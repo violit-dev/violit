@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/violit_glare_small.png" alt="violit icon">
+</p>
+
 # 💜 Violit
 
 > **"Faster than Light, Beautiful as Violet."**
