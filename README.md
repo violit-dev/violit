@@ -238,7 +238,7 @@ Install `violit` from PyPI. (Python 3.10+ required)
 pip install violit
 
 # Or development version
-pip install git+https://github.com/yourusername/violit.git
+pip install git+https://github.com/violit-dev/violit.git
 ```
 
 ### 2. Hello, Violit!
