@@ -13,7 +13,6 @@ Build applications that react at the speed of light with the most elegant syntax
 
 <p align="center">
 <img src="https://img.shields.io/pypi/v/violit?color=blueviolet&style=flat-square&ignore=cache" alt="PyPI">
-<img src="https://img.shields.io/pypi/v/violit?color=blueviolet&style=flat-square" alt="PyPI">
 <img src="https://img.shields.io/badge/Python-3.10+-blue.svg?style=flat-square" alt="Python 3.10+">
 <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="MIT License">
 <img src="https://img.shields.io/badge/Framework-FastAPI-009688.svg?style=flat-square" alt="FastAPI">
