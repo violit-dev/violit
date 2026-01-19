@@ -1,3 +1,5 @@
+![img1](./assets/violit_glare_small.png)
+
 # 💜 Violit
 
 > **"Faster than Light, Beautiful as Violet."**
