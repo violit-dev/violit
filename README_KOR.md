@@ -238,7 +238,7 @@ PyPI에서 `violit`을 설치하세요. (Python 3.10+ 필요)
 pip install violit
 
 # 또는 개발 버전
-pip install git+https://github.com/yourusername/violit.git
+pip install git+https://github.com/violit-dev/violit.git
 ```
 
 ### 2. Hello, Violit!
