@@ -172,7 +172,7 @@ Violit eliminates the **unnecessary complexity** that plagued developers.
 ### 🚫 What You Don't Need Anymore
 
 * ❌ **`@st.cache_data`**: Why cache when code only runs once?
-* ❌ **`@st.fragment`**: All Violit widgets are already independent. (Though `@app.fragment` is supported if you want!)
+* ❌ **`@st.fragment`**: All Violit widgets are already independent.
 * ❌ **`st.rerun()`**: No need to force re-execution. Just change the state.
 * ❌ **`key="widget_1"`**: No need to manage keys to preserve widget state.
 * ❌ **Complex Callback Chains**: No need to link Input/Output like in Dash. State solves everything.
