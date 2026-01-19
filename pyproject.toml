@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "violit"
+version = "0.0.1"
+description = "Violit: Faster than Light, Beautiful as Violet. The High-Performance Python Web Framework (Streamlit Alternative with Zero Rerun)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Violit Team", email = "violit.company@gmail.com"}, 
+]
+keywords = [
+    "web",
+    "framework",
+    "streamlit",
+    "dashboard",
+    "ui",
+    "fastapi",
+    "reactive",
+    "zero-rerun",
+    "shoelace",
+    "websocket",
+    "data-science"
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Software Development :: User Interfaces",
+    "Framework :: FastAPI",
+]
+
+dependencies = [
+    "fastapi>=0.68.0",
+    "uvicorn>=0.15.0",
+    "python-multipart>=0.0.5",
+    "pywebview>=4.0.0",
+    "cachetools>=4.2.0",
+    "pandas>=1.3.0",
+    "numpy>=1.20.0",
+    "plotly>=5.0.0",
+    "matplotlib>=3.4.0",
+    "jinja2>=3.0.0",
+    "websockets>=10.0",
+    "bcrypt>=4.0.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/violit-dev/violit"
+Documentation = "https://github.com/violit-dev/violit"
+Repository = "https://github.com/violit-dev/violit"
+Issues = "https://github.com/violit-dev/violit/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"] 
+include = ["violit*"]
