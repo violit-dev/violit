@@ -449,6 +449,8 @@ Violit은 현대적인 웹 기술과 파이썬의 강력함을 결합했습니�
 
 MIT License
 
+**Violit™ is a trademark of The Violit Team.**
+
 ---
 
 <p align="center">
