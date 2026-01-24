@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/violit_glare_small.png" alt="Violit™ Logo">
+  <img src="./assets/violit_glare_small.png" alt="Violit™ Logo" width=50%>
 </p>
 
 # 💜 Violit
@@ -26,7 +26,7 @@
 *Violit으로 제작된 대시보드가 실시간으로 작동하는 모습입니다.*
 
 <p align="center">
-  <img src="./assets/demo_show_main_small.gif" alt="Violit Showcase Demo" width=500, height=300>
+  <img src="./assets/demo_show_main_small.gif" alt="Violit Showcase Demo" width=50%>
 </p>
 
 ---
