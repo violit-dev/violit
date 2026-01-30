@@ -1044,9 +1044,12 @@ class App(
                 
                 self.debug_print(f"  Action found: {act is not None}")
                 
+                # Detect if this is a navigation action (nav menu click)
+                is_navigation = cid.startswith('nav_menu')
+                
                 if act:
                     store['eval_queue'] = []
-                    self.debug_print(f"  Executing action for CID: {cid}...")
+                    self.debug_print(f"  Executing action for CID: {cid} (navigation={is_navigation})...")
                     act(v) if v is not None else act()
                     self.debug_print(f"  Action executed")
                     
@@ -1058,9 +1061,10 @@ class App(
                     self.debug_print(f"  Dirty components: {len(dirty)} ({[c.id for c in dirty]})")
                     
                     # Send all dirty components via WebSocket
+                    # Pass is_navigation flag to enable/disable smooth transitions
                     if dirty:
-                        self.debug_print(f"  Sending {len(dirty)} updates via WebSocket...")
-                        await self.ws_engine.push_updates(sid, dirty)
+                        self.debug_print(f"  Sending {len(dirty)} updates via WebSocket (navigation={is_navigation})...")
+                        await self.ws_engine.push_updates(sid, dirty, is_navigation=is_navigation)
                         self.debug_print(f"  [OK] Updates sent successfully")
                     else:
                         self.debug_print(f"  [!] No dirty components found - nothing to update")
@@ -1666,116 +1670,87 @@ HTML_TEMPLATE = """
                 debugLog("[WebSocket] Message received");
                 const msg = JSON.parse(e.data);
                 if(msg.type === 'update') {
-                    // Separate page transitions from regular updates
-                    const pageUpdates = [];
-                    const regularUpdates = [];
+                    // Check if this is a navigation update (page transition)
+                    // Server sends isNavigation flag based on action type
+                    const isNavigation = msg.isNavigation === true;
                     
-                    msg.payload.forEach(item => {
-                        // Only page_renderer gets smooth transition
-                        if (item.id.startsWith('page_renderer')) {
-                            pageUpdates.push(item);
-                        } else {
-                            regularUpdates.push(item);
-                        }
-                    });
-                    
-                    // Regular updates: apply immediately without animation
-                    regularUpdates.forEach(item => {
-                        const el = document.getElementById(item.id);
-                        
-                        // Focus Guard: Skip update if element is focused input to prevent interrupting typing
-                        if (document.activeElement && el) {
-                             const isSelfOrChild = document.activeElement.id === item.id || el.contains(document.activeElement);
-                             const isShadowChild = document.activeElement.closest && document.activeElement.closest(`#${item.id}`);
-                             
-                             if (isSelfOrChild || isShadowChild) {
-                                 // Check if it's actually an input that needs protection
-                                 const tag = document.activeElement.tagName.toLowerCase();
-                                 const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('sl-input') || tag.startsWith('sl-textarea');
+                    // Helper function to apply updates
+                    const applyUpdates = (items) => {
+                        items.forEach(item => {
+                            const el = document.getElementById(item.id);
+                            
+                            // Focus Guard: Skip update if element is focused input to prevent interrupting typing
+                            if (document.activeElement && el) {
+                                 const isSelfOrChild = document.activeElement.id === item.id || el.contains(document.activeElement);
+                                 const isShadowChild = document.activeElement.closest && document.activeElement.closest(`#${item.id}`);
                                  
-                                 // If it's an input, block update. If it's a button (nav menu), ALLOW update.
-                                 if (isInput) {
-                                     return;
+                                 if (isSelfOrChild || isShadowChild) {
+                                     // Check if it's actually an input that needs protection
+                                     const tag = document.activeElement.tagName.toLowerCase();
+                                     const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('sl-input') || tag.startsWith('sl-textarea');
+                                     
+                                     // If it's an input, block update. If it's a button (nav menu), ALLOW update.
+                                     if (isInput) {
+                                         return;
+                                     }
                                  }
-                             }
-                        }
+                            }
 
-                        if(el) {
-                            // Smart update for specific widget types to preserve animations/instances
-                            const widgetType = item.id.split('_')[0];
-                            let smartUpdated = false;
-                            
-                            // Checkbox/Toggle: Update checked property only (preserve animation)
-                            if (widgetType === 'checkbox' || widgetType === 'toggle') {
-                                // Parse new HTML to extract checked state
-                                const temp = document.createElement('div');
-                                temp.innerHTML = item.html;
-                                const newCheckbox = temp.querySelector('sl-checkbox, sl-switch');
+                            if(el) {
+                                // Smart update for specific widget types to preserve animations/instances
+                                const widgetType = item.id.split('_')[0];
+                                let smartUpdated = false;
                                 
-                                if (newCheckbox) {
-                                    // Find the actual checkbox element (may be direct or nested)
-                                    const checkboxEl = el.tagName && (el.tagName.toLowerCase() === 'sl-checkbox' || el.tagName.toLowerCase() === 'sl-switch')
-                                        ? el 
-                                        : el.querySelector('sl-checkbox, sl-switch');
+                                // Checkbox/Toggle: Update checked property only (preserve animation)
+                                if (widgetType === 'checkbox' || widgetType === 'toggle') {
+                                    // Parse new HTML to extract checked state
+                                    const temp = document.createElement('div');
+                                    temp.innerHTML = item.html;
+                                    const newCheckbox = temp.querySelector('sl-checkbox, sl-switch');
                                     
-                                    if (checkboxEl) {
-                                        const shouldBeChecked = newCheckbox.hasAttribute('checked');
-                                        // Only update if different to avoid interrupting user interaction
-                                        if (checkboxEl.checked !== shouldBeChecked) {
-                                            checkboxEl.checked = shouldBeChecked;
-                                        }
-                                        smartUpdated = true;
-                                    }
-                                }
-                            }
-                            
-                            // Data Editor: Update AG Grid data only
-                            if (widgetType === 'data' && item.id.includes('editor')) {
-                                // item.id is like "data_editor_xxx_wrapper", extract base cid
-                                const baseCid = item.id.replace('_wrapper', '');
-                                const gridApi = window['gridApi_' + baseCid];
-                                if (gridApi) {
-                                    // Extract rowData from new HTML
-                                    const match = item.html.match(/rowData:\s*(\[.*?\])/s);
-                                    if (match) {
-                                        try {
-                                            const newData = JSON.parse(match[1]);
-                                            gridApi.setRowData(newData);
+                                    if (newCheckbox) {
+                                        // Find the actual checkbox element (may be direct or nested)
+                                        const checkboxEl = el.tagName && (el.tagName.toLowerCase() === 'sl-checkbox' || el.tagName.toLowerCase() === 'sl-switch')
+                                            ? el 
+                                            : el.querySelector('sl-checkbox, sl-switch');
+                                        
+                                        if (checkboxEl) {
+                                            const shouldBeChecked = newCheckbox.hasAttribute('checked');
+                                            // Only update if different to avoid interrupting user interaction
+                                            if (checkboxEl.checked !== shouldBeChecked) {
+                                                checkboxEl.checked = shouldBeChecked;
+                                            }
                                             smartUpdated = true;
-                                        } catch (e) {
-                                            console.error('Failed to parse AG Grid data:', e);
                                         }
                                     }
                                 }
-                            }
-                            
-                            // Default: Full DOM replacement
-                            if (!smartUpdated) {
-                                purgePlotly(el);
-                                el.outerHTML = item.html;
                                 
-                                // Execute scripts
-                                const temp = document.createElement('div');
-                                temp.innerHTML = item.html;
-                                temp.querySelectorAll('script').forEach(s => {
-                                    const script = document.createElement('script');
-                                    script.textContent = s.textContent;
-                                    document.body.appendChild(script);
-                                    script.remove();
-                                });
-                            }
-                        }
-                    });
-                    
-                    // Page updates: use View Transitions if available
-                    if (pageUpdates.length > 0) {
-                        const updatePages = () => {
-                            pageUpdates.forEach(item => {
-                                const el = document.getElementById(item.id);
-                                if(el) {
+                                // Data Editor: Update AG Grid data only
+                                if (widgetType === 'data' && item.id.includes('editor')) {
+                                    // item.id is like "data_editor_xxx_wrapper", extract base cid
+                                    const baseCid = item.id.replace('_wrapper', '');
+                                    const gridApi = window['gridApi_' + baseCid];
+                                    if (gridApi) {
+                                        // Extract rowData from new HTML
+                                        const match = item.html.match(/rowData:\s*(\[.*?\])/s);
+                                        if (match) {
+                                            try {
+                                                const newData = JSON.parse(match[1]);
+                                                gridApi.setRowData(newData);
+                                                smartUpdated = true;
+                                            } catch (e) {
+                                                console.error('Failed to parse AG Grid data:', e);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Default: Full DOM replacement
+                                if (!smartUpdated) {
                                     purgePlotly(el);
                                     el.outerHTML = item.html;
                                     
+                                    // Execute scripts
                                     const temp = document.createElement('div');
                                     temp.innerHTML = item.html;
                                     temp.querySelectorAll('script').forEach(s => {
@@ -1785,14 +1760,17 @@ HTML_TEMPLATE = """
                                         script.remove();
                                     });
                                 }
-                            });
-                        };
-                        
-                        if (document.body.classList.contains('anim-soft') && document.startViewTransition) {
-                            document.startViewTransition(() => updatePages());
-                        } else {
-                            updatePages();
-                        }
+                            }
+                        });
+                    };
+                    
+                    // Apply updates: use View Transitions ONLY for navigation
+                    if (isNavigation && document.body.classList.contains('anim-soft') && document.startViewTransition) {
+                        // Navigation: smooth page transition
+                        document.startViewTransition(() => applyUpdates(msg.payload));
+                    } else {
+                        // Regular updates: apply immediately without animation for snappy response
+                        applyUpdates(msg.payload);
                     }
                 } else if (msg.type === 'eval') {
                     const func = new Function(msg.code);

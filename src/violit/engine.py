@@ -23,11 +23,24 @@ class WsEngine:
     def click_attrs(self, cid: str):
         return {"onclick": f"window.sendAction('{cid}')"}
         
-    async def push_updates(self, sid: str, components: List[Component]):
+    async def push_updates(self, sid: str, components: List[Component], is_navigation: bool = False):
+        """Push component updates to client
+        
+        Args:
+            sid: Session ID
+            components: List of components to update
+            is_navigation: If True, apply smooth page transition animation.
+                          If False (default), update immediately without animation.
+        """
         if sid in self.sockets:
             payload = [{"id": c.id, "html": c.render()} for c in components]
-            await self.sockets[sid].send_json({"type": "update", "payload": payload})
+            await self.sockets[sid].send_json({
+                "type": "update", 
+                "payload": payload,
+                "isNavigation": is_navigation  # Flag for client to determine animation
+            })
 
     async def push_eval(self, sid: str, code: str):
         if sid in self.sockets:
             await self.sockets[sid].send_json({"type": "eval", "code": code})
+
