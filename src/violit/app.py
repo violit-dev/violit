@@ -271,8 +271,16 @@ class App(
     def state(self, default_value, key=None) -> State:
         """Create a reactive state variable"""
         if key is None:
-            name = f"state_{self.state_count}"
-            self.state_count += 1
+            # Streamlit-style: Generate stable key from caller's location
+            frame = inspect.currentframe()
+            try:
+                caller_frame = frame.f_back
+                filename = os.path.basename(caller_frame.f_code.co_filename)
+                lineno = caller_frame.f_lineno
+                # Create stable key: filename_linenumber
+                name = f"state_{filename}_{lineno}"
+            finally:
+                del frame  # Avoid reference cycles
         else:
             name = key
         return State(name, default_value)
