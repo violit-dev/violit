@@ -869,6 +869,7 @@ class App(
             t = store['theme']
             
             sidebar_style = "" if (sidebar_c or self.static_sidebar_order) else "display: none;"
+            main_class = "" if (sidebar_c or self.static_sidebar_order) else "sidebar-collapsed"
             
             # Generate CSRF token
             # Get sid from context (set by middleware) instead of cookies (not set yet on first visit)
@@ -888,7 +889,7 @@ class App(
             # Debug flag injection
             debug_script = f'<script>window._debug_mode = {str(self.debug_mode).lower()};</script>'
             
-            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%THEME_CLASS%", t.theme_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script)
+            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%THEME_CLASS%", t.theme_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script)
             return HTMLResponse(html)
 
         @self.fastapi.post("/action/{cid}")
@@ -1429,31 +1430,34 @@ HTML_TEMPLATE = """
         
         #root { display: flex; width: 100%; min-height: 100vh; }
         #sidebar { 
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 300px; 
+            height: 100vh;
             background: var(--sl-bg-card); 
             border-right: 1px solid var(--sl-border); 
             padding: 2rem 1rem; 
             display: flex; 
             flex-direction: column; 
             gap: 1rem; 
-            flex-shrink: 0; 
             overflow-y: auto; 
             overflow-x: hidden; 
-            white-space: nowrap; 
-            position: sticky; 
-            top: 0; 
-            height: 100vh;
+            white-space: nowrap;
+            z-index: 100;
         }
         #sidebar.collapsed { width: 0; padding: 2rem 0; border-right: none; opacity: 0; }
         
         #main { 
             flex: 1; 
+            margin-left: 300px;
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            padding: 0 1.5rem 3rem 1.5rem; 
-            transition: padding 0.3s ease;
+            padding: 0 1.5rem 3rem 2.5rem; 
+            transition: margin-left 0.3s ease, padding 0.3s ease;
         }
+        #main.sidebar-collapsed { margin-left: 0; }
         #header { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; padding: 1rem 0; display: flex; align-items: center; }
         #app { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; display: flex; flex-direction: column; gap: 1.5rem; }
         
@@ -1825,7 +1829,9 @@ HTML_TEMPLATE = """
         
         function toggleSidebar() {
             const sb = document.getElementById('sidebar');
+            const main = document.getElementById('main');
             sb.classList.toggle('collapsed');
+            main.classList.toggle('sidebar-collapsed');
         }
         function createToast(message, variant = 'primary', icon = 'info-circle') {
             const variantColors = { primary: '#0ea5e9', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' };
@@ -1957,7 +1963,7 @@ HTML_TEMPLATE = """
         <div id="sidebar" style="%SIDEBAR_STYLE%">
             %SIDEBAR_CONTENT%
         </div>
-        <div id="main">
+        <div id="main" class="%MAIN_CLASS%">
             <div id="header">
                  <sl-icon-button name="list" style="font-size: 1.5rem; color: var(--sl-text);" onclick="toggleSidebar()"></sl-icon-button>
             </div>
