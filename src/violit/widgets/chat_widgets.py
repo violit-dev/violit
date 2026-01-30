@@ -116,7 +116,7 @@ class ChatWidgetsMixin:
             <div class="chat-input-container" style="
                 position: fixed; 
                 bottom: 0; 
-                left: 0;
+                left: 300px;
                 right: 0;
                 padding: 20px; 
                 background: linear-gradient(to top, var(--sl-bg) 80%, transparent);
@@ -124,6 +124,7 @@ class ChatWidgetsMixin:
                 display: flex;
                 justify-content: center;
                 pointer-events: none;
+                transition: left 0.3s ease;
             ">
                 <div style="
                     width: 100%; 

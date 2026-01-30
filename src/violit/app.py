@@ -1411,6 +1411,7 @@ HTML_TEMPLATE = """
     <style>
         :root { 
             %CSS_VARS%
+            --sidebar-width: 300px;
         }
         sl-alert { --sl-color-primary-500: var(--sl-primary); --sl-color-primary-600: var(--sl-primary); }
         sl-alert::part(base) { border: 1px solid var(--sl-border); }
@@ -1433,7 +1434,7 @@ HTML_TEMPLATE = """
             position: fixed;
             top: 0;
             left: 0;
-            width: 300px; 
+            width: var(--sidebar-width); 
             height: 100vh;
             background: var(--sl-bg-card); 
             border-right: 1px solid var(--sl-border); 
@@ -1444,13 +1445,13 @@ HTML_TEMPLATE = """
             overflow-y: auto; 
             overflow-x: hidden; 
             white-space: nowrap;
-            z-index: 100;
+            z-index: 1100;
         }
         #sidebar.collapsed { width: 0; padding: 2rem 0; border-right: none; opacity: 0; }
         
         #main { 
             flex: 1; 
-            margin-left: 300px;
+            margin-left: var(--sidebar-width);
             display: flex; 
             flex-direction: column; 
             align-items: center; 
@@ -1458,6 +1459,11 @@ HTML_TEMPLATE = """
             transition: margin-left 0.3s ease, padding 0.3s ease;
         }
         #main.sidebar-collapsed { margin-left: 0; }
+        /* Chat input container positioning - respects sidebar */
+        .chat-input-container { left: var(--sidebar-width) !important; transition: left 0.3s ease; }
+        #sidebar.collapsed ~ #main .chat-input-container,
+        #main.sidebar-collapsed .chat-input-container { left: 0 !important; }
+        
         #header { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; padding: 1rem 0; display: flex; align-items: center; }
         #app { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; display: flex; flex-direction: column; gap: 1.5rem; }
         
@@ -1830,9 +1836,15 @@ HTML_TEMPLATE = """
         function toggleSidebar() {
             const sb = document.getElementById('sidebar');
             const main = document.getElementById('main');
+            const chatInput = document.querySelector('.chat-input-container');
             sb.classList.toggle('collapsed');
             main.classList.toggle('sidebar-collapsed');
+            // Also adjust chat input container if present
+            if (chatInput) {
+                chatInput.style.left = sb.classList.contains('collapsed') ? '0' : '300px';
+            }
         }
+
         function createToast(message, variant = 'primary', icon = 'info-circle') {
             const variantColors = { primary: '#0ea5e9', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' };
             const toast = document.createElement('div');
