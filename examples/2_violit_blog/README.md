@@ -555,7 +555,7 @@ app.navigation([
     vl.Page(my_posts_page, title="My Posts", icon="journal-text"),
     vl.Page(login_page, title="Login/Info", icon="person"),
     vl.Page(register_page, title="Register", icon="person-plus"),
-])
+], reactivity_mode=True)
 ```
 
 **🔍 Explanation:**
