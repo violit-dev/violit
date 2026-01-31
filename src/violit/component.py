@@ -24,9 +24,13 @@ class Component:
                 if v is True: attrs.append(clean_k)
                 elif v is False or v is None: continue
                 else: 
-                    # Escape attribute values for XSS protection
-                    escaped_v = html.escape(str(v), quote=True)
-                    attrs.append(f'{clean_k}="{escaped_v}"')
+                    # Don't escape style attribute (CSS needs special characters)
+                    # But still escape other attributes for XSS protection
+                    if clean_k == 'style':
+                        attrs.append(f'{clean_k}="{v}"')
+                    else:
+                        escaped_v = html.escape(str(v), quote=True)
+                        attrs.append(f'{clean_k}="{escaped_v}"')
         
         props_str = " ".join(attrs)
         content = self.props.get('content', '')

@@ -329,6 +329,8 @@ class BoxContext:
     
     def __init__(self, app, padding, margin, background, border, radius, shadow, center, gradient, variant=None, animation=None, cls="", **kwargs):
         self.app = app
+        # Extract style BEFORE storing kwargs (safe for multiple renders)
+        self.user_style = kwargs.pop('style', '')
         self.kwargs = kwargs
         self.padding = padding
         self.margin = margin
@@ -384,18 +386,18 @@ class BoxContext:
                 '''
             
             # 3. Build Semantic Props into Master CSS
-            # We pass specific props to build_cls
-            semantic_cls = build_cls(
-                self.cls,
-                p=self.padding,
-                m=self.margin,
-                bg=self.background,
-                b=self.border,
-                r=self.radius,
-                shadow=self.shadow,
-                center=self.center,
-                **self.kwargs
-            )
+            # Merge explicit props with kwargs to avoid duplicate argument errors
+            build_props = self.kwargs.copy()
+            
+            if self.padding is not None: build_props['p'] = self.padding
+            if self.margin is not None: build_props['m'] = self.margin
+            if self.background is not None: build_props['bg'] = self.background
+            if self.border is not None: build_props['b'] = self.border
+            if self.radius is not None: build_props['r'] = self.radius
+            if self.shadow is not None: build_props['shadow'] = self.shadow
+            if self.center: build_props['center'] = self.center
+
+            semantic_cls = build_cls(self.cls, **build_props)
             
             # Handle gradient specifically (as it's often complex)
             gradient_style = ""
@@ -415,8 +417,11 @@ class BoxContext:
             # Combine all classes
             final_cls = f"box-{self.cid} {variant_cls} {semantic_cls}".strip()
             
+            # Combine gradient_style with user_style
+            final_style = f"{gradient_style} {self.user_style}".strip() if (gradient_style or self.user_style) else ""
+            
             rendering_ctx.reset(token)
-            return Component("div", id=self.cid, content=content, class_=final_cls, style=gradient_style)
+            return Component("div", id=self.cid, content=content, class_=final_cls, style=final_style if final_style else None)
         
         self.app._register_component(self.cid, builder)
         

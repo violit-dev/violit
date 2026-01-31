@@ -9,8 +9,16 @@ from ..style_utils import build_cls
 class LayoutWidgetsMixin:
     """Layout widgets (columns, container, expander, tabs, empty, dialog)"""
     
-    def columns(self, spec=2, gap="1rem", cls: str = "", **kwargs):
-        """Create column layout"""
+    def columns(self, spec=2, gap="1rem", align="left", cls: str = "", **kwargs):
+        """Create column layout
+        
+        Args:
+            spec: Number of columns or list of weights
+            gap: Gap between columns
+            align: Alignment within each column ("left", "center", "right")
+            cls: Additional CSS classes
+            **kwargs: Additional Master CSS props
+        """
         if isinstance(spec, int):
             count = spec
             weights = ["1fr"] * count
@@ -29,6 +37,14 @@ class LayoutWidgetsMixin:
             from ..state import get_session_store
             store = get_session_store()
             
+            # Determine alignment class for column items
+            align_map = {
+                "left": "",
+                "center": "text:center",
+                "right": "text:right"
+            }
+            align_cls = align_map.get(align, "")
+            
             columns_html = []
             for i in range(count):
                 col_id = f"{columns_id}_col_{i}"
@@ -37,11 +53,12 @@ class LayoutWidgetsMixin:
                     col_content.append(b().render())
                 for cid, b in store['fragment_components'].get(col_id, []):
                     col_content.append(b().render())
-                columns_html.append(f'<div class="column-item h:full">{"".join(col_content)}</div>')
+                columns_html.append(f'<div class="column-item h:full {align_cls}">{"".join(col_content)}</div>')
             
             grid_tmpl = " ".join(weights)
             # Use Master CSS for grid layout where possible, but template needs style
-            base_cls = "grid ai:stretch"
+            # Changed ai:stretch to ai:start for Streamlit-like behavior (no forced stretching)
+            base_cls = "grid ai:start"
             final_cls = build_cls(f"{base_cls} {cls}", gap=gap, **kwargs)
             
             container_html = f'<div id="{columns_id}" class="{final_cls}" style="grid-template-columns: {grid_tmpl};">{"".join(columns_html)}</div>'

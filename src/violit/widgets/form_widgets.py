@@ -12,9 +12,14 @@ class FormWidgetsMixin:
     
     def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None, 
                variant="primary", icon: str = None, outline: bool = False, 
-               loading: bool = False, size: str = "medium", cls: str = "", **props):
+               loading: bool = False, size: str = "medium", pill: bool = False, cls: str = "", **props):
         """Display button"""
         cid = self._get_next_cid("btn")
+        
+        # Extract style OUTSIDE builder (safe for multiple renders)
+        user_style = props.pop('style', '')
+        remaining_props = props.copy()
+        
         def builder():
             token = rendering_ctx.set(cid)
             bt = text() if callable(text) else text
@@ -28,15 +33,22 @@ class FormWidgetsMixin:
                 extra_attrs.append('outline')
             if loading:
                 extra_attrs.append('loading')
+            if pill:
+                extra_attrs.append('pill')
             
             icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon else ''
             
-            final_cls = build_cls(cls, **props)
+            # Add default Streamlit-like styling: display inline-flex, max-content width
+            # Users can override with cls or props
+            default_style = "display: inline-flex; width: auto;"
+            combined_style = f"{default_style} {user_style}".strip()
+            
+            final_cls = build_cls(cls, **remaining_props)
             
             attrs_str = ' '.join(f'{k}="{v}"' for k, v in attrs_dict.items())
             
             html = f'''<sl-button id="{cid}" variant="{variant}" size="{size}" 
-                {attrs_str} {' '.join(extra_attrs)} class="{final_cls}">
+                {attrs_str} {' '.join(extra_attrs)} class="{final_cls}" style="{combined_style}">
                 {icon_html}{bt}
             </sl-button>'''
             

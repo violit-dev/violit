@@ -7,8 +7,17 @@ from ..style_utils import build_cls
 
 
 class TextWidgetsMixin:
-    def write(self, *args, tag: Optional[str] = "div", unsafe_allow_html: bool = False, cls: str = "", **props):
-        """Display content with automatic type detection"""
+    def write(self, *args, tag: Optional[str] = "div", unsafe_allow_html: bool = False, cls: str = "", inline: bool = False, **props):
+        """Display content with automatic type detection
+        
+        Args:
+            *args: Content to display (can be State, callable, or value)
+            tag: HTML tag to wrap content (default: "div")
+            unsafe_allow_html: Allow HTML in content (default: False)
+            cls: Master CSS classes
+            inline: If True, use inline display (default: False)
+            **props: Additional semantic props and HTML attributes
+        """
         from ..state import State
         import re
         import json
@@ -68,9 +77,22 @@ class TextWidgetsMixin:
                 content = " ".join(parts)
                 has_html = '<' in content and '>' in content
                 
-                final_cls = build_cls(cls, **props)
+                # Separate HTML attributes from Master CSS props
+                html_attrs = {}
+                css_props = {}
+                for k, v in props.items():
+                    if k in ['style', 'id', 'data', 'aria'] or k.startswith('data_') or k.startswith('aria_'):
+                        html_attrs[k] = v
+                    else:
+                        css_props[k] = v
                 
-                return Component(tag, id=cid, content=content, escape_content=not (has_html or unsafe_allow_html), class_=final_cls)
+                # Add inline display if requested
+                if inline:
+                    css_props['d'] = 'inline-block'
+                
+                final_cls = build_cls(cls, **css_props)
+                
+                return Component(tag, id=cid, content=content, escape_content=not (has_html or unsafe_allow_html), class_=final_cls, **html_attrs)
             
             finally:
                 rendering_ctx.reset(token)
@@ -231,28 +253,64 @@ class TextWidgetsMixin:
         self.heading(text, level=3, divider=divider, gradient=gradient, align=align, cls=cls, **kwargs)
 
     def text(self, content, size: str = "medium", muted: bool = False, align: str = None, cls: str = "", **kwargs):
-        """Display text paragraph"""
+        """Display text paragraph
+        
+        Args:
+            content: Text content (can be State or callable)
+            size: Text size ("small", "medium", "large", or custom like "3rem")
+            muted: If True, use muted color
+            align: Text alignment ("left", "center", "right")
+            cls: Additional Master CSS classes
+            **kwargs: Additional semantic props (including style)
+        """
         from ..state import State
         
         cid = self._get_next_cid("text")
+        
+        # Extract style props OUTSIDE builder (captured by closure, safe for multiple renders)
+        weight_val = kwargs.pop('weight', None)
+        color_val = kwargs.pop('color', None)
+        user_style = kwargs.pop('style', '')
+        remaining_kwargs = kwargs.copy()  # For build_cls
+        
         def builder():
             token = rendering_ctx.set(cid)
             val = content.value if isinstance(content, State) else (content() if callable(content) else content)
             rendering_ctx.reset(token)
             
-            # Map size to Master CSS font sizes (approximate or utility based)
-            # Violit standard: small, medium, large
-            size_cls = ""
-            if size == "small": size_cls = "font-size:0.875rem"
-            elif size == "large": size_cls = "font-size:1.125rem"
+            # Build inline style for reliable rendering
+            style_parts = ["margin: 0;"]
             
-            base_cls = f"{size_cls}"
-            if muted: base_cls += " color:text-muted"
-            if align: base_cls += f" text:{align}"
+            # Apply size as inline style
+            if size == "small": 
+                style_parts.append("font-size: 0.875rem;")
+            elif size == "large": 
+                style_parts.append("font-size: 1.125rem;")
+            elif size != "medium":
+                style_parts.append(f"font-size: {size};")
             
-            final_cls = build_cls(f"{base_cls} {cls}", **kwargs)
+            # Apply weight and color
+            if weight_val:
+                style_parts.append(f"font-weight: {weight_val};")
+            if color_val:
+                style_parts.append(f"color: {color_val};")
             
-            return Component("p", id=cid, content=val, escape_content=True, class_=final_cls)
+            # Text alignment
+            if align:
+                style_parts.append(f"text-align: {align};")
+            if muted:
+                style_parts.append("color: var(--sl-text-muted);")
+            
+            # User style (gradient etc)
+            if user_style:
+                style_parts.append(user_style)
+            
+            combined_style = " ".join(style_parts)
+            
+            # Build cls for remaining props
+            final_cls = build_cls(cls, **remaining_kwargs)
+            
+            return Component("p", id=cid, content=val, escape_content=True, class_=final_cls, style=combined_style)
         self._register_component(cid, builder)
     
     def caption(self, text: Union[str, Callable], cls: str = "", **kwargs):
