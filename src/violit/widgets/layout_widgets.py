@@ -41,10 +41,10 @@ class LayoutWidgetsMixin:
                 # Check session
                 for cid, b in store['fragment_components'].get(col_id, []):
                     col_content.append(b().render())
-                columns_html.append(f'<div class="column-item">{"".join(col_content)}</div>')
+                columns_html.append(f'<div class="column-item" style="height: 100%;">{"".join(col_content)}</div>')
             
             grid_tmpl = " ".join(weights)
-            container_html = f'<div id="{columns_id}" class="columns" style="display: grid; grid-template-columns: {grid_tmpl}; gap: {gap};">{"".join(columns_html)}</div>'
+            container_html = f'<div id="{columns_id}" class="columns" style="display: grid; grid-template-columns: {grid_tmpl}; gap: {gap}; align-items: stretch;">{"".join(columns_html)}</div>'
             return Component("div", id=f"{columns_id}_wrapper", content=container_html)
         
         self._register_component(columns_id, builder)

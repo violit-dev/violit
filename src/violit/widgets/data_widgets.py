@@ -86,8 +86,16 @@ class DataWidgetsMixin:
         
         self._register_component(cid, builder, action=action if on_cell_clicked else None)
 
-    def table(self, df: Union[pd.DataFrame, Callable, State], **props):
-        """Display static HTML table (Signal support)"""
+    def table(self, df: Union[pd.DataFrame, Callable, State], 
+              styled: bool = False, highlight_row: int = None, title: str = None, **props):
+        """Display static HTML table (Signal support)
+        
+        Args:
+            df: DataFrame or callable/State
+            styled: Use premium styled table with rounded corners and header gradient
+            highlight_row: Row index to highlight (0-based)
+            title: Optional table title (only for styled mode)
+        """
         cid = self._get_next_cid("table")
         def builder():
             # Handle Signal
@@ -105,34 +113,98 @@ class DataWidgetsMixin:
                 try: current_df = pd.DataFrame(current_df)
                 except: return Component("div", id=cid, content="Invalid data format")
 
-            # Convert dataframe to HTML table
-            html_table = current_df.to_html(index=False, border=0, classes=['data-table'])
-            styled_html = f'''
-            <div style="overflow-x:auto;border:1px solid var(--sl-border);border-radius:0.5rem;">
+            if styled:
+                # Premium styled table
+                headers_html = ''.join(
+                    f'<th style="padding: 1rem; text-align: center; border-bottom: 2px solid rgba(139, 92, 246, 0.3);">{col}</th>' 
+                    for col in current_df.columns
+                )
+                
+                rows_html = []
+                for i, (_, row) in enumerate(current_df.iterrows()):
+                    is_highlight = highlight_row is not None and i == highlight_row
+                    row_style = 'background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(217, 70, 239, 0.08));' if is_highlight else ''
+                    
+                    cells_html = []
+                    for j, cell in enumerate(row):
+                        cell_style = 'padding: 1rem; border-bottom: 1px solid var(--sl-color-neutral-200);'
+                        if j == 0:
+                            cell_style += ' text-align: left;'
+                            if is_highlight:
+                                cell_style += ' font-weight: 700; color: #A855F7;'
+                        else:
+                            cell_style += ' text-align: center;'
+                            if is_highlight:
+                                cell_style += ' font-weight: 600;'
+                            if '✅' in str(cell):
+                                cell_style += ' color: #22c55e; font-weight: 600;'
+                        
+                        cells_html.append(f'<td style="{cell_style}">{cell}</td>')
+                    
+                    rows_html.append(f'<tr style="{row_style}">{"".join(cells_html)}</tr>')
+                
+                title_html = f'<div class="table-header">{title}</div>' if title else ''
+                
+                styled_html = f'''
                 <style>
-                    .data-table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        background: var(--sl-bg-card);
-                        color: var(--sl-text);
-                    }}
-                    .data-table thead {{
-                        background: var(--sl-primary);
-                        color: white;
-                    }}
-                    .data-table th, .data-table td {{
-                        padding: 0.75rem;
-                        text-align: left;
-                        border-bottom: 1px solid var(--sl-border);
-                    }}
-                    .data-table tbody tr:hover {{
-                        background: color-mix(in srgb, var(--sl-bg-card), var(--sl-primary) 5%);
-                    }}
+                .styled-table-{cid} {{
+                    background: var(--sl-color-neutral-50);
+                    border-radius: 20px;
+                    padding: 2.5rem;
+                    margin: 1.5rem 0;
+                }}
+                .styled-table-{cid} .table-header {{
+                    font-size: 1.8rem;
+                    font-weight: 700;
+                    text-align: center;
+                    margin-bottom: 2rem;
+                    color: var(--sl-color-neutral-900);
+                }}
                 </style>
-                {html_table}
-            </div>
-            '''
-            return Component("div", id=cid, content=styled_html)
+                <div class="styled-table-{cid}">
+                    {title_html}
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.95rem;">
+                        <thead>
+                            <tr style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(217, 70, 239, 0.1));">
+                                {headers_html}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {''.join(rows_html)}
+                        </tbody>
+                    </table>
+                </div>
+                '''
+                return Component("div", id=cid, content=styled_html)
+            else:
+                # Default table
+                html_table = current_df.to_html(index=False, border=0, classes=['data-table'])
+                styled_html = f'''
+                <div style="overflow-x:auto;border:1px solid var(--sl-border);border-radius:0.5rem;">
+                    <style>
+                        .data-table {{
+                            width: 100%;
+                            border-collapse: collapse;
+                            background: var(--sl-bg-card);
+                            color: var(--sl-text);
+                        }}
+                        .data-table thead {{
+                            background: var(--sl-primary);
+                            color: white;
+                        }}
+                        .data-table th, .data-table td {{
+                            padding: 0.75rem;
+                            text-align: left;
+                            border-bottom: 1px solid var(--sl-border);
+                        }}
+                        .data-table tbody tr:hover {{
+                            background: color-mix(in srgb, var(--sl-bg-card), var(--sl-primary) 5%);
+                        }}
+                    </style>
+                    {html_table}
+                </div>
+                '''
+                return Component("div", id=cid, content=styled_html)
         self._register_component(cid, builder)
 
     def data_editor(self, df: pd.DataFrame, num_rows="fixed", height=400, key=None, on_change=None, **props):
@@ -209,8 +281,20 @@ class DataWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal"):
-        """Display metric value with Signal support"""
+    def metric(self, label: str, value: Union[str, int, float, State, Callable], 
+               delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal",
+               icon: str = None, border_color: str = None, help_text: str = None):
+        """Display metric value with Signal support
+        
+        Args:
+            label: Metric label
+            value: Metric value (supports State, Callable)
+            delta: Optional delta/change value
+            delta_color: 'positive', 'negative', or 'normal'
+            icon: Optional Shoelace icon name
+            border_color: Optional left border accent color
+            help_text: Optional help text below value
+        """
         import html as html_lib
         
         cid = self._get_next_cid("metric")
@@ -238,7 +322,6 @@ class DataWidgetsMixin:
                 curr_delta = delta()
                 rendering_ctx.reset(token)
 
-            # XSS protection: escape all values
             escaped_label = html_lib.escape(str(label))
             escaped_val = html_lib.escape(str(curr_val))
 
@@ -247,15 +330,36 @@ class DataWidgetsMixin:
                 escaped_delta = html_lib.escape(str(curr_delta))
                 color_map = {"positive": "#10b981", "negative": "#ef4444", "normal": "var(--sl-text-muted)"}
                 color = color_map.get(delta_color, "var(--sl-text-muted)")
-                icon = "arrow-up" if delta_color == "positive" else "arrow-down" if delta_color == "negative" else ""
-                icon_html = f'<sl-icon name="{icon}" style="font-size: 0.8em; margin-right: 2px;"></sl-icon>' if icon else ""
+                delta_icon = "arrow-up" if delta_color == "positive" else "arrow-down" if delta_color == "negative" else ""
+                icon_html = f'<sl-icon name="{delta_icon}" style="font-size: 0.8em; margin-right: 2px;"></sl-icon>' if delta_icon else ""
                 delta_html = f'<div style="color: {color}; font-size: 0.9rem; margin-top: 0.25rem; font-weight: 500;">{icon_html}{escaped_delta}</div>'
             
+            # Icon
+            metric_icon = ""
+            if icon:
+                metric_icon = f'<sl-icon name="{icon}" style="font-size: 1.5rem; color: var(--sl-primary); margin-right: 0.75rem;"></sl-icon>'
+            
+            # Border accent
+            border_style = ""
+            if border_color:
+                border_style = f"border-left: 4px solid {border_color}; padding-left: 1.25rem;"
+            
+            # Help text
+            help_html = ""
+            if help_text:
+                help_html = f'<div style="font-size: 0.75rem; color: var(--sl-color-neutral-500); margin-top: 0.5rem;">{html_lib.escape(help_text)}</div>'
+            
             html_output = f'''
-            <div class="card" style="padding: 1.25rem;">
-                <div style="font-size: 0.875rem; color: var(--sl-text-muted); margin-bottom: 0.5rem; font-weight: 500;">{escaped_label}</div>
-                <div style="font-size: 1.75rem; font-weight: 700; color: var(--sl-text);">{escaped_val}</div>
-                {delta_html}
+            <div class="card" style="padding: 1.25rem; {border_style}">
+                <div style="display: flex; align-items: flex-start;">
+                    {metric_icon}
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.875rem; color: var(--sl-text-muted); margin-bottom: 0.5rem; font-weight: 500;">{escaped_label}</div>
+                        <div style="font-size: 1.75rem; font-weight: 700; color: var(--sl-text);">{escaped_val}</div>
+                        {delta_html}
+                        {help_html}
+                    </div>
+                </div>
             </div>
             '''
             return Component("div", id=cid, content=html_output)

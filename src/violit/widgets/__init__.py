@@ -14,6 +14,7 @@ from .form_widgets import FormWidgetsMixin
 from .chat_widgets import ChatWidgetsMixin
 from .card_widgets import CardWidgetsMixin
 from .list_widgets import ListWidgetsMixin
+from .ui_widgets import UIWidgetsMixin
 
 __all__ = [
     'TextWidgetsMixin',
@@ -27,4 +28,5 @@ __all__ = [
     'ChatWidgetsMixin',
     'CardWidgetsMixin',
     'ListWidgetsMixin',
+    'UIWidgetsMixin',
 ]

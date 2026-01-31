@@ -9,15 +9,47 @@ from ..state import get_session_store
 class FormWidgetsMixin:
     """Form-related widgets (form, form_submit_button, button, download_button, link_button, page_link)"""
     
-    def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None, variant="primary", **props):
-        """Display button"""
+    def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None, 
+               variant="primary", icon: str = None, outline: bool = False, 
+               loading: bool = False, size: str = "medium", **props):
+        """Display button
+        
+        Args:
+            text: Button text
+            on_click: Click callback
+            variant: Button style ('primary', 'success', 'neutral', 'warning', 'danger')
+            icon: Shoelace icon name (prefix slot)
+            outline: Use outline style
+            loading: Show loading spinner
+            size: Button size ('small', 'medium', 'large')
+        """
         cid = self._get_next_cid("btn")
         def builder():
             token = rendering_ctx.set(cid)
             bt = text() if callable(text) else text
             rendering_ctx.reset(token)
-            attrs = self.engine.click_attrs(cid)
-            return Component("sl-button", id=cid, content=bt, variant=variant, **attrs, **props)
+            
+            attrs_dict = self.engine.click_attrs(cid)
+            
+            # Build extra attrs
+            extra_attrs = []
+            if outline:
+                extra_attrs.append('outline')
+            if loading:
+                extra_attrs.append('loading')
+            
+            icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon else ''
+            
+            # Build HTML manually for extra control
+            attrs_str = ' '.join(f'{k}="{v}"' for k, v in attrs_dict.items())
+            props_str = ' '.join(f'{k}="{v}"' for k, v in props.items())
+            
+            html = f'''<sl-button id="{cid}" variant="{variant}" size="{size}" 
+                {attrs_str} {' '.join(extra_attrs)} {props_str}>
+                {icon_html}{bt}
+            </sl-button>'''
+            
+            return Component("span", id=cid, content=html)
         self._register_component(cid, builder, action=on_click)
 
     def download_button(self, label, data, file_name, mime="text/plain", on_click=None, **props):

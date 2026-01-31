@@ -46,6 +46,7 @@ from .widgets import (
     ChatWidgetsMixin,
     CardWidgetsMixin,
     ListWidgetsMixin,
+    UIWidgetsMixin,
 )
 
 class FileWatcher:
@@ -154,6 +155,7 @@ class App(
     ChatWidgetsMixin,
     CardWidgetsMixin,
     ListWidgetsMixin,
+    UIWidgetsMixin,
 ):
     """Main Violit App class"""
     

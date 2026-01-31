@@ -10,7 +10,8 @@ from ..context import rendering_ctx
 class CardWidgetsMixin:
     """Mixin for Shoelace Card components"""
     
-    def card(self, content=None, header=None, footer=None, **kwargs):
+    def card(self, content=None, header=None, footer=None, 
+             hover: bool = False, accent: bool = False, variant: str = None, **kwargs):
         """
         Create a Shoelace card component
         
@@ -18,6 +19,9 @@ class CardWidgetsMixin:
             content: Optional card content (str). If None, use as context manager
             header: Optional header content (str)
             footer: Optional footer content (str)
+            hover: Enable hover lift effect
+            accent: Show gradient accent bar on top
+            variant: Card style variant ('feature', 'stat', 'default')
             **kwargs: Additional attributes (e.g., data_post_id="123", class_="custom")
         
         Returns:
@@ -30,10 +34,9 @@ class CardWidgetsMixin:
             # Card with header and footer
             app.card("Content", header="Title", footer="Footer text")
             
-            # Context manager for complex content
-            with app.card(header="My Card"):
-                app.text("Line 1")
-                app.text("Line 2")
+            # Feature card with hover effect
+            with app.card(header="Feature", hover=True, accent=True):
+                app.text("Description")
             
             # With custom attributes
             with app.card(data_post_id="123", class_="custom-card"):
@@ -52,7 +55,7 @@ class CardWidgetsMixin:
         
         if content is None:
             # Context manager mode
-            return CardContext(self, cid, header, footer, attrs_str)
+            return CardContext(self, cid, header, footer, attrs_str, hover, accent, variant)
         else:
             # Direct content mode
             def builder():
@@ -72,9 +75,37 @@ class CardWidgetsMixin:
                     if callable(footer):
                         current_footer = footer()
                     
-                    # Set full width for consistency
-                    card_style = 'style="width: 100%;"'
-                    html_parts = [f'<sl-card{attrs_str} {card_style}>']
+                    # Build styles based on variant
+                    extra_styles = "width: 100%;"
+                    wrapper_styles = ["width: 100%;"]
+                    
+                    if hover:
+                        wrapper_styles.append("transition: all 0.3s ease; cursor: pointer;")
+                    
+                    # Generate unique class for this card
+                    card_class = f"card-{cid}"
+                    
+                    style_tag = ""
+                    if hover or accent:
+                        hover_styles = f".{card_class}:hover {{ transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); }}" if hover else ""
+                        accent_styles = f"""
+                        .{card_class}::before {{
+                            content: '';
+                            position: absolute;
+                            top: 0; left: 0; right: 0;
+                            height: 4px;
+                            background: linear-gradient(90deg, #8B5CF6, #D946EF);
+                            opacity: {1 if not hover else 0};
+                            transition: opacity 0.3s ease;
+                            border-radius: 4px 4px 0 0;
+                        }}
+                        .{card_class}:hover::before {{ opacity: 1; }}
+                        """ if accent else ""
+                        
+                        style_tag = f"<style>{hover_styles}{accent_styles}</style>"
+                        wrapper_styles.append("position: relative; overflow: hidden;")
+                    
+                    html_parts = [style_tag, f'<sl-card class="{card_class}"{attrs_str} style="{extra_styles}">']
                     
                     if current_header:
                         html_parts.append(f'<div slot="header">{current_header}</div>')
@@ -88,7 +119,7 @@ class CardWidgetsMixin:
                     html_parts.append('</sl-card>')
                     
                     # Apply full width to wrapper div for consistency
-                    return Component("div", id=cid, content=''.join(html_parts), style="width: 100%;")
+                    return Component("div", id=cid, content=''.join(html_parts), style="; ".join(wrapper_styles))
                 finally:
                     rendering_ctx.reset(token)
             
@@ -527,36 +558,32 @@ class CardWidgetsMixin:
 class CardContext:
     """Context manager for card with complex content"""
     
-    def __init__(self, app, cid, header, footer, attrs_str):
+    def __init__(self, app, cid, header, footer, attrs_str, hover=False, accent=False, variant=None):
         self.app = app
         self.cid = cid
         self.header = header
         self.footer = footer
         self.attrs_str = attrs_str
-        self.components = []
+        self.hover = hover
+        self.accent = accent
+        self.variant = variant
+        self.token = None
     
     def __enter__(self):
-        from ..context import layout_ctx
-        self.token = layout_ctx.set(f"card_{self.cid}")
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        from ..context import layout_ctx
-        from ..state import get_session_store
-        
-        # Collect all components added inside this context
-        store = get_session_store()
-        card_components = []
-        
-        # Get components that were added in this context
-        for comp_cid in store['order']:
-            if comp_cid.startswith(f"card_{self.cid}") or len(card_components) > 0:
-                builder = store['builders'].get(comp_cid) or self.app.static_builders.get(comp_cid)
-                if builder:
-                    card_components.append(builder().render())
-        
-        # Build final card HTML
+        # Register builder BEFORE entering context (like ContainerContext)
         def builder():
+            from ..state import get_session_store
+            store = get_session_store()
+            
+            # Render child components
+            htmls = []
+            # Static first
+            for cid, b in self.app.static_fragment_components.get(self.cid, []):
+                htmls.append(b().render())
+            # Dynamic next
+            for cid, b in store['fragment_components'].get(self.cid, []):
+                htmls.append(b().render())
+            
             token = rendering_ctx.set(self.cid)
             
             try:
@@ -569,27 +596,80 @@ class CardContext:
                 if callable(self.footer):
                     current_footer = self.footer()
                 
-                # Add width: 100% to sl-card (consistency with broadcast)
-                card_style = 'style="width: 100%;"'
-                html_parts = [f'<sl-card{self.attrs_str} {card_style}>']
+                # Build styles based on options
+                extra_styles = "width: 100%; height: 100%;"
+                wrapper_styles = ["width: 100%; height: 100%;"]
+                
+                if self.hover:
+                    wrapper_styles.append("transition: all 0.3s ease; cursor: pointer;")
+                
+                # Generate unique class for this card
+                card_class = f"card-{self.cid}"
+                
+                style_tag = ""
+                if self.hover or self.accent:
+                    hover_styles = f"""
+                    .{card_class} {{ transition: all 0.3s ease; }}
+                    .{card_class}:hover {{ 
+                        transform: translateY(-8px); 
+                        box-shadow: 0 20px 40px rgba(139, 92, 246, 0.2), 0 8px 16px rgba(0, 0, 0, 0.1);
+                    }}
+                    """ if self.hover else ""
+                    accent_styles = f"""
+                    .{card_class}::before {{
+                        content: '';
+                        position: absolute;
+                        top: 0; left: 0; right: 0;
+                        height: 4px;
+                        background: linear-gradient(90deg, #8B5CF6, #D946EF);
+                        opacity: {1 if not self.hover else 0};
+                        transition: opacity 0.3s ease;
+                        border-radius: 4px 4px 0 0;
+                    }}
+                    .{card_class}:hover::before {{ opacity: 1; }}
+                    """ if self.accent else ""
+                    
+                    style_tag = f"<style>{hover_styles}{accent_styles}</style>"
+                    wrapper_styles.append("position: relative; overflow: hidden;")
+                
+                # Add CSS to ensure card stretches to full height
+                card_height_style = f"""
+                <style>
+                .{card_class} {{ height: 100%; display: flex; flex-direction: column; }}
+                .{card_class}::part(base) {{ height: 100%; display: flex; flex-direction: column; }}
+                .{card_class}::part(body) {{ flex: 1; display: flex; flex-direction: column; }}
+                </style>
+                """
+                
+                html_parts = [style_tag, card_height_style, f'<sl-card class="{card_class}"{self.attrs_str} style="{extra_styles}">']
                 
                 if current_header:
                     html_parts.append(f'<div slot="header">{current_header}</div>')
                 
-                # Add collected components as content (no wrapper div)
-                if card_components:
-                    html_parts.extend(card_components)
+                # Add collected components as content
+                if htmls:
+                    html_parts.extend(htmls)
                 
                 if current_footer:
                     html_parts.append(f'<div slot="footer">{current_footer}</div>')
                 
                 html_parts.append('</sl-card>')
                 
-                # Apply width: 100% to wrapper div (consistency with list_container)
-                return Component("div", id=self.cid, content=''.join(html_parts), style="width: 100%;")
+                return Component("div", id=self.cid, content=''.join(html_parts), style="; ".join(wrapper_styles))
             finally:
                 rendering_ctx.reset(token)
         
         self.app._register_component(self.cid, builder)
-        layout_ctx.reset(self.token)
+        
+        # Now set fragment context for children
+        from ..context import fragment_ctx
+        self.token = fragment_ctx.set(self.cid)
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        from ..context import fragment_ctx
+        fragment_ctx.reset(self.token)
+    
+    def __getattr__(self, name):
+        return getattr(self.app, name)
 

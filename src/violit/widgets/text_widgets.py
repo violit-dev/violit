@@ -191,8 +191,17 @@ class TextWidgetsMixin:
         '''
         return styled_html
 
-    def heading(self, text, level: int = 1, divider: bool = False):
-        """Display heading (h1-h6)"""
+    def heading(self, text, level: int = 1, divider: bool = False, gradient: bool = None, align: str = None, **kwargs):
+        """Display heading (h1-h6)
+        
+        Args:
+            text: Heading text
+            level: Heading level (1-6)
+            divider: Show divider below
+            gradient: Apply gradient text effect (default: True for level 1)
+            align: Text alignment ('left', 'center', 'right')
+            **kwargs: Additional attributes (style, class_, etc.)
+        """
         from ..state import State
         import html as html_lib
         
@@ -207,29 +216,92 @@ class TextWidgetsMixin:
                 content = text
             rendering_ctx.reset(token)
             
-            # XSS protection: escape content
             escaped_content = html_lib.escape(str(content))
             
-            grad = "gradient-text" if level == 1 else ""
-            html_output = f'<h{level} class="{grad}">{escaped_content}</h{level}>'
-            if divider: html_output += '<sl-divider class="divider"></sl-divider>'
-            return Component("div", id=cid, content=html_output)
+            # Gradient: default True for h1, False for others
+            grade_val = gradient if gradient is not None else (level == 1)
+            
+            style_parts = []
+            
+            if isinstance(grade_val, str):
+                style_parts.append(f"background: {grade_val}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text")
+            elif grade_val:
+                style_parts.append("background: linear-gradient(135deg, var(--sl-color-primary-600), var(--sl-color-primary-400)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text")
+            
+            if align:
+                style_parts.append(f"text-align: {align}")
+                
+            # Merge kwargs style
+            if 'style' in kwargs:
+                style_parts.append(kwargs.pop('style'))
+            
+            style_attr = f'style="{"; ".join(style_parts)}"' if style_parts else ""
+            
+            # Handle additional props via Component? 
+            # Component logic for h1-h6 might need distinct handling if we want to pass ID and props
+            # But heading implementation currently manually constructs HTML string: f'<h{level} ...>'
+            # We should try to use Component if possible, OR construct manual string with props.
+            # Using Component is cleaner but requires 'tag' support in Component which works.
+            
+            # Let's switch to Component for h{level} to handle props automatically
+            # But we need to handle the gradient style carefully inside kwargs/style
+            
+            final_style = "; ".join(style_parts)
+            
+            # Use Component to render the H tag
+            # Note: content is already escaped if we use explicit content arg, BUT Component escapes too.
+            # If we pass escaped content to Component, we must disable component escaping.
+            
+            comp = Component(f"h{level}", id=cid, content=content, escape_content=True, style=final_style, **kwargs)
+            html_output = comp.render()
+            
+            # If divider needed, we need to wrap or append. 
+            # Current implementation returns Component("div") wrapper containing H tag string.
+            # To allow Props on H tag, we should construct the H tag carefully or return it directly.
+            # But 'builder' usually returns a SINGLE component.
+            # If divider is used, we return a DIV containing H + Divider. 
+            # If no divider, we can return the H component directly?
+            # Existing implementation: return Component("div", id=cid, content=html_output)
+            # This wraps H in a DIV. This is fine. Use inline style on H tag.
+            
+            # Let's reconstruct the manual HTML string with props, to maintain wrapper behavior
+            props_str = ""
+            for k, v in kwargs.items():
+                if k == 'class_': k = 'class'
+                k = k.replace('_', '-')
+                props_str += f' {k}="{html_lib.escape(str(v))}"'
+            
+            h_tag = f'<h{level} {style_attr}{props_str}>{escaped_content}</h{level}>'
+            
+            if divider: 
+                h_tag += '<sl-divider class="divider"></sl-divider>'
+                
+            return Component("div", id=cid, content=h_tag)
+            
         self._register_component(cid, builder)
 
-    def title(self, text: Union[str, Callable]):
+    def title(self, text: Union[str, Callable], gradient: bool = True, align: str = None, **kwargs):
         """Display title (h1 with gradient)"""
-        self.heading(text, level=1, divider=False)
+        self.heading(text, level=1, divider=False, gradient=gradient, align=align, **kwargs)
     
-    def header(self, text: Union[str, Callable], divider: bool = True):
+    def header(self, text: Union[str, Callable], divider: bool = True, gradient: bool = False, align: str = None, **kwargs):
         """Display header (h2)"""
-        self.heading(text, level=2, divider=divider)
+        self.heading(text, level=2, divider=divider, gradient=gradient, align=align, **kwargs)
     
-    def subheader(self, text: Union[str, Callable], divider: bool = False):
+    def subheader(self, text: Union[str, Callable], divider: bool = False, gradient: bool = False, align: str = None, **kwargs):
         """Display subheader (h3)"""
-        self.heading(text, level=3, divider=divider)
+        self.heading(text, level=3, divider=divider, gradient=gradient, align=align, **kwargs)
 
-    def text(self, content, size: str = "medium", muted: bool = False):
-        """Display text paragraph"""
+    def text(self, content, size: str = "medium", muted: bool = False, align: str = None, **kwargs):
+        """Display text paragraph
+        
+        Args:
+            content: Text content
+            size: Text size ('small', 'medium', 'large')
+            muted: Use muted color
+            align: Text alignment ('left', 'center', 'right')
+            **kwargs: Additional attributes (style, class_, etc.)
+        """
         from ..state import State
         
         cid = self._get_next_cid("text")
@@ -242,9 +314,22 @@ class TextWidgetsMixin:
             else:
                 val = content
             rendering_ctx.reset(token)
+            
             cls = f"text-{size} {'text-muted' if muted else ''}"
+            style_parts = []
+            if align:
+                style_parts.append(f"text-align: {align}")
+            
+            # Merge kwargs
+            if 'style' in kwargs:
+                style_parts.append(kwargs.pop('style'))
+            if 'class_' in kwargs:
+                cls = f"{cls} {kwargs.pop('class_')}".strip()
+                
+            style = "; ".join(style_parts)
+            
             # XSS protection: enable content escaping
-            return Component("p", id=cid, content=val, escape_content=True, class_=cls)
+            return Component("p", id=cid, content=val, escape_content=True, class_=cls, style=style, **kwargs)
         self._register_component(cid, builder)
     
     def caption(self, text: Union[str, Callable]):
@@ -349,8 +434,19 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=content, **props)
         self._register_component(cid, builder)
 
-    def code(self, code: Union[str, Callable], language: Optional[str] = None, **props):
-        """Display code block with syntax highlighting"""
+    def code(self, code: Union[str, Callable], language: Optional[str] = None, 
+             copy_button: bool = False, line_numbers: bool = False, 
+             showcase: bool = False, title: str = None, **props):
+        """Display code block with syntax highlighting
+        
+        Args:
+            code: Code content (string or callable)
+            language: Programming language for syntax highlighting
+            copy_button: Show copy to clipboard button
+            line_numbers: Show line numbers
+            showcase: Use macOS-style window appearance with colored dots
+            title: Window title (only for showcase mode)
+        """
         import html as html_lib
         
         cid = self._get_next_cid("code")
@@ -359,15 +455,123 @@ class TextWidgetsMixin:
             code_text = code() if callable(code) else code
             rendering_ctx.reset(token)
             
-            # XSS protection: escape code content
             escaped_code = html_lib.escape(str(code_text))
             
+            # Build line numbers if enabled
+            if line_numbers or showcase:
+                lines = escaped_code.split('\n')
+                numbered_lines = []
+                for i, line in enumerate(lines, 1):
+                    numbered_lines.append(f'<span class="line-num">{i}</span>{line}')
+                escaped_code = '\n'.join(numbered_lines)
+                line_num_style = '''
+                    .line-num { 
+                        display: inline-block; 
+                        width: 2.5rem; 
+                        text-align: right; 
+                        margin-right: 1rem; 
+                        color: #6b7280;
+                        user-select: none;
+                    }
+                '''
+            else:
+                line_num_style = ''
+            
             lang_class = f"language-{language}" if language else ""
-            html_output = f'''
-            <pre style="background:var(--sl-bg-card);padding:1rem;border-radius:0.5rem;border:1px solid var(--sl-border);overflow-x:auto;">
-                <code class="{lang_class}" style="color:var(--sl-text);font-family:monospace;">{escaped_code}</code>
-            </pre>
-            '''
+            
+            # Copy button
+            copy_btn_html = ''
+            if copy_button:
+                raw_code = html_lib.escape(str(code_text).replace('"', '&quot;'))
+                copy_btn_html = f'''<sl-copy-button value="{raw_code}" 
+                    style="position: absolute; top: 0.5rem; right: 0.5rem; --sl-color-primary-600: var(--sl-color-neutral-400);">
+                </sl-copy-button>'''
+            
+            if showcase:
+                title_html = f'<div class="code-title">{title}</div>' if title else ''
+                
+                # macOS-style showcase window
+                html_output = f'''
+                <div class="code-showcase-{cid}">
+                    <style>
+                    .code-showcase-{cid} {{
+                        background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+                        border-radius: 16px;
+                        padding: 2rem;
+                        margin: 2rem 0;
+                        position: relative;
+                        overflow: hidden;
+                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    }}
+                    .code-showcase-{cid}::before {{
+                        content: '';
+                        position: absolute;
+                        top: 0; left: 0; right: 0;
+                        height: 40px;
+                        background: linear-gradient(90deg, #1a1a2e, #2d2d5a);
+                        border-radius: 16px 16px 0 0;
+                    }}
+                    .code-showcase-{cid} .code-dots {{
+                        position: absolute;
+                        top: 15px;
+                        left: 20px;
+                        display: flex;
+                        gap: 8px;
+                        z-index: 1;
+                    }}
+                    .code-showcase-{cid} .code-dot {{
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 50%;
+                    }}
+                    .code-showcase-{cid} .code-dot.red {{ background: #ff5f56; }}
+                    .code-showcase-{cid} .code-dot.yellow {{ background: #ffbd2e; }}
+                    .code-showcase-{cid} .code-dot.green {{ background: #27c93f; }}
+                    
+                    .code-showcase-{cid} .code-title {{
+                        position: absolute;
+                        top: 12px;
+                        right: 20px;
+                        color: #666;
+                        font-family: sans-serif;
+                        font-size: 0.8rem;
+                        z-index: 1;
+                    }}
+                    
+                    .code-showcase-{cid} pre {{
+                        margin-top: 1.5rem;
+                        background: transparent !important;
+                        border: none !important;
+                        padding: 0 !important;
+                    }}
+                    .code-showcase-{cid} code {{
+                        color: #d4d4d4 !important;
+                        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+                        font-size: 0.95rem;
+                        line-height: 1.8;
+                    }}
+                    {line_num_style}
+                    </style>
+                    <div class="code-dots">
+                        <div class="code-dot red"></div>
+                        <div class="code-dot yellow"></div>
+                        <div class="code-dot green"></div>
+                    </div>
+                    {title_html}
+                    {copy_btn_html}
+                    <pre><code class="{lang_class}">{escaped_code}</code></pre>
+                </div>
+                '''
+            else:
+                html_output = f'''
+                <div style="position: relative;">
+                    <style>{line_num_style}</style>
+                    {copy_btn_html}
+                    <pre style="background:var(--sl-bg-card);padding:1rem;border-radius:0.5rem;border:1px solid var(--sl-border);overflow-x:auto;margin:0;">
+                        <code class="{lang_class}" style="color:var(--sl-text);font-family:'JetBrains Mono', 'Fira Code', monospace;font-size:0.9rem;line-height:1.6;">{escaped_code}</code>
+                    </pre>
+                </div>
+                '''
             return Component("div", id=cid, content=html_output, **props)
         self._register_component(cid, builder)
 
