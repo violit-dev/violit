@@ -6,82 +6,98 @@ from ..context import rendering_ctx
 
 
 class TextWidgetsMixin:
-    def write(self, *args, tag: Optional[str] = "div", unsafe_allow_html: bool = False, **props):
-        """Display content with automatic type detection"""
-        from ..state import State
-        import re
-        import json
-        import html as html_lib
+    def write(self, *args, **kwargs):
+        """Magic write: displays arguments based on their type
         
-        cid = self._get_next_cid("comp")
+        Supported types:
+        - Strings, Numbers, State: Rendered as Markdown text
+        - Pandas DataFrame/Series: Rendered as interactive table
+        - Dict/List: Rendered as JSON tree
+        - Matplotlib/Plotly Figures: Rendered as charts
+        - Exceptions: Rendered as error trace
+        """
+        from ..state import State, ComputedState
         
-        def builder():
-            def _has_markdown(text: str) -> bool:
-                """Check if text contains markdown syntax"""
-                markdown_patterns = [
-                    r'^#{1,6}\s',           # Headers: # ## ###
-                    r'\*\*[^*]+\*\*',       # Bold: **text**
-                    r'(?<!\*)\*[^*\n]+\*',  # Italic: *text*
-                    r'`[^`]+`',             # Code: `text`
-                    r'\[.+?\]\(.+?\)',      # Links: [text](url)
-                    r'^[-*]\s',             # Lists: - or *
-                    r'^\d+\.\s',            # Numbered lists: 1. 2.
-                ]
-                for pattern in markdown_patterns:
-                    if re.search(pattern, text, re.MULTILINE):
-                        return True
-                return False
+        # Buffer for text-like arguments
+        text_buffer = []
+        
+        def flush_buffer():
+            if text_buffer:
+                self.markdown(*text_buffer)
+                text_buffer.clear()
+        
+        for arg in args:
+            # Unwrap state for type checking ONLY
+            check_val = arg.value if isinstance(arg, (State, ComputedState)) else arg
             
-            # Set rendering context once for entire builder
-            token = rendering_ctx.set(cid)
-            parts = []
-            
+            # 1. Pandas DataFrame / Series
+            is_df = False
             try:
-                for arg in args:
-                    current_value = arg
-                    
-                    # State object: read value (registers dependency)
-                    if isinstance(arg, State):
-                        current_value = arg.value
-                    
-                    # Callable/Lambda: execute (registers dependency)
-                    elif callable(arg):
-                        current_value = arg()
-                    
-                    # DataFrame (pandas)
-                    try:
-                        import pandas as pd
-                        if isinstance(current_value, pd.DataFrame):
-                            parts.append(self._render_dataframe_html(current_value))
-                            continue
-                    except (ImportError, AttributeError):
-                        pass
-                    
-                    # Dict or List → JSON
-                    if isinstance(current_value, (dict, list, tuple)):
-                        json_str = json.dumps(current_value, indent=2, ensure_ascii=False)
-                        parts.append(f'<pre style="background:var(--sl-bg-card);padding:1rem;border-radius:0.5rem;border:1px solid var(--sl-border);overflow-x:auto;"><code style="color:var(--sl-text);font-family:monospace;">{html_lib.escape(json_str)}</code></pre>')
-                        continue
-                    
-                    # String with markdown → render as markdown
-                    text = str(current_value)
-                    if _has_markdown(text):
-                        parts.append(self._render_markdown(text))
-                    else:
-                        # Plain text
-                        parts.append(text)
-                
-                # Join all parts
-                content = " ".join(parts)
-                
-                # Check if any HTML in content
-                has_html = '<' in content and '>' in content
-                return Component(tag, id=cid, content=content, escape_content=not (has_html or unsafe_allow_html), **props)
+                import pandas as pd
+                if isinstance(check_val, (pd.DataFrame, pd.Series, pd.Index)):
+                    is_df = True
+            except ImportError: pass
             
-            finally:
-                rendering_ctx.reset(token)
-        
-        self._register_component(cid, builder)
+            if is_df:
+                flush_buffer()
+                if hasattr(self, 'dataframe'):
+                    self.dataframe(arg)
+                else:
+                    self.markdown(str(arg))
+                continue
+                
+            # 2. Matplotlib Figure
+            is_pyplot = False
+            try:
+                import matplotlib.figure
+                if isinstance(check_val, matplotlib.figure.Figure):
+                    is_pyplot = True
+            except ImportError: pass
+            
+            if is_pyplot:
+                flush_buffer()
+                if hasattr(self, 'pyplot'):
+                    self.pyplot(arg)
+                continue
+                
+            # 3. Plotly Figure
+            is_plotly = False
+            try:
+                if hasattr(check_val, 'to_plotly_json'):
+                    is_plotly = True
+            except ImportError: pass
+            
+            if is_plotly:
+                flush_buffer()
+                if hasattr(self, 'plotly_chart'):
+                    self.plotly_chart(arg)
+                continue
+                
+            # 4. Dict / List (JSON)
+            if isinstance(check_val, (dict, list)):
+                flush_buffer()
+                if hasattr(self, 'json'):
+                    self.json(arg)
+                else:
+                    # Fallback if json widget logic is missing for State
+                    # But wait, we need to fix json widget too.
+                    self.json(arg)
+                continue
+                
+            # 5. Exception
+            if isinstance(check_val, Exception):
+                flush_buffer()
+                if hasattr(self, 'exception'):
+                    self.exception(arg)
+                else:
+                    self.error(str(arg))
+                continue
+            
+            # Default: Text-like (str, int, float, State, ComputedState)
+            text_buffer.append(arg)
+            
+        # Flush remaining text
+        flush_buffer()
     
     def _render_markdown(self, text: str) -> str:
         """Render markdown to HTML (internal helper)"""
@@ -193,7 +209,7 @@ class TextWidgetsMixin:
 
     def heading(self, *args, level: int = 1, divider: bool = False):
         """Display heading (h1-h6)"""
-        from ..state import State
+        from ..state import State, ComputedState
         import html as html_lib
         
         cid = self._get_next_cid("heading")
@@ -202,7 +218,7 @@ class TextWidgetsMixin:
             
             parts = []
             for arg in args:
-                if isinstance(arg, State):
+                if isinstance(arg, (State, ComputedState)):
                     parts.append(str(arg.value))
                 elif callable(arg):
                     parts.append(str(arg()))
@@ -238,7 +254,7 @@ class TextWidgetsMixin:
         
         Supports multiple arguments which will be joined by spaces.
         """
-        from ..state import State
+        from ..state import State, ComputedState
         
         cid = self._get_next_cid("text")
         def builder():
@@ -246,7 +262,7 @@ class TextWidgetsMixin:
             
             parts = []
             for arg in args:
-                if isinstance(arg, State):
+                if isinstance(arg, (State, ComputedState)):
                     parts.append(str(arg.value))
                 elif callable(arg):
                     parts.append(str(arg()))
@@ -273,11 +289,11 @@ class TextWidgetsMixin:
         cid = self._get_next_cid("markdown")
         def builder():
             token = rendering_ctx.set(cid)
-            from ..state import State
+            from ..state import State, ComputedState
             
             parts = []
             for arg in args:
-                if isinstance(arg, State):
+                if isinstance(arg, (State, ComputedState)):
                     parts.append(str(arg.value))
                 elif callable(arg):
                     parts.append(str(arg()))
@@ -371,12 +387,12 @@ class TextWidgetsMixin:
         """
         cid = self._get_next_cid("html")
         def builder():
-            from ..state import State
+            from ..state import State, ComputedState
             token = rendering_ctx.set(cid)
             
             parts = []
             for arg in args:
-                if isinstance(arg, State):
+                if isinstance(arg, (State, ComputedState)):
                     parts.append(str(arg.value))
                 elif callable(arg):
                     parts.append(str(arg()))

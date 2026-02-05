@@ -28,6 +28,7 @@ class StatusWidgetsMixin:
     def alert(self, *args, variant="primary", icon=None):
         """Display alert message with Signal support (multiple arguments supported)"""
         import html as html_lib
+        from ..state import State, ComputedState
         
         cid = self._get_next_cid("alert")
         def builder():
@@ -37,7 +38,7 @@ class StatusWidgetsMixin:
             
             try:
                 for arg in args:
-                    if isinstance(arg, State):
+                    if isinstance(arg, (State, ComputedState)):
                         parts.append(str(arg.value))
                     elif callable(arg):
                         parts.append(str(arg()))
@@ -59,10 +60,10 @@ class StatusWidgetsMixin:
     def toast(self, *args, icon="info-circle", variant="primary"):
         """Display toast notification (Signal support via evaluation)"""
         import json
-        from ..state import State
+        from ..state import State, ComputedState
         
         # Check if any argument requires dynamic binding
-        is_dynamic = any(isinstance(a, (State, Callable)) for a in args)
+        is_dynamic = any(isinstance(a, (State, ComputedState, Callable)) for a in args)
         
         if is_dynamic:
             cid = self._get_next_cid("toast_trigger")
@@ -70,7 +71,7 @@ class StatusWidgetsMixin:
                 token = rendering_ctx.set(cid)
                 parts = []
                 for arg in args:
-                    if isinstance(arg, State):
+                    if isinstance(arg, (State, ComputedState)):
                         parts.append(str(arg.value))
                     elif callable(arg):
                         parts.append(str(arg()))
@@ -148,14 +149,14 @@ class StatusWidgetsMixin:
     def progress(self, value=0, *args):
         """Display progress bar with Signal support"""
         import html as html_lib
-        from ..state import State
+        from ..state import State, ComputedState
         
         cid = self._get_next_cid("progress")
         
         def builder():
             # Handle Signal
             val_num = value
-            if isinstance(value, State):
+            if isinstance(value, (State, ComputedState)):
                 token = rendering_ctx.set(cid)
                 val_num = value.value
                 rendering_ctx.reset(token)
@@ -169,7 +170,7 @@ class StatusWidgetsMixin:
             if args:
                 token = rendering_ctx.set(cid)
                 for arg in args:
-                    if isinstance(arg, State):
+                    if isinstance(arg, (State, ComputedState)):
                         parts.append(str(arg.value))
                     elif callable(arg):
                         parts.append(str(arg()))
@@ -198,7 +199,7 @@ class StatusWidgetsMixin:
     def spinner(self, *args):
         """Display loading spinner"""
         import html as html_lib
-        from ..state import State
+        from ..state import State, ComputedState
         
         cid = self._get_next_cid("spinner")
         
@@ -207,7 +208,7 @@ class StatusWidgetsMixin:
             if args:
                 token = rendering_ctx.set(cid)
                 for arg in args:
-                    if isinstance(arg, State):
+                    if isinstance(arg, (State, ComputedState)):
                         parts.append(str(arg.value))
                     elif callable(arg):
                         parts.append(str(arg()))

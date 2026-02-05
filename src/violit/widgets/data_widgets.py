@@ -263,16 +263,34 @@ class DataWidgetsMixin:
         self._register_component(cid, builder)
 
     def json(self, body: Any, expanded=True):
-        """Display JSON data"""
+        """Display JSON data with Signal support"""
         cid = self._get_next_cid("json")
-        json_str = json.dumps(body, indent=2, default=str)
-        html = f'''
-        <details {"open" if expanded else ""} style="background:var(--sl-bg-card);border:1px solid var(--sl-border);border-radius:0.5rem;padding:0.5rem;">
-            <summary style="cursor:pointer;font-size:0.875rem;color:var(--sl-text-muted);">JSON Data</summary>
-            <pre style="margin:0.5rem 0 0 0;font-size:0.875rem;color:var(--sl-primary);">{json_str}</pre>
-        </details>
-        '''
-        return Component("div", id=cid, content=html)
+        
+        def builder():
+            from ..state import State, ComputedState
+            import json as json_lib
+            
+            # Handle Signal
+            current_body = body
+            if isinstance(body, (State, ComputedState)):
+                token = rendering_ctx.set(cid)
+                current_body = body.value
+                rendering_ctx.reset(token)
+            elif callable(body):
+                token = rendering_ctx.set(cid)
+                current_body = body()
+                rendering_ctx.reset(token)
+                
+            json_str = json_lib.dumps(current_body, indent=2, default=str)
+            html = f'''
+            <details {"open" if expanded else ""} style="background:var(--sl-bg-card);border:1px solid var(--sl-border);border-radius:0.5rem;padding:0.5rem;">
+                <summary style="cursor:pointer;font-size:0.875rem;color:var(--sl-text-muted);">JSON Data</summary>
+                <pre style="margin:0.5rem 0 0 0;font-size:0.875rem;color:var(--sl-primary);overflow-x:auto;">{json_str}</pre>
+            </details>
+            '''
+            return Component("div", id=cid, content=html)
+            
+        self._register_component(cid, builder)
 
     def heatmap(self, data: Union[dict, State, Callable], 
                 start_date=None, end_date=None,

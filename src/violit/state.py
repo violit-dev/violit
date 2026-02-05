@@ -83,6 +83,108 @@ class State:
     def __gt__(self, other): return ComputedState(lambda: self.value > other)
     def __ge__(self, other): return ComputedState(lambda: self.value >= other)
 
+    # Reactive Arithmetic Operators
+    def __add__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        def compute():
+            self_val = self.value
+            # If either is a string, concatenate as strings
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                return str(self_val) + str(other_val)
+            else:
+                return self_val + other_val
+        return ComputedState(compute)
+    
+    def __radd__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        def compute():
+            self_val = self.value
+            # If either is a string, concatenate as strings
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                return str(other_val) + str(self_val)
+            else:
+                return other_val + self_val
+        return ComputedState(compute)
+    
+    def __sub__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: self.value - other_val)
+    
+    def __rsub__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: other_val - self.value)
+    
+    def __mul__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        def compute():
+            self_val = self.value
+            # String repetition: "ab" * 3 or 3 * "ab"
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                # One must be int for string repetition to work
+                if isinstance(self_val, str) and isinstance(other_val, int):
+                    return self_val * other_val
+                elif isinstance(other_val, str) and isinstance(self_val, int):
+                    return self_val * other_val
+                else:
+                    # Both strings? Convert to numeric or error
+                    return self_val * other_val
+            else:
+                return self_val * other_val
+        return ComputedState(compute)
+    
+    def __rmul__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        def compute():
+            self_val = self.value
+            # String repetition: "ab" * 3 or 3 * "ab"
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                if isinstance(other_val, str) and isinstance(self_val, int):
+                    return other_val * self_val
+                elif isinstance(self_val, str) and isinstance(other_val, int):
+                    return other_val * self_val
+                else:
+                    return other_val * self_val
+            else:
+                return other_val * self_val
+        return ComputedState(compute)
+    
+    def __truediv__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: self.value / other_val)
+    
+    def __rtruediv__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: other_val / self.value)
+    
+    def __floordiv__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: self.value // other_val)
+    
+    def __rfloordiv__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: other_val // self.value)
+    
+    def __mod__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: self.value % other_val)
+    
+    def __rmod__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: other_val % self.value)
+    
+    def __pow__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: self.value ** other_val)
+    
+    def __rpow__(self, other): 
+        other_val = other.value if isinstance(other, (State, ComputedState)) else other
+        return ComputedState(lambda: other_val ** self.value)
+    
+    # String formatting support
+    def __format__(self, format_spec):
+        """Support for f-string formatting: f'{state:03d}'"""
+        return format(self.value, format_spec)
+
 
 class ComputedState:
     """A state derived from other states (e.g. expressions)"""
@@ -107,3 +209,102 @@ class ComputedState:
     def __or__(self, other):
         val_other = other.value if hasattr(other, 'value') else other
         return ComputedState(lambda: self.value or val_other)
+
+    # Reactive Arithmetic Operators (Mirroring State)
+    def __add__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        def compute():
+            self_val = self.value
+            # If either is a string, concatenate as strings
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                return str(self_val) + str(other_val)
+            else:
+                return self_val + other_val
+        return ComputedState(compute)
+    
+    def __radd__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        def compute():
+            self_val = self.value
+            # If either is a string, concatenate as strings
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                return str(other_val) + str(self_val)
+            else:
+                return other_val + self_val
+        return ComputedState(compute)
+    
+    def __sub__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: self.value - other_val)
+    
+    def __rsub__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: other_val - self.value)
+    
+    def __mul__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        def compute():
+            self_val = self.value
+            # String repetition: "ab" * 3 or 3 * "ab"
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                if isinstance(self_val, str) and isinstance(other_val, int):
+                    return self_val * other_val
+                elif isinstance(other_val, str) and isinstance(self_val, int):
+                    return self_val * other_val
+                else:
+                    return self_val * other_val
+            else:
+                return self_val * other_val
+        return ComputedState(compute)
+    
+    def __rmul__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        def compute():
+            self_val = self.value
+            # String repetition: "ab" * 3 or 3 * "ab"
+            if isinstance(self_val, str) or isinstance(other_val, str):
+                if isinstance(other_val, str) and isinstance(self_val, int):
+                    return other_val * self_val
+                elif isinstance(self_val, str) and isinstance(other_val, int):
+                    return other_val * self_val
+                else:
+                    return other_val * self_val
+            else:
+                return other_val * self_val
+        return ComputedState(compute)
+    
+    def __truediv__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: self.value / other_val)
+    
+    def __rtruediv__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: other_val / self.value)
+    
+    def __floordiv__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: self.value // other_val)
+    
+    def __rfloordiv__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: other_val // self.value)
+    
+    def __mod__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: self.value % other_val)
+    
+    def __rmod__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: other_val % self.value)
+    
+    def __pow__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: self.value ** other_val)
+    
+    def __rpow__(self, other): 
+        other_val = other.value if hasattr(other, 'value') else other
+        return ComputedState(lambda: other_val ** self.value)
+    
+    # String formatting support
+    def __format__(self, format_spec):
+        return format(self.value, format_spec)
