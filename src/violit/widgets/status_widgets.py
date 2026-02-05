@@ -9,38 +9,44 @@ from ..state import get_session_store, State
 class StatusWidgetsMixin:
     """Status display widgets (success, info, warning, error, toast, progress, spinner, status, balloons, snow, exception)"""
     
-    def success(self, content): 
+    def success(self, *args): 
         """Display success alert"""
-        self.alert(content, "success", "check-circle")
+        self.alert(*args, variant="success", icon="check-circle")
     
-    def warning(self, content): 
+    def warning(self, *args): 
         """Display warning alert"""
-        self.alert(content, "warning", "exclamation-triangle")
+        self.alert(*args, variant="warning", icon="exclamation-triangle")
     
-    def error(self, content): 
+    def error(self, *args): 
         """Display error alert"""
-        self.alert(content, "danger", "x-circle")
+        self.alert(*args, variant="danger", icon="x-circle")
     
-    def info(self, content): 
+    def info(self, *args): 
         """Display info alert"""
-        self.alert(content, "primary", "info-circle")
+        self.alert(*args, variant="primary", icon="info-circle")
     
-    def alert(self, content: Union[str, Callable, State], variant="primary", icon=None):
-        """Display alert message with Signal support"""
+    def alert(self, *args, variant="primary", icon=None):
+        """Display alert message with Signal support (multiple arguments supported)"""
         import html as html_lib
         
         cid = self._get_next_cid("alert")
         def builder():
-            # Signal handling
-            val = content
-            if isinstance(content, State):
-                token = rendering_ctx.set(cid)
-                val = content.value
+            # Signal handling for multiple arguments
+            parts = []
+            token = rendering_ctx.set(cid)
+            
+            try:
+                for arg in args:
+                    if isinstance(arg, State):
+                        parts.append(str(arg.value))
+                    elif callable(arg):
+                        parts.append(str(arg()))
+                    else:
+                        parts.append(str(arg))
+            finally:
                 rendering_ctx.reset(token)
-            elif callable(content):
-                token = rendering_ctx.set(cid)
-                val = content()
-                rendering_ctx.reset(token)
+            
+            val = " ".join(parts)
             
             # XSS protection: escape content
             escaped_val = html_lib.escape(str(val))
@@ -50,16 +56,27 @@ class StatusWidgetsMixin:
             return Component("div", id=cid, content=html_output)
         self._register_component(cid, builder)
 
-    def toast(self, message: Union[str, Callable, State], icon="info-circle", variant="primary"):
+    def toast(self, *args, icon="info-circle", variant="primary"):
         """Display toast notification (Signal support via evaluation)"""
         import json
+        from ..state import State
         
-        if isinstance(message, (State, Callable)):
-            # Special case: dynamic toast label isn't common but for consistency:
+        # Check if any argument requires dynamic binding
+        is_dynamic = any(isinstance(a, (State, Callable)) for a in args)
+        
+        if is_dynamic:
             cid = self._get_next_cid("toast_trigger")
             def builder():
                 token = rendering_ctx.set(cid)
-                val = message.value if isinstance(message, State) else message()
+                parts = []
+                for arg in args:
+                    if isinstance(arg, State):
+                        parts.append(str(arg.value))
+                    elif callable(arg):
+                        parts.append(str(arg()))
+                    else:
+                        parts.append(str(arg))
+                val = " ".join(parts)
                 rendering_ctx.reset(token)
                 
                 # XSS protection: safely escape with JSON.stringify
@@ -70,6 +87,7 @@ class StatusWidgetsMixin:
                 return Component("script", id=cid, content=code)
             self._register_component(cid, builder)
         else:
+            message = " ".join(str(a) for a in args)
             # XSS protection: safely escape with JSON.stringify
             safe_message = json.dumps(str(message))
             safe_variant = json.dumps(str(variant))
@@ -127,9 +145,10 @@ class StatusWidgetsMixin:
             if 'effect' in lite_data:
                 store['effects'].append(lite_data['effect'])
 
-    def progress(self, value=0, text=None):
+    def progress(self, value=0, *args):
         """Display progress bar with Signal support"""
         import html as html_lib
+        from ..state import State
         
         cid = self._get_next_cid("progress")
         
@@ -145,7 +164,22 @@ class StatusWidgetsMixin:
                 val_num = value()
                 rendering_ctx.reset(token)
             
-            progress_text = text or f"{val_num}%"
+            # Resolve text args
+            parts = []
+            if args:
+                token = rendering_ctx.set(cid)
+                for arg in args:
+                    if isinstance(arg, State):
+                        parts.append(str(arg.value))
+                    elif callable(arg):
+                        parts.append(str(arg()))
+                    else:
+                        parts.append(str(arg))
+                rendering_ctx.reset(token)
+                progress_text = " ".join(parts)
+            else:
+                progress_text = f"{val_num}%"
+            
             # XSS protection: escape text
             escaped_text = html_lib.escape(str(progress_text))
             
@@ -161,22 +195,40 @@ class StatusWidgetsMixin:
             return Component("div", id=cid, content=html_output)
         self._register_component(cid, builder)
 
-    def spinner(self, text="Loading..."):
+    def spinner(self, *args):
         """Display loading spinner"""
         import html as html_lib
+        from ..state import State
         
         cid = self._get_next_cid("spinner")
         
-        # XSS protection: escape text
-        escaped_text = html_lib.escape(str(text))
-        
-        html_output = f'''
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
-            <sl-spinner style="font-size:1.5rem;"></sl-spinner>
-            <span style="color:var(--sl-text-muted);font-size:0.875rem;">{escaped_text}</span>
-        </div>
-        '''
-        return Component("div", id=cid, content=html_output)
+        def builder():
+            parts = []
+            if args:
+                token = rendering_ctx.set(cid)
+                for arg in args:
+                    if isinstance(arg, State):
+                        parts.append(str(arg.value))
+                    elif callable(arg):
+                        parts.append(str(arg()))
+                    else:
+                        parts.append(str(arg))
+                rendering_ctx.reset(token)
+                text = " ".join(parts)
+            else:
+                text = "Loading..."
+            
+            # XSS protection: escape text
+            escaped_text = html_lib.escape(str(text))
+            
+            html_output = f'''
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+                <sl-spinner style="font-size:1.5rem;"></sl-spinner>
+                <span style="color:var(--sl-text-muted);font-size:0.875rem;">{escaped_text}</span>
+            </div>
+            '''
+            return Component("div", id=cid, content=html_output)
+        self._register_component(cid, builder)
     
     def status(self, label: str, state: str = "running", expanded: bool = True):
         from ..context import fragment_ctx

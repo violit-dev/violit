@@ -191,7 +191,7 @@ class TextWidgetsMixin:
         '''
         return styled_html
 
-    def heading(self, text, level: int = 1, divider: bool = False):
+    def heading(self, *args, level: int = 1, divider: bool = False):
         """Display heading (h1-h6)"""
         from ..state import State
         import html as html_lib
@@ -199,12 +199,17 @@ class TextWidgetsMixin:
         cid = self._get_next_cid("heading")
         def builder():
             token = rendering_ctx.set(cid)
-            if isinstance(text, State):
-                content = text.value
-            elif callable(text):
-                content = text()
-            else:
-                content = text
+            
+            parts = []
+            for arg in args:
+                if isinstance(arg, State):
+                    parts.append(str(arg.value))
+                elif callable(arg):
+                    parts.append(str(arg()))
+                else:
+                    parts.append(str(arg))
+            
+            content = " ".join(parts)
             rendering_ctx.reset(token)
             
             # XSS protection: escape content
@@ -216,48 +221,71 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=html_output)
         self._register_component(cid, builder)
 
-    def title(self, text: Union[str, Callable]):
+    def title(self, *args):
         """Display title (h1 with gradient)"""
-        self.heading(text, level=1, divider=False)
+        self.heading(*args, level=1, divider=False)
     
-    def header(self, text: Union[str, Callable], divider: bool = True):
+    def header(self, *args, divider: bool = True):
         """Display header (h2)"""
-        self.heading(text, level=2, divider=divider)
+        self.heading(*args, level=2, divider=divider)
     
-    def subheader(self, text: Union[str, Callable], divider: bool = False):
+    def subheader(self, *args, divider: bool = False):
         """Display subheader (h3)"""
-        self.heading(text, level=3, divider=divider)
+        self.heading(*args, level=3, divider=divider)
 
-    def text(self, content, size: str = "medium", muted: bool = False):
-        """Display text paragraph"""
+    def text(self, *args, size: str = "medium", muted: bool = False):
+        """Display text paragraph
+        
+        Supports multiple arguments which will be joined by spaces.
+        """
         from ..state import State
         
         cid = self._get_next_cid("text")
         def builder():
             token = rendering_ctx.set(cid)
-            if isinstance(content, State):
-                val = content.value
-            elif callable(content):
-                val = content()
-            else:
-                val = content
+            
+            parts = []
+            for arg in args:
+                if isinstance(arg, State):
+                    parts.append(str(arg.value))
+                elif callable(arg):
+                    parts.append(str(arg()))
+                else:
+                    parts.append(str(arg))
+            
+            val = " ".join(parts)
             rendering_ctx.reset(token)
+            
             cls = f"text-{size} {'text-muted' if muted else ''}"
             # XSS protection: enable content escaping
             return Component("p", id=cid, content=val, escape_content=True, class_=cls)
         self._register_component(cid, builder)
     
-    def caption(self, text: Union[str, Callable]):
+    def caption(self, *args):
         """Display caption text (small, muted)"""
-        self.text(text, size="small", muted=True)
+        self.text(*args, size="small", muted=True)
 
-    def markdown(self, text: Union[str, Callable], **props):
-        """Display markdown-formatted text"""
+    def markdown(self, *args, **props):
+        """Display markdown-formatted text
+        
+        Supports multiple arguments which will be joined by spaces.
+        """
         cid = self._get_next_cid("markdown")
         def builder():
             token = rendering_ctx.set(cid)
-            content = text() if callable(text) else text
+            from ..state import State
             
+            parts = []
+            for arg in args:
+                if isinstance(arg, State):
+                    parts.append(str(arg.value))
+                elif callable(arg):
+                    parts.append(str(arg()))
+                else:
+                    parts.append(str(arg))
+            
+            content = " ".join(parts)
+                
             # Enhanced markdown conversion - line-by-line processing
             import re
             lines = content.split('\n')
@@ -332,19 +360,30 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=html, class_="markdown", **props)
         self._register_component(cid, builder)
     
-    def html(self, html_content: Union[str, Callable], **props):
+    def html(self, *args, **props):
         """Display raw HTML content
         
         Use this when you need to render HTML directly without markdown processing.
         For markdown formatting, use app.markdown() instead.
         
         Example:
-            app.html('<div class="custom">Hello</div>')
+            app.html('<div class="custom">', count, '</div>')
         """
         cid = self._get_next_cid("html")
         def builder():
+            from ..state import State
             token = rendering_ctx.set(cid)
-            content = html_content() if callable(html_content) else html_content
+            
+            parts = []
+            for arg in args:
+                if isinstance(arg, State):
+                    parts.append(str(arg.value))
+                elif callable(arg):
+                    parts.append(str(arg()))
+                else:
+                    parts.append(str(arg))
+            
+            content = " ".join(parts)
             rendering_ctx.reset(token)
             return Component("div", id=cid, content=content, **props)
         self._register_component(cid, builder)
@@ -369,16 +408,6 @@ class TextWidgetsMixin:
             </pre>
             '''
             return Component("div", id=cid, content=html_output, **props)
-        self._register_component(cid, builder)
-
-    def html(self, html_content: Union[str, Callable], **props):
-        """Render raw HTML"""
-        cid = self._get_next_cid("html")
-        def builder():
-            token = rendering_ctx.set(cid)
-            content = html_content() if callable(html_content) else html_content
-            rendering_ctx.reset(token)
-            return Component("div", id=cid, content=content, **props)
         self._register_component(cid, builder)
 
     def divider(self):
