@@ -9,6 +9,51 @@ from ..context import rendering_ctx
 from ..state import State
 
 
+# [FIX] Shared helper: Plotly render script that handles both visible and hidden containers.
+# - Visible containers: double-rAF ensures layout is settled before rendering.
+# - Hidden containers (e.g. inactive tabs): defers rendering via IntersectionObserver,
+#   so the chart is created at the correct width the moment the tab becomes visible.
+_PLOTLY_RENDER_SCRIPT = """
+<script>(function(){{
+    var d = {fj};
+    var cid = '{cid}';
+    var cfg = {{responsive: true, displayModeBar: false}};
+
+    function _vlDraw() {{
+        var el = document.getElementById(cid);
+        if (!el || !window.Plotly) return;
+        // autosize: true + responsive config handles all sizing.
+        // Do NOT set d.layout.width — it overrides responsive behavior.
+        d.layout.autosize = true;
+        delete d.layout.width;
+        Plotly.newPlot(cid, d.data, d.layout, cfg);
+    }}
+
+    function _vlSchedule() {{
+        requestAnimationFrame(function() {{
+            requestAnimationFrame(_vlDraw);
+        }});
+    }}
+
+    var el = document.getElementById(cid);
+    if (!el) return;
+
+    // If container is hidden (inactive tab, clientWidth=0), defer until visible
+    if (el.clientWidth < 10) {{
+        var io = new IntersectionObserver(function(entries) {{
+            if (entries[0].isIntersecting && entries[0].boundingClientRect.width > 10) {{
+                io.disconnect();
+                _vlSchedule();
+            }}
+        }});
+        io.observe(el);
+    }} else {{
+        _vlSchedule();
+    }}
+}})();</script>
+"""
+
+
 class ChartWidgetsMixin:
     """Chart widgets (line, bar, area, scatter, plotly, pyplot, etc.)"""
     
@@ -51,16 +96,8 @@ class ChartWidgetsMixin:
             fj = pio.to_json(current_fig)
             width_style = "width: 100%;" if use_container_width else ""
             html = f'''
-            <div id="{cid}" style="{width_style} height: 500px;"></div>
-            <script>(function(){{
-                const d = {fj};
-                if (window.Plotly) {{
-                    Plotly.newPlot('{cid}', d.data, d.layout, {{responsive: true}});
-                }} else {{
-                    console.error("Plotly not found");
-                }}
-            }})();</script>
-            '''
+            <div id="{cid}" class="js-plotly-plot" style="{width_style} height: 500px;"></div>
+            ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
             return Component("div", id=f"{cid}_wrapper", content=html)
             
         self._register_component(cid, builder)
@@ -110,12 +147,8 @@ class ChartWidgetsMixin:
             fj = pio.to_json(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
-            <div id="{cid}" style="{container_width} height: {height}px;"></div>
-            <script>(function(){{
-                const d = {fj};
-                Plotly.newPlot('{cid}', d.data, d.layout, {{responsive: true}});
-            }})();</script>
-            '''
+            <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
+            ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
             return Component("div", id=f"{cid}_wrapper", content=html)
         
         self._register_component(cid, builder)
@@ -138,12 +171,8 @@ class ChartWidgetsMixin:
             fj = pio.to_json(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
-            <div id="{cid}" style="{container_width} height: {height}px;"></div>
-            <script>(function(){{
-                const d = {fj};
-                Plotly.newPlot('{cid}', d.data, d.layout, {{responsive: true}});
-            }})();</script>
-            '''
+            <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
+            ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
             return Component("div", id=f"{cid}_wrapper", content=html)
         
         self._register_component(cid, builder)
@@ -167,12 +196,8 @@ class ChartWidgetsMixin:
             fj = pio.to_json(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
-            <div id="{cid}" style="{container_width} height: {height}px;"></div>
-            <script>(function(){{
-                const d = {fj};
-                Plotly.newPlot('{cid}', d.data, d.layout, {{responsive: true}});
-            }})();</script>
-            '''
+            <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
+            ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
             return Component("div", id=f"{cid}_wrapper", content=html)
         
         self._register_component(cid, builder)
@@ -196,12 +221,8 @@ class ChartWidgetsMixin:
             fj = pio.to_json(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
-            <div id="{cid}" style="{container_width} height: {height}px;"></div>
-            <script>(function(){{
-                const d = {fj};
-                Plotly.newPlot('{cid}', d.data, d.layout, {{responsive: true}});
-            }})();</script>
-            '''
+            <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
+            ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
             return Component("div", id=f"{cid}_wrapper", content=html)
         
         self._register_component(cid, builder)

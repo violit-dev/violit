@@ -11,7 +11,7 @@ mode = 'lite' if '--lite' in sys.argv else 'ws'
 # Initialize App
 # This will handle --conservative flag internally if passed
 # Set container_width='1200px' to display wider with sidebar
-app = vl.App(title="Violit Showcase", mode=mode, theme='light', container_width='1200px')
+app = vl.App(title="Violit Showcase", mode=mode, theme='violit_light_jewel', container_width='1200px')
 
 # --- State Management ---
 chat_history = app.state([

@@ -159,7 +159,7 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='light', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=True, container_width='800px', use_cdn=False):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=True, container_width='800px', use_cdn=False):
         self.mode = mode
         self.use_cdn = use_cdn
         self.app_title = title  # Renamed to avoid conflict with title() method
@@ -887,6 +887,10 @@ class App(
                         }}
                         extraStyle.textContent = `{t.extra_css}`;
                     }})();
+
+                    // Theme Extra JS (cleanup previous, then apply new)
+                    if (window._vlThemeCleanup) {{ window._vlThemeCleanup(); window._vlThemeCleanup = null; }}
+                    {t.extra_js}
                 </script>
             '''
             return Component("div", id=cid, style="display:none", content=script_content)
@@ -1763,6 +1767,7 @@ HTML_TEMPLATE = """
         sl-button {
              --sl-color-primary-500: var(--sl-primary);
              --sl-color-primary-600: color-mix(in srgb, var(--sl-primary), black 10%);
+             caret-color: transparent;
         }
         body { margin: 0; background: var(--sl-bg); color: var(--sl-text); font-family: 'Inter', sans-serif; min-height: 100vh; transition: background 0.3s, color 0.3s; }
         
@@ -1924,6 +1929,76 @@ HTML_TEMPLATE = """
                 container.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.purge(p));
             }
         }
+
+        // [FIX] Plotly Auto-Resize Logic
+        // Handles resizing when:
+        // 1. Window resizes
+        // 2. Tab switches (visibility changes)
+        // 3. Container size changes (sidebar toggle, etc)
+        function setupPlotlyResizer() {
+            if (!window.Plotly) return;
+
+            // 1. Resize on window resize (with debounce for performance)
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    document.querySelectorAll('.js-plotly-plot').forEach(el => {
+                        if (el.offsetParent !== null && window.Plotly) {
+                            Plotly.Plots.resize(el);
+                        }
+                    });
+                }, 150);
+            });
+
+            // 2. Resize on Tab Switch (Shoelace sl-tab-show event)
+            // Charts in previously hidden tabs are handled by IntersectionObserver
+            // in the chart render script. This handler covers charts that were
+            // already rendered but may need resizing after a tab switch.
+            document.addEventListener('sl-tab-show', (event) => {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        document.querySelectorAll('.js-plotly-plot').forEach(el => {
+                            if (el.offsetParent !== null && el.querySelector('.plot-container')) {
+                                Plotly.Plots.resize(el);
+                            }
+                        });
+                    });
+                });
+            });
+            
+            // 3. ResizeObserver for container changes
+            const ro = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    const el = entry.target;
+                    if (el.classList.contains('js-plotly-plot') && el.offsetParent !== null) {
+                        Plotly.Plots.resize(el);
+                    }
+                }
+            });
+
+            // Observe existing plots
+            document.querySelectorAll('.js-plotly-plot').forEach(el => ro.observe(el));
+
+            // Observe new plots added dynamically
+            const mo = new MutationObserver(mutations => {
+                for (let mutation of mutations) {
+                    for (let node of mutation.addedNodes) {
+                        if (node.nodeType === 1) {
+                            if (node.classList.contains('js-plotly-plot')) {
+                                ro.observe(node);
+                            }
+                            node.querySelectorAll('.js-plotly-plot').forEach(el => ro.observe(el));
+                        }
+                    }
+                }
+            });
+            mo.observe(document.body, { childList: true, subtree: true });
+        }
+
+        // Initialize Resizer
+        document.addEventListener('DOMContentLoaded', setupPlotlyResizer);
+
 
         if (mode === 'ws') {
             // [FIX] Pre-define sendAction with queue to handle clicks before WebSocket connects
@@ -2104,6 +2179,16 @@ HTML_TEMPLATE = """
                                     purgePlotly(el);
                                     el.outerHTML = item.html;
                                     
+                                    // [FIX] Force animation restart for page transitions
+                                    // When replacing outerHTML with same ID, browser might optimize away the animation.
+                                    // We force a reflow to ensure the fade-in plays.
+                                    const newEl = document.getElementById(item.id);
+                                    if (newEl && newEl.classList.contains('page-container') && document.body.classList.contains('anim-soft')) {
+                                        newEl.style.animation = 'none';
+                                        void newEl.offsetWidth; // Trigger reflow
+                                        newEl.style.animation = 'fade-in 0.3s ease-out';
+                                    }
+                                    
                                     // Execute scripts
                                     const temp = document.createElement('div');
                                     temp.innerHTML = item.html;
@@ -2118,14 +2203,9 @@ HTML_TEMPLATE = """
                         });
                     };
                     
-                    // Apply updates: use View Transitions ONLY for navigation
-                    if (isNavigation && document.body.classList.contains('anim-soft') && document.startViewTransition) {
-                        // Navigation: smooth page transition
-                        document.startViewTransition(() => applyUpdates(msg.payload));
-                    } else {
-                        // Regular updates: apply immediately without animation for snappy response
-                        applyUpdates(msg.payload);
-                    }
+                    // Apply updates immediately (no View Transition).
+                    // CSS fade-in on .page-container handles the smooth entrance.
+                    applyUpdates(msg.payload);
                 } else if (msg.type === 'eval') {
                     const func = new Function(msg.code);
                     func();

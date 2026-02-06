@@ -804,6 +804,419 @@ class Theme:
                 }
             """
         },
+        'violit_light_jewel': {
+            'mode': 'light',
+            'primary': '#6D28D9',       # Royal Purple (Violet-700) — 로고의 가장 진한 보라
+            'secondary': '#7C3AED',     # Violet-600
+            'success': '#16A34A',       # Green-600
+            'warning': '#EA580C',       # Orange-600
+            'danger': '#DC2626',        # Red-600
+            'bg': '#FFFFFF',            # 쨍한 흰색 (회색조 X)
+            'bg_card': '#FFFFFF',       # 카드도 순백
+            'border': '#E9E5F0',        # 보라끼 살짝 섞인 테두리
+            'text': '#1C1127',          # 아주 짙은 보라-검정 텍스트
+            'text_muted': '#6B5F7B',    # Muted 보라 회색
+            'radius': '0.5rem',         # 과하지 않은 Radius
+            'input_border_radius_small': '0.375rem',
+            'input_border_radius_medium': '0.5rem',
+            'input_border_radius_large': '0.625rem',
+            'extra_css': """
+                /*
+                   THEME: Clean Crystal (violit_light_2nd)
+                   Concept: Shadcn/Zinc 스타일 + Royal Purple 포인트
+                   핵심: 1px 얇은 Border, Inter 폰트, 0.5rem Radius, 단색 버튼
+                */
+
+                /* --- @font-face: Inter (로컬 vendor) --- */
+                @font-face {
+                    font-family: 'Inter';
+                    font-style: normal;
+                    font-weight: 100 900;
+                    font-display: swap;
+                    src: url('/static/vendor/fonts/inter/inter-latin-ext.woff2') format('woff2');
+                    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+                }
+                @font-face {
+                    font-family: 'Inter';
+                    font-style: normal;
+                    font-weight: 100 900;
+                    font-display: swap;
+                    src: url('/static/vendor/fonts/inter/inter-latin.woff2') format('woff2');
+                    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+                }
+
+                /* --- Global --- */
+                body {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    background-color: #FFFFFF;
+                    color: #1C1127;
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                    letter-spacing: -0.011em;
+                    line-height: 1.6;
+                }
+
+                /* --- Cards: Material Elevation 1→3 on hover --- */
+                .card {
+                    background: #FFFFFF !important;
+                    border: 1px solid #E9E5F0 !important;
+                    border-radius: 0.5rem !important;
+                    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+                    transition: box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                                border-color 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                                transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .card:hover {
+                    border-color: #DDD8E8 !important;
+                    box-shadow: 0 3px 6px -1px rgba(0, 0, 0, 0.07),
+                                0 6px 12px 0 rgba(0, 0, 0, 0.05),
+                                0 2px 18px 0 rgba(0, 0, 0, 0.04) !important;
+                    transform: translateY(-1px);
+                }
+
+                /* --- Buttons: Material Elevation + 단색 --- */
+                sl-button::part(base) {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    background: #6D28D9 !important;
+                    border: 1px solid transparent !important;
+                    color: #FFFFFF !important;
+                    font-weight: 500 !important;
+                    font-size: 0.875rem !important;
+                    letter-spacing: -0.006em;
+                    border-radius: 0.5rem !important;
+                    box-shadow: 0 1px 3px rgba(109, 40, 217, 0.12), 0 1px 2px rgba(109, 40, 217, 0.08) !important;
+                    transition: box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                                background-color 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                                transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    caret-color: transparent !important;
+                }
+                /* Hover: Material Elevation 4 */
+                sl-button::part(base):hover {
+                    background: #6D28D9 !important;
+                    box-shadow: 0 2px 4px -1px rgba(109, 40, 217, 0.2),
+                                0 4px 5px 0 rgba(109, 40, 217, 0.14),
+                                0 1px 10px 0 rgba(109, 40, 217, 0.12) !important;
+                }
+                /* Active: Material press */
+                sl-button::part(base):active {
+                    background: #5B21B6 !important;
+                    box-shadow: 0 1px 2px rgba(109, 40, 217, 0.1) !important;
+                    transform: scale(0.97);
+                }
+
+                /* --- Inputs: 깔끔한 1px 보더 --- */
+                sl-input::part(base),
+                sl-textarea::part(base),
+                sl-select::part(combobox) {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    background: #FFFFFF !important;
+                    border: 1px solid #E9E5F0 !important;
+                    border-radius: 0.5rem !important;
+                    font-size: 0.875rem;
+                    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+                }
+                sl-input::part(base):focus-within,
+                sl-textarea::part(base):focus-within,
+                sl-select::part(combobox):focus-within {
+                    border-color: #6D28D9 !important;
+                    box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.08) !important;
+                    outline: none;
+                }
+
+                /* --- Typography: 짙은 보라-검정, Sharp --- */
+                h1, h2, h3, h4, h5, h6 {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    color: #1C1127;
+                    font-weight: 600;
+                    letter-spacing: -0.025em;
+                    line-height: 1.3;
+                }
+                h1 { font-weight: 700; letter-spacing: -0.035em; }
+
+                p, span, label, div {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+
+                /* --- Links: Primary Purple --- */
+                a {
+                    color: #6D28D9;
+                    text-decoration: none;
+                    transition: color 0.15s ease;
+                }
+                a:hover {
+                    color: #5B21B6;
+                    text-decoration: underline;
+                }
+
+                /* --- Sidebar: 깨끗한 구분선 --- */
+                #sidebar {
+                    background: #FAFAFA !important;
+                    border-right: 1px solid #E9E5F0 !important;
+                }
+
+                /* --- Sidebar Navigation: Subtle, Clean Style --- */
+                /* Default state: transparent background, dark text */
+                #sidebar sl-button::part(base) {
+                    background: transparent !important;
+                    color: #6B5F7B !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    font-weight: 500 !important;
+                }
+                
+                /* Hover: subtle purple tint */
+                #sidebar sl-button::part(base):hover {
+                    background: rgba(109, 40, 217, 0.06) !important;
+                    color: #6D28D9 !important;
+                    box-shadow: none !important;
+                }
+                
+                /* Active (selected page): purple background + white text */
+                #sidebar sl-button[variant="primary"]::part(base) {
+                    background: #6D28D9 !important;
+                    color: #FFFFFF !important;
+                    box-shadow: 0 1px 3px rgba(109, 40, 217, 0.12), 0 1px 2px rgba(109, 40, 217, 0.08) !important;
+                }
+                
+                #sidebar sl-button[variant="primary"]::part(base):hover {
+                    background: #6D28D9 !important;
+                    box-shadow: 0 2px 4px -1px rgba(109, 40, 217, 0.2),
+                                0 4px 5px 0 rgba(109, 40, 217, 0.14),
+                                0 1px 10px 0 rgba(109, 40, 217, 0.12) !important;
+                }
+                
+                #sidebar sl-button[variant="primary"]::part(base):active {
+                    background: #5B21B6 !important;
+                    box-shadow: 0 1px 2px rgba(109, 40, 217, 0.1) !important;
+                    transform: scale(0.97);
+                }
+
+                /* --- Table / Data: 미니멀 라인 --- */
+                table {
+                    border-collapse: collapse;
+                }
+                th, td {
+                    border-bottom: 1px solid #E9E5F0;
+                    padding: 0.625rem 0.75rem;
+                    font-size: 0.875rem;
+                }
+                th {
+                    font-weight: 600;
+                    color: #1C1127;
+                    text-align: left;
+                }
+
+                /* --- Badges / Tags: 미니멀 --- */
+                sl-tag::part(base) {
+                    border-radius: 0.375rem !important;
+                    border: 1px solid #E9E5F0 !important;
+                    font-size: 0.75rem;
+                    font-weight: 500;
+                }
+
+                /* --- Scrollbar: 은은한 보라 --- */
+                ::-webkit-scrollbar { width: 6px; height: 6px; }
+                ::-webkit-scrollbar-track { background: transparent; }
+                ::-webkit-scrollbar-thumb { background: #D4CFE0; border-radius: 3px; }
+                ::-webkit-scrollbar-thumb:hover { background: #B0A6C4; }
+
+                /* --- Selection: 보라 하이라이트 --- */
+                ::selection {
+                    background: rgba(109, 40, 217, 0.12);
+                    color: #1C1127;
+                }
+
+                /* --- Material: Focus ring --- */
+                sl-button:focus-visible::part(base) {
+                    outline: 2px solid #6D28D9 !important;
+                    outline-offset: 2px;
+                }
+
+                /* --- Material: Ripple overlay (global, survives DOM swaps) --- */
+                #vl-ripple-overlay {
+                    position: fixed;
+                    inset: 0;
+                    pointer-events: none;
+                    z-index: 10000;
+                }
+                .vl-ripple-box {
+                    position: fixed;
+                    overflow: hidden;
+                    pointer-events: none;
+                    transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .vl-rpl {
+                    position: absolute;
+                    border-radius: 50%;
+                    pointer-events: none;
+                    background: rgba(255, 255, 255, 0.14);
+                    transform: scale(0);
+                    opacity: 1;
+                    transition: transform 0.65s cubic-bezier(0.2, 0, 0, 1),
+                                opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .vl-rpl.vl-fade {
+                    opacity: 0;
+                }
+            """,
+            'extra_js': """
+(function() {
+    var ac = new AbortController();
+    var sig = ac.signal;
+    var curBtn = null;
+    var activeRipple = null;
+    var activeBox = null;
+
+    /* --- Global ripple overlay (lives in body, never destroyed by HTMX swaps) --- */
+    var overlay = document.getElementById('vl-ripple-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'vl-ripple-overlay';
+        document.body.appendChild(overlay);
+    }
+
+    function getBase(btn) {
+        if (!btn || !btn.shadowRoot) return null;
+        var base = btn.shadowRoot.querySelector('[part="base"]');
+        if (!base) return null;
+        base.style.position = 'relative';
+        base.style.overflow = 'hidden';
+        return base;
+    }
+
+    /* ============================================
+       Mouse-following Glow (stays in Shadow DOM)
+       ============================================ */
+    document.addEventListener('mousemove', function(e) {
+        var btn = e.target.closest('sl-button');
+        if (curBtn && curBtn !== btn) {
+            var pb = curBtn.shadowRoot && curBtn.shadowRoot.querySelector('[part="base"]');
+            if (pb) { var g = pb.querySelector('.vl-glow'); if (g) g.style.opacity = '0'; }
+            curBtn = null;
+        }
+        if (!btn) return;
+        curBtn = btn;
+        var base = getBase(btn);
+        if (!base) return;
+        var rect = base.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        var glow = base.querySelector('.vl-glow');
+        if (!glow) {
+            glow = document.createElement('span');
+            glow.className = 'vl-glow';
+            glow.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;border-radius:inherit;transition:opacity 0.25s cubic-bezier(0.4,0,0.2,1);';
+            base.appendChild(glow);
+        }
+        glow.style.background = 'radial-gradient(circle 120px at ' + x + 'px ' + y + 'px, rgba(255,255,255,0.2), transparent 70%)';
+        glow.style.opacity = '1';
+    }, {signal: sig});
+
+    document.addEventListener('mouseleave', function() {
+        if (curBtn) {
+            var pb = curBtn.shadowRoot && curBtn.shadowRoot.querySelector('[part="base"]');
+            if (pb) { var g = pb.querySelector('.vl-glow'); if (g) g.style.opacity = '0'; }
+            curBtn = null;
+        }
+    }, {signal: sig});
+
+    /* ============================================
+       Material Ripple - Global Overlay Approach
+       Ripple lives in a fixed-position overlay on
+       document.body, completely outside any HTMX-
+       swapped content. Even if the button DOM is
+       replaced mid-animation, the ripple continues
+       its full expand + fade cycle undisturbed.
+       ============================================ */
+
+    /* Phase 1 (pointerdown): Expand from click point */
+    document.addEventListener('pointerdown', function(e) {
+        var btn = e.target.closest('sl-button');
+        if (!btn) return;
+        var base = btn.shadowRoot && btn.shadowRoot.querySelector('[part="base"]');
+        if (!base) return;
+
+        /* Clear previous ripple if still running */
+        if (activeBox && activeBox.parentNode) activeBox.remove();
+        activeRipple = null;
+        activeBox = null;
+
+        var rect = base.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+
+        /* Pythagorean distance to farthest corner */
+        var dx = Math.max(x, rect.width - x);
+        var dy = Math.max(y, rect.height - y);
+        var radius = Math.sqrt(dx * dx + dy * dy) + 8;
+        var dia = radius * 2;
+
+        /* Container: fixed overlay matching button viewport position exactly */
+        var box = document.createElement('div');
+        box.className = 'vl-ripple-box';
+        box.style.cssText = 'left:' + rect.left + 'px;top:' + rect.top + 'px;'
+            + 'width:' + rect.width + 'px;height:' + rect.height + 'px;'
+            + 'border-radius:' + (getComputedStyle(base).borderRadius || '0.5rem') + ';';
+
+        /* Ripple circle */
+        var r = document.createElement('span');
+        r.className = 'vl-rpl';
+        r.style.left = (x - radius) + 'px';
+        r.style.top = (y - radius) + 'px';
+        r.style.width = dia + 'px';
+        r.style.height = dia + 'px';
+
+        box.appendChild(r);
+        overlay.appendChild(box);
+        activeRipple = r;
+        activeBox = box;
+
+        /* Trigger expansion + press tint on next frame */
+        requestAnimationFrame(function() {
+            r.style.transform = 'scale(1)';
+            /* Material state overlay tint (persists across DOM swaps) */
+            box.style.background = 'rgba(0,0,0,0.08)';
+        });
+    }, {signal: sig});
+
+    /* Phase 2 (pointerup): Release tint + fade ripple */
+    function fadeRipple() {
+        if (!activeRipple) return;
+        var r = activeRipple;
+        var box = activeBox;
+        activeRipple = null;
+        activeBox = null;
+        /* Release tint */
+        box.style.background = 'transparent';
+        /* Fade ripple */
+        r.classList.add('vl-fade');
+        setTimeout(function() { if (box && box.parentNode) box.remove(); }, 600);
+    }
+    document.addEventListener('pointerup', fadeRipple, {signal: sig});
+    document.addEventListener('pointercancel', fadeRipple, {signal: sig});
+
+    /* ============================================
+       Cleanup for theme switching
+       ============================================ */
+    window._vlThemeCleanup = function() {
+        ac.abort();
+        activeRipple = null;
+        activeBox = null;
+        curBtn = null;
+        var ol = document.getElementById('vl-ripple-overlay');
+        if (ol) ol.remove();
+        document.querySelectorAll('sl-button').forEach(function(btn) {
+            if (!btn.shadowRoot) return;
+            var base = btn.shadowRoot.querySelector('[part="base"]');
+            if (base) {
+                var g = base.querySelector('.vl-glow');
+                if (g) g.remove();
+            }
+        });
+    };
+})();
+            """
+        },
         'violit_dark': {
             'mode': 'dark',
             'primary': '#8B5CF6',
@@ -898,7 +1311,7 @@ class Theme:
         """Convert to CSS variables"""
         return "\n".join([
             f"--sl-{k.replace('_', '-')}: {v};" 
-            for k, v in self.current.items() if k not in ['mode', 'extra_css']
+            for k, v in self.current.items() if k not in ['mode', 'extra_css', 'extra_js']
         ])
     
     @property
@@ -908,6 +1321,10 @@ class Theme:
     @property
     def extra_css(self) -> str:
         return self.current.get('extra_css', '')
+    
+    @property
+    def extra_js(self) -> str:
+        return self.current.get('extra_js', '')
     
     @property
     def theme_class(self) -> str:
