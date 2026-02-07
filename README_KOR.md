@@ -296,8 +296,8 @@ Violit은 지속적으로 발전하고 있습니다.
 
 *   ✅ **Core**: Signal State Engine, Theme System
 *   ✅ **Widgets**: Plotly, Dataframe, Input Widgets
-*   ⏳ **Homepage**: 공식 홈페이지 Open 
-*   ⏳ **Documentation**: 공식 기술 문서 및 API 레퍼런스 업데이트 
+*   ✅ **Homepage**: 공식 홈페이지 Open 
+*   ✅ **Documentation**: 공식 기술 문서 및 API 레퍼런스 업데이트 
 *   ⏳ **Custom Components**: User-defined Custom Component 지원 
 *   ⏳ **Custom Theme**: User-defined Custom Theme지원 
 *   ⏳ **async**: async 처리 지원 
