@@ -61,6 +61,132 @@ class StatusWidgetsMixin:
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
+    # ── Callout / Admonition ─────────────────────────────────────────────────
+    _CALLOUT_VARIANTS = {
+        "tip": {
+            "icon": "lightbulb",
+            "bg": "#fffbeb", "border": "#fde68a", "accent": "#f59e0b",
+            "title_color": "#92400e", "text_color": "#78350f",
+        },
+        "info": {
+            "icon": "info-circle",
+            "bg": "#eff6ff", "border": "#bfdbfe", "accent": "#3b82f6",
+            "title_color": "#1e40af", "text_color": "#1e3a5f",
+        },
+        "warning": {
+            "icon": "exclamation-triangle",
+            "bg": "#fef2f2", "border": "#fecaca", "accent": "#ef4444",
+            "title_color": "#991b1b", "text_color": "#7f1d1d",
+        },
+        "danger": {
+            "icon": "exclamation-octagon",
+            "bg": "#fef2f2", "border": "#fecaca", "accent": "#dc2626",
+            "title_color": "#991b1b", "text_color": "#7f1d1d",
+        },
+        "success": {
+            "icon": "check-circle",
+            "bg": "#f0fdf4", "border": "#bbf7d0", "accent": "#22c55e",
+            "title_color": "#166534", "text_color": "#14532d",
+        },
+        "note": {
+            "icon": "journal-text",
+            "bg": "#f8fafc", "border": "#e2e8f0", "accent": "#64748b",
+            "title_color": "#334155", "text_color": "#475569",
+        },
+    }
+
+    def callout(self, body, title=None, variant="info", icon=None,
+                allow_html=False, cls: str = "", style: str = ""):
+        """Display a callout / admonition box with colored left-border accent.
+
+        Args:
+            body: Content text (supports State/ComputedState for reactive updates)
+            title: Optional bold title shown above the body
+            variant: "tip" | "info" | "warning" | "danger" | "success" | "note"
+            icon: Custom Shoelace icon name (auto-selected by variant if None)
+            allow_html: If True, body/title are rendered as raw HTML (like app.html).
+                        If False (default), content is escaped for XSS safety.
+            cls: Additional CSS classes
+            style: Additional inline styles
+
+        Example:
+            app.callout("Remember to save!", title="TIP", variant="tip")
+            app.callout("Use <code>app.text()</code> for safe output", variant="info", allow_html=True)
+        """
+        import html as html_lib
+        from ..state import State, ComputedState
+
+        cid = self._get_next_cid("callout")
+        v = self._CALLOUT_VARIANTS.get(variant, self._CALLOUT_VARIANTS["info"])
+        icon_name = icon or v["icon"]
+
+        def builder():
+            token = rendering_ctx.set(cid)
+            try:
+                if isinstance(body, (State, ComputedState)):
+                    body_val = str(body.value)
+                elif callable(body):
+                    body_val = str(body())
+                else:
+                    body_val = str(body)
+            finally:
+                rendering_ctx.reset(token)
+
+            display_body = body_val if allow_html else html_lib.escape(body_val)
+
+            title_html = ""
+            if title:
+                display_title = str(title) if allow_html else html_lib.escape(str(title))
+                title_html = (
+                    f'<div style="font-weight:700;font-size:0.8rem;'
+                    f'color:{v["title_color"]};margin-bottom:0.25rem;">'
+                    f'{display_title}</div>'
+                )
+
+            html_output = (
+                f'<div style="display:flex;gap:0.75rem;padding:1rem 1.25rem;'
+                f'background:{v["bg"]};border:1px solid {v["border"]};'
+                f'border-radius:0.625rem;margin:0.75rem 0 1.25rem;'
+                f'border-left:4px solid {v["accent"]};">'
+                f'<sl-icon name="{icon_name}" style="font-size:1.1rem;'
+                f'color:{v["accent"]};flex-shrink:0;margin-top:0.1rem;"></sl-icon>'
+                f'<div>{title_html}'
+                f'<div style="font-size:0.85rem;color:{v["text_color"]};'
+                f'line-height:1.6;">{display_body}</div>'
+                f'</div></div>'
+            )
+
+            _wd = self._get_widget_defaults("callout")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
+
+        self._register_component(cid, builder)
+
+    def callout_tip(self, body, title="TIP", **kwargs):
+        """Shortcut for callout(variant='tip')"""
+        self.callout(body, title=title, variant="tip", **kwargs)
+
+    def callout_info(self, body, title="참고", **kwargs):
+        """Shortcut for callout(variant='info')"""
+        self.callout(body, title=title, variant="info", **kwargs)
+
+    def callout_warning(self, body, title="주의", **kwargs):
+        """Shortcut for callout(variant='warning')"""
+        self.callout(body, title=title, variant="warning", **kwargs)
+
+    def callout_danger(self, body, title="위험", **kwargs):
+        """Shortcut for callout(variant='danger')"""
+        self.callout(body, title=title, variant="danger", **kwargs)
+
+    def callout_success(self, body, title="완료", **kwargs):
+        """Shortcut for callout(variant='success')"""
+        self.callout(body, title=title, variant="success", **kwargs)
+
+    def callout_note(self, body, title="NOTE", **kwargs):
+        """Shortcut for callout(variant='note')"""
+        self.callout(body, title=title, variant="note", **kwargs)
+
     def toast(self, *args, icon="info-circle", variant="primary"):
         """Display toast notification (Signal support via evaluation)"""
         import json
