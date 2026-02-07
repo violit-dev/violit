@@ -4,6 +4,7 @@ from typing import Callable, Any, List as ListType
 from ..component import Component
 from ..context import rendering_ctx
 from ..state import State
+from ..style_utils import merge_cls, merge_style
 
 
 class ListWidgetsMixin:
@@ -15,7 +16,9 @@ class ListWidgetsMixin:
                      container_id: str = None,
                      empty_message: str = None,
                      reverse: bool = False,
-                     item_gap: str = "1rem"):
+                     item_gap: str = "1rem",
+                     cls: str = "",
+                     style: str = ""):
         """Create a reactive list that updates when items change"""
         cid = self._get_next_cid("reactive_list")
         container_id = container_id or f"{cid}-container"
@@ -54,7 +57,10 @@ class ListWidgetsMixin:
             </div>
             '''
             
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("reactive_list")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
         
@@ -66,13 +72,15 @@ class ListWidgetsMixin:
                  container_id: str = None,
                  empty_message: str = "No items yet",
                  card_type: str = "live",
-                 reverse: bool = True):
+                 reverse: bool = True,
+                 cls: str = "",
+                 style: str = ""):
         """Reactive list for card items"""
         def render_card(item):
             # Use styled_card with return_html=True to get HTML string
             return self.styled_card(
                 content=item.get('content', ''),
-                style=card_type,
+                preset=card_type,
                 header_badge='LIVE' if card_type == 'live' else f'#{item.get("id", "")}',
                 footer_text=item.get('created_at'),
                 data_id=item.get('id'),
@@ -85,7 +93,9 @@ class ListWidgetsMixin:
             key=key,
             container_id=container_id,
             empty_message=empty_message,
-            reverse=reverse
+            reverse=reverse,
+            cls=cls,
+            style=style
         )
 
 

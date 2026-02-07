@@ -4,28 +4,29 @@ from typing import Union, Callable, Optional
 from ..component import Component
 from ..context import rendering_ctx
 from ..state import get_session_store, State
+from ..style_utils import merge_cls, merge_style
 
 
 class StatusWidgetsMixin:
     """Status display widgets (success, info, warning, error, toast, progress, spinner, status, balloons, snow, exception)"""
     
-    def success(self, *args): 
+    def success(self, *args, cls: str = "", style: str = ""): 
         """Display success alert"""
-        self.alert(*args, variant="success", icon="check-circle")
+        self.alert(*args, variant="success", icon="check-circle", cls=cls, style=style)
     
-    def warning(self, *args): 
+    def warning(self, *args, cls: str = "", style: str = ""): 
         """Display warning alert"""
-        self.alert(*args, variant="warning", icon="exclamation-triangle")
+        self.alert(*args, variant="warning", icon="exclamation-triangle", cls=cls, style=style)
     
-    def error(self, *args): 
+    def error(self, *args, cls: str = "", style: str = ""): 
         """Display error alert"""
-        self.alert(*args, variant="danger", icon="x-circle")
+        self.alert(*args, variant="danger", icon="x-circle", cls=cls, style=style)
     
-    def info(self, *args): 
+    def info(self, *args, cls: str = "", style: str = ""): 
         """Display info alert"""
-        self.alert(*args, variant="primary", icon="info-circle")
+        self.alert(*args, variant="primary", icon="info-circle", cls=cls, style=style)
     
-    def alert(self, *args, variant="primary", icon=None):
+    def alert(self, *args, variant="primary", icon=None, cls: str = "", style: str = ""):
         """Display alert message with Signal support (multiple arguments supported)"""
         import html as html_lib
         from ..state import State, ComputedState
@@ -54,7 +55,10 @@ class StatusWidgetsMixin:
             
             icon_html = f'<sl-icon slot="icon" name="{icon}"></sl-icon>' if icon else ""
             html_output = f'<sl-alert variant="{variant}" open>{icon_html}{escaped_val}</sl-alert>'
-            return Component("div", id=cid, content=html_output)
+            _wd = self._get_widget_defaults("alert")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
     def toast(self, *args, icon="info-circle", variant="primary"):
@@ -106,7 +110,7 @@ class StatusWidgetsMixin:
         code = "createSnow()"
         self._enqueue_eval(code, effect="snow")
 
-    def exception(self, exception: Exception):
+    def exception(self, exception: Exception, cls: str = "", style: str = ""):
         """Display exception with traceback"""
         import traceback
         import html as html_lib
@@ -127,7 +131,10 @@ class StatusWidgetsMixin:
                 <pre style="margin-top:0.5rem;padding:0.5rem;background:rgba(0,0,0,0.1);border-radius:0.25rem;overflow-x:auto;font-size:0.85rem;">{escaped_tb}</pre>
             </sl-alert>
             '''
-            return Component("div", id=cid, content=html_output)
+            _wd = self._get_widget_defaults("exception")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
     def _enqueue_eval(self, code, **lite_data):
@@ -146,7 +153,7 @@ class StatusWidgetsMixin:
             if 'effect' in lite_data:
                 store['effects'].append(lite_data['effect'])
 
-    def progress(self, value=0, *args):
+    def progress(self, value=0, *args, cls: str = "", style: str = ""):
         """Display progress bar with Signal support"""
         import html as html_lib
         from ..state import State, ComputedState
@@ -193,10 +200,13 @@ class StatusWidgetsMixin:
                 <sl-progress-bar value="{val_num}"></sl-progress-bar>
             </div>
             '''
-            return Component("div", id=cid, content=html_output)
+            _wd = self._get_widget_defaults("progress")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def spinner(self, *args):
+    def spinner(self, *args, cls: str = "", style: str = ""):
         """Display loading spinner"""
         import html as html_lib
         from ..state import State, ComputedState
@@ -228,21 +238,26 @@ class StatusWidgetsMixin:
                 <span style="color:var(--sl-text-muted);font-size:0.875rem;">{escaped_text}</span>
             </div>
             '''
-            return Component("div", id=cid, content=html_output)
+            _wd = self._get_widget_defaults("spinner")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
     
-    def status(self, label: str, state: str = "running", expanded: bool = True):
+    def status(self, label: str, state: str = "running", expanded: bool = True, cls: str = "", style: str = ""):
         from ..context import fragment_ctx
         
         cid = self._get_next_cid("status")
         
         class StatusContext:
-            def __init__(self, app, status_id, label, state, expanded):
+            def __init__(self, app, status_id, label, state, expanded, user_cls="", user_style=""):
                 self.app = app
                 self.status_id = status_id
                 self.label = label
                 self.state = state
                 self.expanded = expanded
+                self.user_cls = user_cls
+                self.user_style = user_style
                 self.token = None
                 
             def __enter__(self):
@@ -291,7 +306,10 @@ class StatusWidgetsMixin:
                         </div>
                     </sl-details>
                     '''
-                    return Component("div", id=self.status_id, content=html_output)
+                    _wd = self.app._get_widget_defaults("status")
+                    _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
+                    _fs = merge_style(_wd.get("style", ""), self.user_style)
+                    return Component("div", id=self.status_id, content=html_output, class_=_fc or None, style=_fs or None)
                 
                 self.app._register_component(self.status_id, builder)
                 
@@ -305,4 +323,4 @@ class StatusWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
                 
-        return StatusContext(self, cid, label, state, expanded)
+        return StatusContext(self, cid, label, state, expanded, cls, style)

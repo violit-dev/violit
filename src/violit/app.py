@@ -221,6 +221,10 @@ class App(
         self.state_count = 0
         self._fragments: Dict[str, Callable] = {}
         
+        # Styling System: configure_widget defaults + user CSS
+        self._widget_defaults: Dict[str, Dict[str, str]] = {}
+        self._user_css: List[str] = []
+        
         # Broadcasting System
         self.broadcaster = Broadcaster(self)
         self._fragment_count = 0
@@ -275,6 +279,45 @@ class App(
         """Print only in debug mode"""
         if self.debug_mode:
             print(*args, **kwargs)
+
+    def configure_widget(self, widget_type: str, cls: str = "", style: str = ""):
+        """Set default cls/style for a specific widget type.
+        
+        These defaults are merged with per-widget cls/style values.
+        Per-widget values take higher priority (appended after defaults).
+        
+        Args:
+            widget_type: Widget function name (e.g. "button", "card", "text_input")
+            cls: Default Master CSS / utility classes
+            style: Default inline CSS (e.g. CSS variables)
+            
+        Example:
+            app.configure_widget("button", cls="r:full shadow:md")
+            app.configure_widget("card", cls="r:16 shadow:lg")
+        """
+        self._widget_defaults[widget_type] = {'cls': cls, 'style': style}
+
+    def add_css(self, css: str):
+        """Add custom CSS rules to the page.
+        
+        Use this to define custom classes, ::part() selectors for Shoelace,
+        or any CSS that needs to be globally available.
+        
+        Args:
+            css: Raw CSS string
+            
+        Example:
+            app.add_css('''
+                .cyan-btn { --sl-color-primary-600: cyan; }
+                .glass { backdrop-filter: blur(16px); background: rgba(255,255,255,0.6); }
+                #my-btn::part(base) { border-radius: 9999px; }
+            ''')
+        """
+        self._user_css.append(css)
+
+    def _get_widget_defaults(self, widget_type: str) -> Dict[str, str]:
+        """Get default cls/style for a widget type (internal helper)."""
+        return self._widget_defaults.get(widget_type, {})
 
     def state(self, default_value, key=None) -> State:
         """Create a reactive state variable"""
@@ -1157,6 +1200,13 @@ class App(
     <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@master/css-runtime@2.0.0-rc.67/dist/global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" />
+    <style>
+        .violit-code-light pre code.hljs { background: transparent !important; }
+        .violit-code-dark pre code.hljs { background: transparent !important; }
+    </style>
                 """
             else:
                 # Local/Offline Mode
@@ -1169,6 +1219,13 @@ class App(
     <script src="/static/vendor/htmx/htmx.min.js"></script>
     <script src="/static/vendor/ag-grid/ag-grid-community.min.js"></script>
     <script src="/static/vendor/plotly/plotly-2.27.0.min.js"></script>
+    <script src="/static/vendor/master-css/master-css-runtime.js"></script>
+    <script src="/static/vendor/highlightjs/highlight.min.js"></script>
+    <link rel="stylesheet" href="/static/vendor/highlightjs/atom-one-dark.min.css" />
+    <style>
+        .violit-code-light pre code.hljs { background: transparent !important; }
+        .violit-code-dark pre code.hljs { background: transparent !important; }
+    </style>
     <!-- Fonts: Inter (local vendor woff2) -->
     <style>
         @font-face {
@@ -1190,7 +1247,12 @@ class App(
     </style>
                 """
 
-            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%THEME_CLASS%", t.theme_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources)
+            # Build user CSS from add_css() calls
+            user_css = ""
+            if self._user_css:
+                user_css = "<style id=\"violit-user-css\">\n" + "\n".join(self._user_css) + "\n</style>"
+            
+            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%THEME_CLASS%", t.theme_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css)
             return HTMLResponse(html)
 
         @self.fastapi.post("/action/{cid}")
@@ -1756,6 +1818,7 @@ HTML_TEMPLATE = """
     %CSRF_SCRIPT%
     %DEBUG_SCRIPT%
     %VENDOR_RESOURCES%
+    %USER_CSS%
     <style>
         :root { 
             %CSS_VARS%
@@ -2206,6 +2269,13 @@ HTML_TEMPLATE = """
                     // Apply updates immediately (no View Transition).
                     // CSS fade-in on .page-container handles the smooth entrance.
                     applyUpdates(msg.payload);
+                    
+                    // Re-highlight code blocks after DOM update
+                    if (typeof hljs !== 'undefined') {
+                        document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
+                            hljs.highlightElement(block);
+                        });
+                    }
                 } else if (msg.type === 'eval') {
                     const func = new Function(msg.code);
                     func();

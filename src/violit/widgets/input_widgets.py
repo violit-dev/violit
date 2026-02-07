@@ -7,6 +7,7 @@ import json
 from ..component import Component
 from ..context import rendering_ctx, layout_ctx
 from ..state import State
+from ..style_utils import merge_cls, merge_style, wrap_html
 
 
 class UploadedFile(io.BytesIO):
@@ -35,16 +36,16 @@ class UploadedFile(io.BytesIO):
 
 class InputWidgetsMixin:
     
-    def text_input(self, label, value="", key=None, on_change=None, **props):
+    def text_input(self, label, value="", key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Single-line text input"""
-        return self._input_component("input", "sl-input", label, value, on_change, key, **props)
+        return self._input_component("input", "sl-input", label, value, on_change, key, cls=cls, style=style, **props)
 
-    def slider(self, label, min_value=0, max_value=100, value=None, step=1, key=None, on_change=None, **props):
+    def slider(self, label, min_value=0, max_value=100, value=None, step=1, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Slider widget"""
         if value is None: value = min_value
-        return self._input_component("slider", "sl-range", label, value, on_change, key, min=min_value, max=max_value, step=step, **props)
+        return self._input_component("slider", "sl-range", label, value, on_change, key, cls=cls, style=style, min=min_value, max=max_value, step=step, **props)
 
-    def checkbox(self, label, value=False, key=None, on_change=None, **props):
+    def checkbox(self, label, value=False, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Checkbox widget"""
         cid = self._get_next_cid("checkbox")
         
@@ -86,11 +87,14 @@ class InputWidgetsMixin:
                 '''
             
             html = f'<sl-checkbox id="{cid}" {checked_attr} {attrs_str} {props_str}>{label}</sl-checkbox>{listener_script}'
-            return Component(None, id=cid, content=html)
+            _wd = self._get_widget_defaults("checkbox")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s
 
-    def radio(self, label, options, index=0, key=None, on_change=None, **props):
+    def radio(self, label, options, index=0, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Radio button group"""
         cid = self._get_next_cid("radio_group")
         
@@ -135,12 +139,15 @@ class InputWidgetsMixin:
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
             html = f'<sl-radio-group id="{cid}" label="{label}" value="{cv}" {attrs_str} {props_str}>{opts_html}</sl-radio-group>{listener_script}'
             
-            return Component(None, id=cid, content=html)
+            _wd = self._get_widget_defaults("radio")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
             
         self._register_component(cid, builder, action=action)
         return s
 
-    def selectbox(self, label, options, index=0, key=None, on_change=None, **props):
+    def selectbox(self, label, options, index=0, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Single select dropdown"""
         cid = self._get_next_cid("select")
         
@@ -190,12 +197,15 @@ class InputWidgetsMixin:
                     select_html += f' {k}="{v}"'
             select_html += f'>{opts_html}</sl-select>{listener_script}'
             
-            return Component(None, id=cid, content=select_html)
+            _wd = self._get_widget_defaults("selectbox")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component(None, id=cid, content=wrap_html(select_html, _fc, _fs))
             
         self._register_component(cid, builder, action=action)
         return s
 
-    def multiselect(self, label, options, default=None, key=None, on_change=None, **props):
+    def multiselect(self, label, options, default=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Multi-select dropdown"""
         cid = self._get_next_cid("multiselect")
         
@@ -227,7 +237,14 @@ class InputWidgetsMixin:
             if self.mode == 'ws':
                 attrs = {"on_sl_change": f"window.sendAction('{cid}', this.value)"}
 
-            return Component("sl-select", id=cid, label=label, content=opts_html, multiple=True, clearable=True, **attrs)
+            _wd = self._get_widget_defaults("multiselect")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            # sl-select: cls/style applied via wrapper since this is a Shoelace component
+            inner = Component("sl-select", id=cid, label=label, content=opts_html, multiple=True, clearable=True, **attrs)
+            if _fc or _fs:
+                return Component("div", id=f"{cid}_wrap", content=inner.render(), class_=_fc or None, style=_fs or None)
+            return inner
         
         self._register_component(cid, builder, action=action)
         
@@ -272,7 +289,7 @@ class InputWidgetsMixin:
         
         return s
 
-    def text_area(self, label, value="", height=None, key=None, on_change=None, **props):
+    def text_area(self, label, value="", height=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Multi-line text input"""
         cid = self._get_next_cid("textarea")
         
@@ -316,12 +333,15 @@ class InputWidgetsMixin:
                 elif v is not False and v is not None: html += f' {k}="{v}"'
             html += f'></sl-textarea>{listener_script}'
             
-            return Component(None, id=cid, content=html)
+            _wd = self._get_widget_defaults("text_area")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def number_input(self, label, value=0, min_value=None, max_value=None, step=1, key=None, on_change=None, **props):
+    def number_input(self, label, value=0, min_value=None, max_value=None, step=1, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Numeric input"""
         cid = self._get_next_cid("number")
         
@@ -372,12 +392,15 @@ class InputWidgetsMixin:
                 elif v is not False and v is not None: html += f' {k}="{v}"'
             html += f'></sl-input>{listener_script}'
             
-            return Component(None, id=cid, content=html)
+            _wd = self._get_widget_defaults("number_input")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def file_uploader(self, label, accept=None, multiple=False, key=None, on_change=None, help=None, **props):
+    def file_uploader(self, label, accept=None, multiple=False, key=None, on_change=None, help=None, cls: str = "", style: str = "", **props):
         """File upload widget"""
         cid = self._get_next_cid("file")
         
@@ -514,12 +537,15 @@ class InputWidgetsMixin:
             }})();
             </script>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("file_uploader")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def toggle(self, label, value=False, key=None, on_change=None, **props):
+    def toggle(self, label, value=False, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Toggle switch widget"""
         cid = self._get_next_cid("toggle")
         
@@ -561,11 +587,14 @@ class InputWidgetsMixin:
                 '''
             
             html = f'<sl-switch id="{cid}" {checked_attr} {attrs_str} {props_str}>{label}</sl-switch>{listener_script}'
-            return Component(None, id=cid, content=html)
+            _wd = self._get_widget_defaults("toggle")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s
 
-    def color_picker(self, label="Pick a color", value="#000000", key=None, on_change=None, **props):
+    def color_picker(self, label="Pick a color", value="#000000", key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Color picker widget"""
         cid = self._get_next_cid("color")
         
@@ -586,12 +615,18 @@ class InputWidgetsMixin:
             else:
                 attrs = {"on_sl_change": f"window.sendAction('{cid}', this.value)"}
             
-            return Component("sl-color-picker", id=cid, label=label, value=cv, **attrs, **props)
+            inner = Component("sl-color-picker", id=cid, label=label, value=cv, **attrs, **props)
+            _wd = self._get_widget_defaults("color_picker")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            if _fc or _fs:
+                return Component("div", id=f"{cid}_wrap", content=inner.render(), class_=_fc or None, style=_fs or None)
+            return inner
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def date_input(self, label="Select date", value=None, key=None, on_change=None, **props):
+    def date_input(self, label="Select date", value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Date picker widget"""
         import datetime
         cid = self._get_next_cid("date")
@@ -622,12 +657,15 @@ class InputWidgetsMixin:
                        {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
             </div>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("date_input")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def time_input(self, label="Select time", value=None, key=None, on_change=None, **props):
+    def time_input(self, label="Select time", value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Time picker widget"""
         import datetime
         cid = self._get_next_cid("time")
@@ -658,12 +696,15 @@ class InputWidgetsMixin:
                        {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
             </div>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("time_input")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def datetime_input(self, label="Select date and time", value=None, key=None, on_change=None, **props):
+    def datetime_input(self, label="Select date and time", value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """DateTime picker widget"""
         import datetime
         cid = self._get_next_cid("datetime")
@@ -694,12 +735,15 @@ class InputWidgetsMixin:
                        {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
             </div>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("datetime_input")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, **props):
+    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, cls: str = "", style: str = "", **props):
         """Generic input component builder"""
         cid = self._get_next_cid(type_name)
         
@@ -740,6 +784,9 @@ class InputWidgetsMixin:
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
             html = f'<{tag_name} id="{cid}" label="{label}" value="{cv}" {attrs_str} {props_str}></{tag_name}>{listener_script}'
             
-            return Component(None, id=cid, content=html)
+            _wd = self._get_widget_defaults(type_name)
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s

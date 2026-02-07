@@ -6,13 +6,14 @@ import pandas as pd
 from ..component import Component
 from ..context import rendering_ctx
 from ..state import State
+from ..style_utils import merge_cls, merge_style
 
 
 class DataWidgetsMixin:
     """Data display widgets (dataframe, table, data_editor, metric, json)"""
     
     def dataframe(self, df: Union[pd.DataFrame, Callable, State], height=400, 
-                  column_defs=None, grid_options=None, on_cell_clicked=None, **props):
+                  column_defs=None, grid_options=None, on_cell_clicked=None, cls: str = "", style: str = "", **props):
         """Display interactive dataframe with AG Grid"""
         cid = self._get_next_cid("df")
         
@@ -82,11 +83,14 @@ class DataWidgetsMixin:
                 else {{ console.error("agGrid not found"); }}
             }})();</script>
             '''
-            return Component("div", id=f"{cid}_wrapper", content=html)
+            _wd = self._get_widget_defaults("dataframe")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action if on_cell_clicked else None)
 
-    def table(self, df: Union[pd.DataFrame, Callable, State], **props):
+    def table(self, df: Union[pd.DataFrame, Callable, State], cls: str = "", style: str = "", **props):
         """Display static HTML table (Signal support)"""
         cid = self._get_next_cid("table")
         def builder():
@@ -132,10 +136,13 @@ class DataWidgetsMixin:
                 {html_table}
             </div>
             '''
-            return Component("div", id=cid, content=styled_html)
+            _wd = self._get_widget_defaults("table")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=styled_html, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def data_editor(self, df: pd.DataFrame, num_rows="fixed", height=400, key=None, on_change=None, **props):
+    def data_editor(self, df: pd.DataFrame, num_rows="fixed", height=400, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Interactive data editor (simplified version)"""
         cid = self._get_next_cid("data_editor")
         
@@ -204,12 +211,15 @@ class DataWidgetsMixin:
                 }};
             }})();</script>
             '''
-            return Component("div", id=f"{cid}_wrapper", content=html)
+            _wd = self._get_widget_defaults("data_editor")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action)
         return s
 
-    def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal"):
+    def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal", cls: str = "", style: str = ""):
         """Display metric value with Signal support"""
         import html as html_lib
         
@@ -258,11 +268,14 @@ class DataWidgetsMixin:
                 {delta_html}
             </div>
             '''
-            return Component("div", id=cid, content=html_output)
+            _wd = self._get_widget_defaults("metric")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
             
         self._register_component(cid, builder)
 
-    def json(self, body: Any, expanded=True):
+    def json(self, body: Any, expanded=True, cls: str = "", style: str = ""):
         """Display JSON data with Signal support"""
         cid = self._get_next_cid("json")
         
@@ -288,7 +301,10 @@ class DataWidgetsMixin:
                 <pre style="margin:0.5rem 0 0 0;font-size:0.875rem;color:var(--sl-primary);overflow-x:auto;">{json_str}</pre>
             </details>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("json")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
             
         self._register_component(cid, builder)
 
@@ -296,7 +312,7 @@ class DataWidgetsMixin:
                 start_date=None, end_date=None,
                 color_map=None, show_legend=True, 
                 show_weekdays=True, show_months=True,
-                cell_size=12, gap=3, on_cell_clicked=None, **props):
+                cell_size=12, gap=3, on_cell_clicked=None, cls: str = "", style: str = "", **props):
         """
         Display GitHub-style activity heatmap
         
@@ -542,6 +558,9 @@ class DataWidgetsMixin:
             </div>
             '''
             
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("heatmap")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action if on_cell_clicked else None)

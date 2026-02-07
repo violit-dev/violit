@@ -5,12 +5,13 @@ Provides easy-to-use wrappers for Shoelace card components
 
 from ..component import Component
 from ..context import rendering_ctx
+from ..style_utils import merge_cls, merge_style
 
 
 class CardWidgetsMixin:
     """Mixin for Shoelace Card components"""
     
-    def card(self, content=None, header=None, footer=None, **kwargs):
+    def card(self, content=None, header=None, footer=None, cls: str = "", style: str = "", **kwargs):
         """
         Create a Shoelace card component
         
@@ -52,7 +53,7 @@ class CardWidgetsMixin:
         
         if content is None:
             # Context manager mode
-            return CardContext(self, cid, header, footer, attrs_str)
+            return CardContext(self, cid, header, footer, attrs_str, cls, style)
         else:
             # Direct content mode
             def builder():
@@ -88,13 +89,16 @@ class CardWidgetsMixin:
                     html_parts.append('</sl-card>')
                     
                     # Apply full width to wrapper div for consistency
-                    return Component("div", id=cid, content=''.join(html_parts), style="width: 100%;")
+                    _wd = self._get_widget_defaults("card")
+                    _fc = merge_cls(_wd.get("cls", ""), cls)
+                    _fs = merge_style("width: 100%;", _wd.get("style", ""), style)
+                    return Component("div", id=cid, content=''.join(html_parts), class_=_fc or None, style=_fs or None)
                 finally:
                     rendering_ctx.reset(token)
             
             self._register_component(cid, builder)
     
-    def badge(self, text, variant="neutral", pill=False, pulse=False):
+    def badge(self, text, variant="neutral", pill=False, pulse=False, cls: str = "", style: str = ""):
         """
         Create a Shoelace badge component
         
@@ -123,11 +127,14 @@ class CardWidgetsMixin:
             html = f'<sl-badge {attrs_str}>{text}</sl-badge>'
             
             rendering_ctx.reset(token)
-            return Component("span", id=cid, content=html)
+            _wd = self._get_widget_defaults("badge")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("span", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
     
-    def icon(self, name, size=None, label=None):
+    def icon(self, name, size=None, label=None, cls: str = "", style: str = ""):
         """
         Create a Shoelace icon component
         
@@ -155,13 +162,16 @@ class CardWidgetsMixin:
             html = f'<sl-icon {attrs_str}></sl-icon>'
             
             rendering_ctx.reset(token)
-            return Component("span", id=cid, content=html)
+            _wd = self._get_widget_defaults("icon")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("span", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
     
     # ============= Predefined Card Themes =============
     
-    def live_card(self, content, timestamp=None, post_id=None):
+    def live_card(self, content, timestamp=None, post_id=None, cls: str = "", style: str = ""):
         """
         Create a LIVE card with danger badge and pulse animation
         
@@ -182,7 +192,7 @@ class CardWidgetsMixin:
         if timestamp:
             footer = f'<div style="text-align: right; font-size: 0.85rem; color: var(--sl-color-neutral-600);"><sl-icon name="clock"></sl-icon> {timestamp}</div>'
         
-        kwargs = {"style": "margin-bottom: 1rem; width: 100%;"}
+        kwargs = {}
         if post_id is not None:
             kwargs["data_post_id"] = str(post_id)
         
@@ -190,24 +200,28 @@ class CardWidgetsMixin:
             content=f'<div style="font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap;">{escaped_content}</div>',
             header=header,
             footer=footer,
+            cls=cls,
+            style=merge_style("margin-bottom: 1rem; width: 100%;", style),
             **kwargs
         )
     
     
     def styled_card(self, 
                     content: str,
-                    style: str = 'default',
+                    preset: str = 'default',
                     header_badge: str = None,
                     header_badge_variant: str = 'neutral',
                     header_text: str = None,
                     footer_text: str = None,
                     data_id: str = None,
-                    return_html: bool = False):
+                    return_html: bool = False,
+                    cls: str = "",
+                    style: str = ""):
         """Styled card with various preset styles
         
         Args:
             content: Card content (auto-escaped)
-            style: Card style ('default', 'live', 'admin', 'info', 'warning')
+            preset: Card preset ('default', 'live', 'admin', 'info', 'warning')
             header_badge: Header badge text
             header_badge_variant: Badge color ('primary', 'success', 'neutral', 'warning', 'danger')
             header_text: Additional header text (e.g., timestamp)
@@ -222,7 +236,7 @@ class CardWidgetsMixin:
             # Display on screen
             app.styled_card(
                 "Hello world",
-                style='live',
+                preset='live',
                 header_badge='LIVE',
                 footer_text='2026-01-18'
             )
@@ -230,7 +244,7 @@ class CardWidgetsMixin:
             # Generate HTML for broadcast
             html = app.styled_card(
                 "Hello world",
-                style='live',
+                preset='live',
                 header_badge='LIVE',
                 footer_text='2026-01-18',
                 data_id='123',
@@ -271,7 +285,7 @@ class CardWidgetsMixin:
             }
         }
         
-        config = styles_config.get(style, styles_config['default'])
+        config = styles_config.get(preset, styles_config['default'])
         
         # Create header
         header_parts = []
@@ -323,18 +337,22 @@ class CardWidgetsMixin:
             content=f'<div style="{config["content_style"]}">{escaped_content}</div>',
             header=header_html,
             footer=footer_html,
+            cls=cls,
+            style=style,
             **kwargs
         )
     
     
     def card_with_actions(self,
                           content: str,
-                          style: str = 'default',
+                          preset: str = 'default',
                           header_badge: str = None,
                           header_badge_variant: str = 'neutral',
                           header_text: str = None,
                           footer_text: str = None,
-                          data_id: str = None):
+                          data_id: str = None,
+                          cls: str = "",
+                          style: str = ""):
         """
         Card widget with action buttons
         
@@ -342,7 +360,7 @@ class CardWidgetsMixin:
         
         Args:
             content: Card content
-            style: Card style
+            preset: Card preset
             header_badge: Header badge
             header_badge_variant: Badge color
             header_text: Additional header text
@@ -353,7 +371,7 @@ class CardWidgetsMixin:
             # Admin page
             app.card_with_actions(
                 content=post['content'],
-                style='admin',
+                preset='admin',
                 header_badge=f'#{post["id"]}',
                 header_text=post['created_at'],
                 data_id=post['id']
@@ -393,7 +411,7 @@ class CardWidgetsMixin:
             }
         }
         
-        config = styles_config.get(style, styles_config['default'])
+        config = styles_config.get(preset, styles_config['default'])
         
         # Create header
         header_parts = []
@@ -439,7 +457,7 @@ class CardWidgetsMixin:
         # Render with markdown
         self.markdown(html_content)
     
-    def info_card(self, content, title=None):
+    def info_card(self, content, title=None, cls: str = "", style: str = ""):
         """
         Create an info card with primary variant
         
@@ -457,10 +475,11 @@ class CardWidgetsMixin:
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
-            style="margin-bottom: 1rem;"
+            cls=cls,
+            style=merge_style("margin-bottom: 1rem;", style)
         )
     
-    def success_card(self, content, title=None):
+    def success_card(self, content, title=None, cls: str = "", style: str = ""):
         """
         Create a success card with success variant
         
@@ -478,10 +497,11 @@ class CardWidgetsMixin:
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
-            style="margin-bottom: 1rem;"
+            cls=cls,
+            style=merge_style("margin-bottom: 1rem;", style)
         )
     
-    def warning_card(self, content, title=None):
+    def warning_card(self, content, title=None, cls: str = "", style: str = ""):
         """
         Create a warning card with warning variant
         
@@ -499,10 +519,11 @@ class CardWidgetsMixin:
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
-            style="margin-bottom: 1rem;"
+            cls=cls,
+            style=merge_style("margin-bottom: 1rem;", style)
         )
     
-    def danger_card(self, content, title=None):
+    def danger_card(self, content, title=None, cls: str = "", style: str = ""):
         """
         Create a danger card with danger variant
         
@@ -520,19 +541,22 @@ class CardWidgetsMixin:
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
-            style="margin-bottom: 1rem;"
+            cls=cls,
+            style=merge_style("margin-bottom: 1rem;", style)
         )
 
 
 class CardContext:
     """Context manager for card with complex content"""
     
-    def __init__(self, app, cid, header, footer, attrs_str):
+    def __init__(self, app, cid, header, footer, attrs_str, user_cls="", user_style=""):
         self.app = app
         self.cid = cid
         self.header = header
         self.footer = footer
         self.attrs_str = attrs_str
+        self.user_cls = user_cls
+        self.user_style = user_style
         self.components = []
     
     def __enter__(self):
@@ -586,7 +610,10 @@ class CardContext:
                 html_parts.append('</sl-card>')
                 
                 # Apply width: 100% to wrapper div (consistency with list_container)
-                return Component("div", id=self.cid, content=''.join(html_parts), style="width: 100%;")
+                _wd = self.app._get_widget_defaults("card")
+                _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
+                _fs = merge_style("width: 100%;", _wd.get("style", ""), self.user_style)
+                return Component("div", id=self.cid, content=''.join(html_parts), class_=_fc or None, style=_fs or None)
             finally:
                 rendering_ctx.reset(token)
         

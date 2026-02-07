@@ -3,6 +3,7 @@
 from typing import Union, Callable, Optional
 from ..component import Component
 from ..context import rendering_ctx
+from ..style_utils import merge_cls, merge_style
 
 
 class TextWidgetsMixin:
@@ -207,7 +208,7 @@ class TextWidgetsMixin:
         '''
         return styled_html
 
-    def heading(self, *args, level: int = 1, divider: bool = False):
+    def heading(self, *args, level: int = 1, divider: bool = False, cls: str = "", style: str = ""):
         """Display heading (h1-h6)"""
         from ..state import State, ComputedState
         import html as html_lib
@@ -234,22 +235,25 @@ class TextWidgetsMixin:
             grad = "gradient-text" if level == 1 else ""
             html_output = f'<h{level} class="{grad}">{escaped_content}</h{level}>'
             if divider: html_output += '<sl-divider class="divider"></sl-divider>'
-            return Component("div", id=cid, content=html_output)
+            _wd = self._get_widget_defaults("heading")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def title(self, *args):
+    def title(self, *args, cls: str = "", style: str = ""):
         """Display title (h1 with gradient)"""
-        self.heading(*args, level=1, divider=False)
+        self.heading(*args, level=1, divider=False, cls=cls, style=style)
     
-    def header(self, *args, divider: bool = True):
+    def header(self, *args, divider: bool = True, cls: str = "", style: str = ""):
         """Display header (h2)"""
-        self.heading(*args, level=2, divider=divider)
+        self.heading(*args, level=2, divider=divider, cls=cls, style=style)
     
-    def subheader(self, *args, divider: bool = False):
+    def subheader(self, *args, divider: bool = False, cls: str = "", style: str = ""):
         """Display subheader (h3)"""
-        self.heading(*args, level=3, divider=divider)
+        self.heading(*args, level=3, divider=divider, cls=cls, style=style)
 
-    def text(self, *args, size: str = "medium", muted: bool = False):
+    def text(self, *args, size: str = "medium", muted: bool = False, cls: str = "", style: str = ""):
         """Display text paragraph
         
         Supports multiple arguments which will be joined by spaces.
@@ -272,16 +276,19 @@ class TextWidgetsMixin:
             val = " ".join(parts)
             rendering_ctx.reset(token)
             
-            cls = f"text-{size} {'text-muted' if muted else ''}"
+            text_cls = f"text-{size} {'text-muted' if muted else ''}"
+            _wd = self._get_widget_defaults("text")
+            _fc = merge_cls(_wd.get("cls", ""), text_cls, cls)
+            _fs = merge_style(_wd.get("style", ""), style)
             # XSS protection: enable content escaping
-            return Component("p", id=cid, content=val, escape_content=True, class_=cls)
+            return Component("p", id=cid, content=val, escape_content=True, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
     
-    def caption(self, *args):
+    def caption(self, *args, cls: str = "", style: str = ""):
         """Display caption text (small, muted)"""
-        self.text(*args, size="small", muted=True)
+        self.text(*args, size="small", muted=True, cls=cls, style=style)
 
-    def markdown(self, *args, **props):
+    def markdown(self, *args, cls: str = "", style: str = "", **props):
         """Display markdown-formatted text
         
         Supports multiple arguments which will be joined by spaces.
@@ -373,10 +380,13 @@ class TextWidgetsMixin:
             html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--sl-primary);">\1</a>', html)
             
             rendering_ctx.reset(token)
-            return Component("div", id=cid, content=html, class_="markdown", **props)
+            _wd = self._get_widget_defaults("markdown")
+            _fc = merge_cls(_wd.get("cls", ""), "markdown", cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc, style=_fs or None, **props)
         self._register_component(cid, builder)
     
-    def html(self, *args, **props):
+    def html(self, *args, cls: str = "", style: str = "", **props):
         """Display raw HTML content
         
         Use this when you need to render HTML directly without markdown processing.
@@ -401,11 +411,30 @@ class TextWidgetsMixin:
             
             content = " ".join(parts)
             rendering_ctx.reset(token)
-            return Component("div", id=cid, content=content, **props)
+            _wd = self._get_widget_defaults("html")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=content, class_=_fc or None, style=_fs or None, **props)
         self._register_component(cid, builder)
 
-    def code(self, code: Union[str, Callable], language: Optional[str] = None, **props):
-        """Display code block with syntax highlighting"""
+    def code(self, code: Union[str, Callable], language: Optional[str] = None,
+             showcase: bool = False, title: Optional[str] = None,
+             copy_button: bool = True, line_numbers: bool = False,
+             theme: str = "dark",
+             cls: str = "", style: str = "", **props):
+        """Display code block with syntax highlighting
+        
+        Args:
+            code: Code string or callable returning code string
+            language: Language for syntax highlighting (e.g. "python", "javascript")
+            showcase: If True, show macOS-style window chrome (traffic lights + title bar)
+            title: Title text for the title bar (shown in showcase mode)
+            copy_button: If True, show a copy-to-clipboard button (default: True)
+            line_numbers: If True, show line numbers
+            theme: Color theme - "dark" (default) or "light"
+            cls: Additional CSS classes
+            style: Additional inline CSS
+        """
         import html as html_lib
         
         cid = self._get_next_cid("code")
@@ -418,41 +447,176 @@ class TextWidgetsMixin:
             escaped_code = html_lib.escape(str(code_text))
             
             lang_class = f"language-{language}" if language else ""
+            
+            # Theme colors
+            if theme == "light":
+                bg_color = "#fafafa"
+                border_color = "var(--sl-border, #e5e7eb)"
+                bar_bg = "#f0f0f0"
+                bar_dot_colors = ("#ff5f57", "#febc2e", "#28c840")
+                title_color = "#6b7280"
+                line_num_color = "#9ca3af"
+                copy_btn_color = "#6b7280"
+                copy_btn_hover = "#374151"
+                hljs_theme_class = "violit-code-light"
+            else:
+                bg_color = "#1e1b2e"
+                border_color = "rgba(124, 58, 237, 0.15)"
+                bar_bg = "#16132a"
+                bar_dot_colors = ("#ff5f57", "#febc2e", "#28c840")
+                title_color = "#6b6b8d"
+                line_num_color = "#4a4a6a"
+                copy_btn_color = "#6b6b8d"
+                copy_btn_hover = "#a5a5c0"
+                hljs_theme_class = "violit-code-dark"
+            
+            # --- Build line numbers ---
+            line_num_html = ""
+            if line_numbers:
+                lines = code_text.split('\n')
+                nums = ''.join(f'<span style="display:block;">{i+1}</span>' for i in range(len(lines)))
+                line_num_html = f'''<div style="
+                    position: absolute; left: 0; top: 0; bottom: 0;
+                    padding: 1rem 0.75rem 1rem 1rem;
+                    text-align: right; color: {line_num_color};
+                    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+                    font-size: 0.8rem; line-height: 1.7;
+                    user-select: none; pointer-events: none;
+                    border-right: 1px solid {border_color};
+                ">{nums}</div>'''
+            
+            code_padding_left = "3.5rem" if line_numbers else "1.25rem"
+            
+            # --- Copy button ---
+            copy_btn_html = ""
+            if copy_button:
+                # Unique copy function name to avoid conflicts
+                copy_fn = f"violitCopy_{cid}"
+                copy_btn_html = f'''
+                <button onclick="{copy_fn}(this)" style="
+                    position: absolute; top: 0.6rem; right: 0.6rem;
+                    background: transparent; border: 1px solid {border_color};
+                    border-radius: 0.375rem; padding: 0.3rem 0.5rem;
+                    cursor: pointer; color: {copy_btn_color};
+                    font-size: 0.75rem; font-family: inherit;
+                    transition: all 0.2s; z-index: 2; display: flex;
+                    align-items: center; gap: 0.3rem;
+                " onmouseenter="this.style.color='{copy_btn_hover}';this.style.borderColor='{copy_btn_hover}'"
+                  onmouseleave="this.style.color='{copy_btn_color}';this.style.borderColor='{border_color}'"
+                >
+                    <sl-icon name="clipboard" style="font-size: 0.85rem;"></sl-icon>
+                    <span>Copy</span>
+                </button>
+                <script>
+                function {copy_fn}(btn) {{
+                    const pre = btn.closest('.violit-code-block').querySelector('code');
+                    navigator.clipboard.writeText(pre.textContent).then(() => {{
+                        const icon = btn.querySelector('sl-icon');
+                        const span = btn.querySelector('span');
+                        if (icon) icon.setAttribute('name', 'check2');
+                        if (span) span.textContent = 'Copied!';
+                        setTimeout(() => {{
+                            if (icon) icon.setAttribute('name', 'clipboard');
+                            if (span) span.textContent = 'Copy';
+                        }}, 2000);
+                    }});
+                }}
+                </script>
+                '''
+            
+            # --- Title bar (showcase mode) ---
+            title_bar_html = ""
+            if showcase:
+                title_text = f'<span style="margin-left: 0.75rem; font-size: 0.8rem; color: {title_color}; font-family: monospace;">{html_lib.escape(title)}</span>' if title else ''
+                title_bar_html = f'''
+                <div style="
+                    padding: 0.7rem 1rem; background: {bar_bg};
+                    display: flex; align-items: center; gap: 0.5rem;
+                    border-bottom: 1px solid {border_color};
+                ">
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background: {bar_dot_colors[0]};"></div>
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background: {bar_dot_colors[1]};"></div>
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background: {bar_dot_colors[2]};"></div>
+                    {title_text}
+                </div>
+                '''
+            
+            # --- Assemble ---
+            # border-radius: if showcase, top corners are 0 (title bar has them)
+            pre_radius = "0" if showcase else "0.625rem"
+            outer_radius = "0.625rem"
+            
             html_output = f'''
-            <pre style="background:var(--sl-bg-card);padding:1rem;border-radius:0.5rem;border:1px solid var(--sl-border);overflow-x:auto;">
-                <code class="{lang_class}" style="color:var(--sl-text);font-family:monospace;">{escaped_code}</code>
-            </pre>
+            <div class="violit-code-block {hljs_theme_class}" style="
+                position: relative; border-radius: {outer_radius};
+                overflow: hidden; border: 1px solid {border_color};
+                background: {bg_color};
+            ">
+                {title_bar_html}
+                <div style="position: relative;">
+                    {copy_btn_html}
+                    {line_num_html}
+                    <pre style="
+                        margin: 0; padding: 1rem {code_padding_left};
+                        padding-left: {code_padding_left}; padding-right: 3.5rem;
+                        overflow-x: auto; font-size: 0.875rem; line-height: 1.7;
+                        background: {bg_color}; border-radius: {pre_radius};
+                    "><code class="hljs {lang_class}" style="
+                        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+                        background: transparent; padding: 0;
+                    ">{escaped_code}</code></pre>
+                </div>
+            </div>
+            <script>
+            (function() {{
+                var el = document.getElementById('{cid}');
+                if (el && typeof hljs !== 'undefined') {{
+                    el.querySelectorAll('pre code').forEach(function(block) {{
+                        hljs.highlightElement(block);
+                    }});
+                }}
+            }})();
+            </script>
             '''
-            return Component("div", id=cid, content=html_output, **props)
+            _wd = self._get_widget_defaults("code")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None, **props)
         self._register_component(cid, builder)
 
-    def divider(self):
+    def divider(self, cls: str = "", style: str = ""):
         """Display horizontal divider"""
         cid = self._get_next_cid("divider")
         def builder():
-            return Component("sl-divider", id=cid, class_="divider")
+            _wd = self._get_widget_defaults("divider")
+            _fc = merge_cls(_wd.get("cls", ""), "divider", cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("sl-divider", id=cid, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
 
-    def success(self, body, icon="check-circle"):
+    def success(self, body, icon="check-circle", cls: str = "", style: str = ""):
         """Display success message"""
-        self._alert(body, "success", icon)
+        self._alert(body, "success", icon, cls=cls, style=style)
 
-    def info(self, body, icon="info-circle"):
+    def info(self, body, icon="info-circle", cls: str = "", style: str = ""):
         """Display info message"""
-        self._alert(body, "primary", icon)
+        self._alert(body, "primary", icon, cls=cls, style=style)
 
-    def warning(self, body, icon="exclamation-triangle"):
+    def warning(self, body, icon="exclamation-triangle", cls: str = "", style: str = ""):
         """Display warning message"""
-        self._alert(body, "warning", icon)
+        self._alert(body, "warning", icon, cls=cls, style=style)
 
-    def error(self, body, icon="exclamation-octagon"):
+    def error(self, body, icon="exclamation-octagon", cls: str = "", style: str = ""):
         """Display error message"""
-        self._alert(body, "danger", icon)
+        self._alert(body, "danger", icon, cls=cls, style=style)
 
-    def _alert(self, body, variant, icon_name):
+    def _alert(self, body, variant, icon_name, cls: str = "", style: str = ""):
         cid = self._get_next_cid("alert")
         def builder():
             icon_html = f'<sl-icon slot="icon" name="{icon_name}"></sl-icon>'
             html = f'<sl-alert variant="{variant}" open style="margin-bottom:1rem;">{icon_html}{body}</sl-alert>'
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("alert")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)

@@ -3,12 +3,13 @@
 from typing import Union, Callable, Optional, List
 from ..component import Component
 from ..context import rendering_ctx, fragment_ctx, layout_ctx
+from ..style_utils import merge_cls, merge_style
 
 
 class LayoutWidgetsMixin:
     """Layout widgets (columns, container, expander, tabs, empty, dialog)"""
     
-    def columns(self, spec=2, gap="1rem"):
+    def columns(self, spec=2, gap="1rem", cls: str = "", style: str = ""):
         """Create column layout - spec can be an int (equal width) or list of weights"""
         if isinstance(spec, int):
             count = spec
@@ -53,13 +54,16 @@ class LayoutWidgetsMixin:
             grid_tmpl = " ".join(weights)
             # align-items: stretch ensures all columns have equal height
             container_html = f'<div id="{columns_id}" class="columns" style="display: grid; grid-template-columns: {grid_tmpl}; gap: {gap}; align-items: stretch;">{"".join(columns_html)}</div>'
-            return Component("div", id=f"{columns_id}_wrapper", content=container_html)
+            _wd = self._get_widget_defaults("columns")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{columns_id}_wrapper", content=container_html, class_=_fc or None, style=_fs or None)
         
         self._register_component(columns_id, builder)
         
         return column_objects
 
-    def container(self, border=True, **kwargs):
+    def container(self, border=True, cls: str = "", style: str = "", **kwargs):
         """
         Create a container for grouping elements
         
@@ -75,10 +79,12 @@ class LayoutWidgetsMixin:
         cid = self._get_next_cid("container")
         
         class ContainerContext:
-            def __init__(self, app, container_id, border, attrs):
+            def __init__(self, app, container_id, border, user_cls, user_style, attrs):
                 self.app = app
                 self.container_id = container_id
                 self.border = border
+                self.user_cls = user_cls
+                self.user_style = user_style
                 self.attrs = attrs
                 
             def __enter__(self):
@@ -99,8 +105,11 @@ class LayoutWidgetsMixin:
                     border_class = "card" if self.border else ""
                     inner_html = "".join(htmls)
                     
+                    _wd = self.app._get_widget_defaults("container")
+                    _fc = merge_cls(_wd.get("cls", ""), border_class, self.user_cls)
+                    _fs = merge_style(_wd.get("style", ""), self.user_style)
                     # Pass kwargs to Component
-                    return Component("div", id=self.container_id, content=inner_html, class_=border_class, **self.attrs)
+                    return Component("div", id=self.container_id, content=inner_html, class_=_fc or None, style=_fs or None, **self.attrs)
                 
                 self.app._register_component(self.container_id, builder)
                 
@@ -116,18 +125,20 @@ class LayoutWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
         
-        return ContainerContext(self, cid, border, kwargs)
+        return ContainerContext(self, cid, border, cls, style, kwargs)
 
-    def expander(self, label, expanded=False):
+    def expander(self, label, expanded=False, cls: str = "", style: str = ""):
         """Create an expandable/collapsible section"""
         cid = self._get_next_cid("expander")
         
         class ExpanderContext:
-            def __init__(self, app, expander_id, label, expanded):
+            def __init__(self, app, expander_id, label, expanded, user_cls="", user_style=""):
                 self.app = app
                 self.expander_id = expander_id
                 self.label = label
                 self.expanded = expanded
+                self.user_cls = user_cls
+                self.user_style = user_style
                 
             def __enter__(self):
                 # Register builder BEFORE entering context
@@ -152,7 +163,10 @@ class LayoutWidgetsMixin:
                         <div style="padding:0.5rem 0;">{inner_html}</div>
                     </sl-details>
                     '''
-                    return Component("div", id=self.expander_id, content=html)
+                    _wd = self.app._get_widget_defaults("expander")
+                    _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
+                    _fs = merge_style(_wd.get("style", ""), self.user_style)
+                    return Component("div", id=self.expander_id, content=html, class_=_fc or None, style=_fs or None)
                 
                 self.app._register_component(self.expander_id, builder)
                 
@@ -168,17 +182,19 @@ class LayoutWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
         
-        return ExpanderContext(self, cid, label, expanded)
+        return ExpanderContext(self, cid, label, expanded, cls, style)
 
-    def tabs(self, labels: List[str]):
+    def tabs(self, labels: List[str], cls: str = "", style: str = ""):
         """Create tabbed interface"""
         cid = self._get_next_cid("tabs")
         
         class TabsManager:
-            def __init__(self, app, tabs_id, labels):
+            def __init__(self, app, tabs_id, labels, user_cls="", user_style=""):
                 self.app = app
                 self.tabs_id = tabs_id
                 self.labels = labels
+                self.user_cls = user_cls
+                self.user_style = user_style
                 self.tab_objects = []
                 
                 # Create tab objects immediately
@@ -222,7 +238,10 @@ class LayoutWidgetsMixin:
                         {"".join(panels)}
                     </sl-tab-group>
                     '''
-                    return Component("div", id=self.tabs_id, content=html)
+                    _wd = self.app._get_widget_defaults("tabs")
+                    _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
+                    _fs = merge_style(_wd.get("style", ""), self.user_style)
+                    return Component("div", id=self.tabs_id, content=html, class_=_fc or None, style=_fs or None)
                 
                 self.app._register_component(self.tabs_id, builder)
 
@@ -242,7 +261,7 @@ class LayoutWidgetsMixin:
             def __len__(self):
                 return len(self.tab_objects)
         
-        return TabsManager(self, cid, labels)
+        return TabsManager(self, cid, labels, cls, style)
 
     def empty(self):
         """Create an empty container that can be updated later"""

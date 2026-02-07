@@ -4,12 +4,13 @@ from typing import Union, Callable, Optional
 from ..component import Component
 from ..context import rendering_ctx, fragment_ctx
 from ..state import get_session_store
+from ..style_utils import merge_cls, merge_style
 
 
 class FormWidgetsMixin:
     """Form-related widgets (form, form_submit_button, button, download_button, link_button, page_link)"""
     
-    def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None, variant="primary", **props):
+    def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None, variant="primary", cls: str = "", style: str = "", **props):
         """Display button"""
         cid = self._get_next_cid("btn")
         def builder():
@@ -17,10 +18,18 @@ class FormWidgetsMixin:
             bt = text() if callable(text) else text
             rendering_ctx.reset(token)
             attrs = self.engine.click_attrs(cid)
-            return Component("sl-button", id=cid, content=bt, variant=variant, **attrs, **props)
+            _wd = self._get_widget_defaults("button")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            inner = Component("sl-button", id=cid, content=bt, variant=variant, **attrs, **props)
+            if _fc or _fs:
+                # Center button in wrapper (buttons are inline elements, must be explicitly centered)
+                wrap_style = merge_style("display:flex; justify-content:center;", _fs)
+                return Component("div", id=f"{cid}_wrap", content=inner.render(), class_=_fc or None, style=wrap_style)
+            return inner
         self._register_component(cid, builder, action=on_click)
 
-    def download_button(self, label, data, file_name, mime="text/plain", on_click=None, **props):
+    def download_button(self, label, data, file_name, mime="text/plain", on_click=None, cls: str = "", style: str = "", **props):
         """Download button (Streamlit-compatible interface)
         
         Args:
@@ -167,11 +176,14 @@ class FormWidgetsMixin:
                     {label}
                 </sl-button>
                 '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("download_button")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style("display:flex; justify-content:center;", _wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=on_click)
 
-    def link_button(self, label, url, **props):
+    def link_button(self, label, url, cls: str = "", style: str = "", **props):
         """Display link button"""
         cid = self._get_next_cid("link_btn")
         
@@ -182,11 +194,14 @@ class FormWidgetsMixin:
                 {label}
             </sl-button>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("link_button")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style("display:flex; justify-content:center;", _wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def page_link(self, page, label, icon=None, **props):
+    def page_link(self, page, label, icon=None, cls: str = "", style: str = "", **props):
         """Display page navigation link"""
         cid = self._get_next_cid("page_link")
         
@@ -200,7 +215,10 @@ class FormWidgetsMixin:
                 {label}
             </a>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("page_link")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
@@ -268,7 +286,7 @@ class FormWidgetsMixin:
         
         return FormContext(self, form_id, clear_on_submit)
 
-    def form_submit_button(self, label="Submit", on_click=None, **props):
+    def form_submit_button(self, label="Submit", on_click=None, cls: str = "", style: str = "", **props):
         """Form submit button"""
         cid = self._get_next_cid("form_submit")
         
@@ -285,7 +303,10 @@ class FormWidgetsMixin:
                 {label}
             </sl-button>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("form_submit_button")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style("display:flex; justify-content:center;", _wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder, action=action)
 

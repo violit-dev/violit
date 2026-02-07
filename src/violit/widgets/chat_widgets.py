@@ -2,11 +2,12 @@ from typing import Optional, Union, Callable
 from ..component import Component
 from ..context import fragment_ctx
 from ..state import get_session_store
+from ..style_utils import merge_cls, merge_style
 
 class ChatWidgetsMixin:
     """Chat-related widgets"""
     
-    def chat_message(self, name: str, avatar: Optional[str] = None):
+    def chat_message(self, name: str, avatar: Optional[str] = None, cls: str = "", style: str = ""):
         """
         Insert a chat message container.
         
@@ -17,11 +18,13 @@ class ChatWidgetsMixin:
         cid = self._get_next_cid("chat_message")
         
         class ChatMessageContext:
-            def __init__(self, app, message_id, name, avatar):
+            def __init__(self, app, message_id, name, avatar, user_cls="", user_style=""):
                 self.app = app
                 self.message_id = message_id
                 self.name = name
                 self.avatar = avatar
+                self.user_cls = user_cls
+                self.user_style = user_style
                 self.token = None
                 
             def __enter__(self):
@@ -72,7 +75,10 @@ class ChatWidgetsMixin:
                         </div>
                     </div>
                     '''
-                    return Component("div", id=self.message_id, content=html)
+                    _wd = self.app._get_widget_defaults("chat_message")
+                    _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
+                    _fs = merge_style(_wd.get("style", ""), self.user_style)
+                    return Component("div", id=self.message_id, content=html, class_=_fc or None, style=_fs or None)
                 
                 self.app._register_component(self.message_id, builder)
                 
@@ -86,9 +92,9 @@ class ChatWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
                 
-        return ChatMessageContext(self, cid, name, avatar)
+        return ChatMessageContext(self, cid, name, avatar, cls, style)
 
-    def chat_input(self, placeholder: str = "Your message", on_submit: Optional[Callable[[str], None]] = None, auto_scroll: bool = True):
+    def chat_input(self, placeholder: str = "Your message", on_submit: Optional[Callable[[str], None]] = None, auto_scroll: bool = True, cls: str = "", style: str = ""):
         """
         Display a chat input widget at the bottom of the page.
         
@@ -193,7 +199,10 @@ class ChatWidgetsMixin:
                 }}
             </script>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("chat_input")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
             
         self._register_component(cid, builder)
         

@@ -7,6 +7,7 @@ import plotly.io as pio
 from ..component import Component
 from ..context import rendering_ctx
 from ..state import State
+from ..style_utils import merge_cls, merge_style
 
 
 # [FIX] Shared helper: Plotly render script that handles both visible and hidden containers.
@@ -57,7 +58,7 @@ _PLOTLY_RENDER_SCRIPT = """
 class ChartWidgetsMixin:
     """Chart widgets (line, bar, area, scatter, plotly, pyplot, etc.)"""
     
-    def plotly_chart(self, fig: Union[go.Figure, Callable, State], use_container_width=True, render_mode="svg", **props):
+    def plotly_chart(self, fig: Union[go.Figure, Callable, State], use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display Plotly chart with Signal/Lambda support"""
         cid = self._get_next_cid("plot")
         
@@ -98,12 +99,15 @@ class ChartWidgetsMixin:
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{width_style} height: 500px;"></div>
             ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
-            return Component("div", id=f"{cid}_wrapper", content=html)
+            _wd = self._get_widget_defaults("plotly_chart")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
             
         self._register_component(cid, builder)
 
 
-    def pyplot(self, fig=None, use_container_width=True, **props):
+    def pyplot(self, fig=None, use_container_width=True, cls: str = "", style: str = "", **props):
         """Display Matplotlib figure"""
         import matplotlib
         matplotlib.use('Agg')
@@ -124,11 +128,14 @@ class ChartWidgetsMixin:
             
             width_style = "width: 100%;" if use_container_width else ""
             html = f'<img src="data:image/png;base64,{img_base64}" style="{width_style} height: auto;" />'
-            return Component("div", id=cid, content=html, class_="pyplot-container")
+            _wd = self._get_widget_defaults("pyplot")
+            _fc = merge_cls(_wd.get("cls", ""), "pyplot-container", cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def line_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", **props):
+    def line_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display simple line chart"""
         cid = self._get_next_cid("line_chart")
         
@@ -149,11 +156,14 @@ class ChartWidgetsMixin:
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
             ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
-            return Component("div", id=f"{cid}_wrapper", content=html)
+            _wd = self._get_widget_defaults("line_chart")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def bar_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", **props):
+    def bar_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display simple bar chart"""
         cid = self._get_next_cid("bar_chart")
         
@@ -173,11 +183,14 @@ class ChartWidgetsMixin:
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
             ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
-            return Component("div", id=f"{cid}_wrapper", content=html)
+            _wd = self._get_widget_defaults("bar_chart")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def area_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", **props):
+    def area_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display area chart"""
         cid = self._get_next_cid("area_chart")
         
@@ -198,11 +211,14 @@ class ChartWidgetsMixin:
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
             ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
-            return Component("div", id=f"{cid}_wrapper", content=html)
+            _wd = self._get_widget_defaults("area_chart")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def scatter_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", **props):
+    def scatter_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display scatter chart"""
         cid = self._get_next_cid("scatter_chart")
         
@@ -223,11 +239,14 @@ class ChartWidgetsMixin:
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
             ''' + _PLOTLY_RENDER_SCRIPT.format(fj=fj, cid=cid)
-            return Component("div", id=f"{cid}_wrapper", content=html)
+            _wd = self._get_widget_defaults("scatter_chart")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def bokeh_chart(self, figure, use_container_width=True, **props):
+    def bokeh_chart(self, figure, use_container_width=True, cls: str = "", style: str = "", **props):
         """Display Bokeh chart"""
         from bokeh.embed import components
         
@@ -242,7 +261,10 @@ class ChartWidgetsMixin:
                 {script}
             </div>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("bokeh_chart")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 

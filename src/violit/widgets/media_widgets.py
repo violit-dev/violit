@@ -4,12 +4,13 @@ from typing import Union, Optional
 import base64
 from ..component import Component
 from ..context import rendering_ctx
+from ..style_utils import merge_cls, merge_style
 
 
 class MediaWidgetsMixin:
     """Media widgets (image, audio, video)"""
     
-    def image(self, image, caption=None, width=None, use_column_width=False, **props):
+    def image(self, image, caption=None, width=None, use_column_width=False, cls: str = "", style: str = "", **props):
         """Display image from various sources"""
         cid = self._get_next_cid("image")
         
@@ -78,11 +79,14 @@ class MediaWidgetsMixin:
                 {caption_html}
             </div>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("image")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def audio(self, audio, format="audio/mp3", start_time=0, **props):
+    def audio(self, audio, format="audio/mp3", start_time=0, cls: str = "", style: str = "", **props):
         """Display audio player"""
         cid = self._get_next_cid("audio")
         
@@ -129,11 +133,14 @@ class MediaWidgetsMixin:
                 Your browser does not support the audio element.
             </audio>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("audio")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
 
-    def video(self, video, format="video/mp4", start_time=0, **props):
+    def video(self, video, format="video/mp4", start_time=0, cls: str = "", style: str = "", **props):
         """Display video player"""
         cid = self._get_next_cid("video")
         
@@ -168,6 +175,9 @@ class MediaWidgetsMixin:
                 Your browser does not support the video element.
             </video>
             '''
-            return Component("div", id=cid, content=html)
+            _wd = self._get_widget_defaults("video")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
