@@ -7,7 +7,7 @@
 > **"Faster than Light, Beautiful as Violet."**
 > **Streamlit의 직관성 × React의 퍼포먼스**
 
-**Violit(바이올릿)** 은 Streamlit의 **전체 스크립트 재실행(Full Script Rerun)** 구조와 달리, **O(1) State Architecture**를 채택하여 즉각적인 반응성을 제공하는 차세대 Python 웹 프레임워크입니다.
+**Violit(바이올릿)** 은 Streamlit의 **전체 스크립트 재실행(Full Script Rerun)** 구조와 달리, **Fine-Grained State Architecture**를 채택하여 즉각적인 반응성을 제공하는 차세대 Python 웹 프레임워크입니다.
 
 가장 우아한 문법으로, 빛의 속도로 반응하는 애플리케이션을 만드세요.
 
@@ -39,7 +39,7 @@ Violit과 Streamlit은 Python 코드로 UI를 만든다는 점은 같지만, 내
 
 | Feature | Streamlit (Traditional) | **Violit (Reactive)** |
 | --- | --- | --- |
-| **Execution Model** | **Full Rerun (O(N))**<br>사용자 상호작용마다 전체 스크립트를 재실행합니다. | **Zero Rerun (O(1))**<br>변경된 State에 연결된 컴포넌트만 정확히 업데이트합니다. |
+| **Execution Model** | **Full Script Rerun**<br>사용자 상호작용마다 전체 스크립트를 재실행합니다. | **Fine-Grained Updates**<br>변경된 State에 연결된 컴포넌트만 정확히 업데이트합니다. |
 | **Performance** | 데이터 양이 늘어나면 반응 속도가 저하될 수 있습니다. | 데이터 규모와 상관없이 일관된 반응성을 유지합니다. |
 | **Optimization** | `@cache`, `@fragment`와 같은 최적화 데코레이터가 필요합니다. | 별도의 최적화 코드 없이도 설계상 최적화되어 있습니다. |
 | **Deployment** | 웹 브라우저 실행에 최적화되어 있습니다. | 웹 브라우저 및 **Desktop Native App** 모드를 모두 지원합니다. |
@@ -49,7 +49,7 @@ Violit과 Streamlit은 Python 코드로 UI를 만든다는 점은 같지만, 내
 
 1.  **Optimization by Design (Streamlit-Like Syntax, No Complexity)**:
     Streamlit의 직관적인 문법은 그대로 유지하면서, 복잡한 최적화 도구를 아키텍처 단계에서 제거했습니다.
-    *   ❌ **No `@cache_data`, `@fragment`, `st.rerun`**: O(1) 구조 덕분에 수동 최적화가 필요 없습니다.
+    *   ❌ **No `@cache_data`, `@fragment`, `st.rerun`**: Fine-Grained 구조 덕분에 수동 최적화가 필요 없습니다.
     *   ❌ **No `key` Management**: 위젯 상태 관리를 위해 고유 키를 일일이 지정할 필요가 없습니다.
     *   ❌ **No Complex Callbacks**: Dash나 Panel처럼 복잡한 콜백/클래스를 정의할 필요가 없습니다.
 
@@ -90,7 +90,7 @@ app.set_theme('ocean')
 
 ## 📈 Benchmarks & Performance
 
-기존 O(N) 방식 대비 Violit의 O(1) 업데이트 방식이 얼마나 효율적인지 보여주는 벤치마크 결과입니다.
+기존 Full Rerun 방식 대비 Violit의 Fine-Grained 업데이트 방식이 얼마나 효율적인지 보여주는 벤치마크 결과입니다.
 
 
 

@@ -8,7 +8,7 @@
 > **"Faster than Light, Beautiful as Violet."**
 > **Structure of Streamlit × Performance of React**
 
-**Violit** is a next-generation Python web framework that adopts an **O(1) State Architecture** for instant reactivity, unlike Streamlit's **Full Script Rerun** structure.
+**Violit** is a next-generation Python web framework that adopts a **Fine-Grained State Architecture** for instant reactivity, unlike Streamlit's **Full Script Rerun** structure.
 
 Build applications that react at the speed of light with the most elegant syntax.
 
@@ -42,7 +42,7 @@ Violit and Streamlit are similar in that they build UIs with Python code, but th
 
 | Feature | Streamlit (Traditional) | **Violit (Reactive)** |
 | --- | --- | --- |
-| **Execution Model** | **Full Rerun (O(N))**<br>Reruns the entire script on every user interaction. | **Zero Rerun (O(1))**<br>Updates only the components connected to the modified State. |
+| **Execution Model** | **Full Script Rerun**<br>Reruns the entire script on every user interaction. | **Fine-Grained Updates**<br>Updates only the components connected to the modified State. |
 | **Performance** | Response speed may degrade as data size increases. | Maintains consistent reactivity regardless of data scale. |
 | **Optimization** | Requires optimization decorators like `@cache`, `@fragment`. | Optimized by design without extra optimization code. |
 | **Deployment** | Optimized for web browser execution. | Supports both Web Browser and **Desktop Native App** modes. |
@@ -52,7 +52,7 @@ Violit and Streamlit are similar in that they build UIs with Python code, but th
 
 1.  **Optimization by Design (Streamlit-Like Syntax, No Complexity)**:
     Streamlit's intuitive syntax is maintained, but complex optimization tools are removed at the architecture level.
-    *   ❌ **No `@cache_data`, `@fragment`, `st.rerun`**: Thanks to the O(1) structure, manual optimization is unnecessary.
+    *   ❌ **No `@cache_data`, `@fragment`, `st.rerun`**: Thanks to the fine-grained structure, manual optimization is unnecessary.
     *   ❌ **No `key` Management**: No need to manually specify unique keys for widget state management.
     *   ❌ **No Complex Callbacks**: No need to define complex callbacks/classes like Dash or Panel.
 
@@ -93,7 +93,7 @@ app.set_theme('ocean')
 
 ## 📈 Benchmarks & Performance
 
-Benchmark results showing how efficient Violit's O(1) update method is compared to the existing O(N) method.
+Benchmark results showing how efficient Violit's fine-grained update method is compared to the existing full rerun method.
 
 
 
