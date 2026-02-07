@@ -167,19 +167,19 @@ class StatusWidgetsMixin:
         """Shortcut for callout(variant='tip')"""
         self.callout(body, title=title, variant="tip", **kwargs)
 
-    def callout_info(self, body, title="참고", **kwargs):
+    def callout_info(self, body, title="INFO.", **kwargs):
         """Shortcut for callout(variant='info')"""
         self.callout(body, title=title, variant="info", **kwargs)
 
-    def callout_warning(self, body, title="주의", **kwargs):
+    def callout_warning(self, body, title="WARNING", **kwargs):
         """Shortcut for callout(variant='warning')"""
         self.callout(body, title=title, variant="warning", **kwargs)
 
-    def callout_danger(self, body, title="위험", **kwargs):
+    def callout_danger(self, body, title="DANGER", **kwargs):
         """Shortcut for callout(variant='danger')"""
         self.callout(body, title=title, variant="danger", **kwargs)
 
-    def callout_success(self, body, title="완료", **kwargs):
+    def callout_success(self, body, title="SUCCESS", **kwargs):
         """Shortcut for callout(variant='success')"""
         self.callout(body, title=title, variant="success", **kwargs)
 
