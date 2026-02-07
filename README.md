@@ -299,8 +299,8 @@ Violit is continuously evolving.
 
 *   ✅ **Core**: Signal State Engine, Theme System
 *   ✅ **Widgets**: Plotly, Dataframe, Input Widgets
-*   ⏳ **Homepage**: Official Homepage Open 
-*   ⏳ **Documentation**: Official Technical Documentation and API Reference Update 
+*   ✅ **Homepage**: Official Homepage Open 
+*   ✅ **Documentation**: Official Technical Documentation and API Reference Update 
 *   ⏳ **Custom Components**: User-defined Custom Component Support 
 *   ⏳ **Custom Theme**: User-defined Custom Theme Support 
 *   ⏳ **async**: Async processing support 
