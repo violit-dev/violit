@@ -617,7 +617,7 @@ class CardContext:
             finally:
                 rendering_ctx.reset(token)
         
-        self.app._register_component(self.cid, builder)
         fragment_ctx.reset(self.fragment_token)
         layout_ctx.reset(self.layout_token)
+        self.app._register_component(self.cid, builder)
 
