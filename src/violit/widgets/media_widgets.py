@@ -75,7 +75,7 @@ class MediaWidgetsMixin:
             
             html = f'''
             <div class="image-container" style="text-align:center;">
-                <img src="{img_src}" style="{width_style} height:auto;border-radius:0.5rem;" alt="{caption or ''}" />
+                <img src="{img_src}" loading="lazy" style="{width_style} height:auto;border-radius:0.5rem;" alt="{caption or ''}" />
                 {caption_html}
             </div>
             '''
