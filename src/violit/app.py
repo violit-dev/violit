@@ -974,7 +974,14 @@ class App(
                 if self.mode == 'lite':
                     # Lite mode: update hash and HTMX post
                     page_hash = p.key.replace("page_", "")
-                    click_attr = f'onclick="window.location.hash = \'{page_hash}\'" hx-post="/action/{cid}" hx-vals=\'{{"value": "{p.key}"}}\' hx-target="#{cid}" hx-swap="outerHTML"'  
+                    click_attr = (
+                        f'onclick="'
+                        f'if(window._currentPageKey){{window._pageScrollPositions=window._pageScrollPositions||{{}};window._pageScrollPositions[window._currentPageKey]=window.scrollY;}}'
+                        f"window._currentPageKey='{p.key}';"
+                        f"window.location.hash='{page_hash}';"
+                        f"setTimeout(function(){{window.scrollTo(0,window._pageScrollPositions&&window._pageScrollPositions['{p.key}']||0);}},100);"
+                        f'" hx-post="/action/{cid}" hx-vals=\'{{"value": "{p.key}"}}\' hx-target="#{cid}" hx-swap="outerHTML"'
+                    )
                 else:
                     # WebSocket mode (including native)
                     click_attr = f'onclick="window.sendAction(\'{cid}\', \'{p.key}\')"'
@@ -2070,6 +2077,10 @@ HTML_TEMPLATE = """
             window._actionQueue = [];
             window._ws = null;
             
+            // Page scroll position memory: { pageKey: scrollY }
+            window._pageScrollPositions = {};
+            window._currentPageKey = null;
+            
             // Define sendAction IMMEDIATELY (before WebSocket connection)
             window.sendAction = (cid, val) => {
                 debugLog(`[sendAction] Called with cid=${cid}, val=${val}`);
@@ -2094,6 +2105,14 @@ HTML_TEMPLATE = """
                 
                 // Check if this is a navigation menu click (nav_menu_X)
                 if (cid.startsWith('nav_menu')) {
+                    // Save current page scroll position before navigating away
+                    if (window._currentPageKey) {
+                        window._pageScrollPositions[window._currentPageKey] = window.scrollY;
+                        debugLog(`💾 Saved scroll ${window.scrollY}px for page: ${window._currentPageKey}`);
+                    }
+                    // Track the target page key
+                    window._pendingPageKey = val;
+                    
                     // Update URL hash to reflect current page
                     // val is "page_reactive-logic", we make it #reactive-logic
                     const pageName = val.replace('page_', '');
@@ -2270,6 +2289,26 @@ HTML_TEMPLATE = """
                     // CSS fade-in on .page-container handles the smooth entrance.
                     applyUpdates(msg.payload);
                     
+                    // Page scroll position management after navigation
+                    if (isNavigation && window._pendingPageKey) {
+                        const targetKey = window._pendingPageKey;
+                        window._currentPageKey = targetKey;
+                        window._pendingPageKey = null;
+                        
+                        // Restore saved scroll position, or scroll to top for first visit
+                        const savedScroll = window._pageScrollPositions[targetKey];
+                        // Use requestAnimationFrame to ensure DOM is updated before scrolling
+                        requestAnimationFrame(() => {
+                            if (savedScroll !== undefined && savedScroll > 0) {
+                                window.scrollTo(0, savedScroll);
+                                debugLog(`📜 Restored scroll ${savedScroll}px for page: ${targetKey}`);
+                            } else {
+                                window.scrollTo(0, 0);
+                                debugLog(`📜 Scroll to top for page: ${targetKey}`);
+                            }
+                        });
+                    }
+                    
                     // Re-highlight code blocks after DOM update
                     if (typeof hljs !== 'undefined') {
                         document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
@@ -2393,11 +2432,17 @@ HTML_TEMPLATE = """
             // If no hash, force navigation to Home to reset server state
             if (!hash || hash === 'home' || hash === '홈') {
                 debugLog('🏠 No hash - forcing Home page');
+                // Initialize current page key for scroll tracking
+                window._currentPageKey = 'page_home';
                 const tryClickHome = (attempts = 0) => {
                     if (attempts >= 20) return;
                     const navButtons = document.querySelectorAll('#sidebar sl-button');
                     if (navButtons.length > 0) {
                         const homeBtn = navButtons[0]; // First button is Home
+                        // Extract actual page key from button onclick
+                        const onclickAttr = homeBtn.getAttribute('onclick') || '';
+                        const keyMatch = onclickAttr.match(/'(page_[^']+)'/);
+                        if (keyMatch) window._currentPageKey = keyMatch[1];
                         if (homeBtn.getAttribute('variant') !== 'primary') {
                             homeBtn.click();
                             debugLog('🏠 Clicked Home button');
@@ -2411,6 +2456,8 @@ HTML_TEMPLATE = """
             }
             
             const targetKey = 'page_' + hash;
+            // Initialize current page key for scroll tracking
+            window._currentPageKey = targetKey;
             debugLog(`📍 Restoring from Hash: "${hash}" (key: ${targetKey})`);
             
             const tryRestore = (attempts = 0) => {
