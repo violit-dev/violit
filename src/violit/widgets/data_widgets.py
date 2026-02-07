@@ -68,19 +68,27 @@ class DataWidgetsMixin:
             html = f'''
             <div id="{cid}" style="height: {height}px; width: 100%;" class="ag-theme-alpine-dark"></div>
             <script>(function(){{
-                const opt = {{ 
-                    columnDefs: {json.dumps(cols, default=str)}, 
-                    rowData: {json.dumps(data, default=str)},
-                    defaultColDef: {{flex: 1, minWidth: 100, resizable: true}},
-                    {cell_click_handler}
-                    ...{json.dumps(extra_options)}
-                }};
-                const el = document.querySelector('#{cid}');
-                if (el && window.agGrid) {{ 
-                    const grid = new agGrid.Grid(el, opt);
-                    window['grid_{cid}'] = grid;
+                function initGrid() {{
+                    const opt = {{ 
+                        columnDefs: {json.dumps(cols, default=str)}, 
+                        rowData: {json.dumps(data, default=str)},
+                        defaultColDef: {{flex: 1, minWidth: 100, resizable: true}},
+                        {cell_click_handler}
+                        ...{json.dumps(extra_options)}
+                    }};
+                    const el = document.querySelector('#{cid}');
+                    if (el && window.agGrid) {{ 
+                        const grid = new agGrid.Grid(el, opt);
+                        window['grid_{cid}'] = grid;
+                    }}
+                    else {{ console.error("agGrid not found"); }}
                 }}
-                else {{ console.error("agGrid not found"); }}
+                
+                if (document.readyState === 'loading') {{
+                    document.addEventListener('DOMContentLoaded', initGrid);
+                }} else {{
+                    initGrid();
+                }}
             }})();</script>
             '''
             _wd = self._get_widget_defaults("dataframe")
@@ -176,39 +184,47 @@ class DataWidgetsMixin:
                 {add_row_btn}
             </div>
             <script>(function(){{
-                const gridOptions = {{
-                    columnDefs: {json.dumps(cols, default=str)},
-                    rowData: {json.dumps(data, default=str)},
-                    defaultColDef: {{ flex: 1, minWidth: 100, resizable: true, editable: true }},
-                    onCellValueChanged: (params) => {{
-                        const allData = [];
-                        params.api.forEachNode(node => allData.push(node.data));
-                        {f"sendAction('{cid}', allData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(allData)}} , swap: 'none'}});"}
-                    }},
-                    onGridReady: (params) => {{
-                        // Store API when grid is ready
-                        window['gridApi_{cid}'] = params.api;
+                function initEditor() {{
+                    const gridOptions = {{
+                        columnDefs: {json.dumps(cols, default=str)},
+                        rowData: {json.dumps(data, default=str)},
+                        defaultColDef: {{ flex: 1, minWidth: 100, resizable: true, editable: true }},
+                        onCellValueChanged: (params) => {{
+                            const allData = [];
+                            params.api.forEachNode(node => allData.push(node.data));
+                            {f"sendAction('{cid}', allData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(allData)}} , swap: 'none'}});"}
+                        }},
+                        onGridReady: (params) => {{
+                            // Store API when grid is ready
+                            window['gridApi_{cid}'] = params.api;
+                        }}
+                    }};
+                    const el = document.querySelector('#{cid}');
+                    if (el && window.agGrid) {{
+                        new agGrid.Grid(el, gridOptions);
                     }}
-                }};
-                const el = document.querySelector('#{cid}');
-                if (el && window.agGrid) {{
-                    new agGrid.Grid(el, gridOptions);
+                    
+                    window.addDataRow_{cid} = function() {{
+                        // Access stored grid API
+                        const api = window['gridApi_{cid}'];
+                        if (api && api.applyTransaction) {{
+                            // Add empty row with all column fields
+                            const newRow = {{}};
+                            {json.dumps([c for c in df.columns])}.forEach(col => newRow[col] = '');
+                            api.applyTransaction({{add: [newRow]}});
+                            // Trigger data update to sync with backend
+                            const allData = [];
+                            api.forEachNode(node => allData.push(node.data));
+                            {f"sendAction('{cid}', allData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(allData)}} , swap: 'none'}});"}
+                        }}
+                    }};
                 }}
-                
-                window.addDataRow_{cid} = function() {{
-                    // Access stored grid API
-                    const api = window['gridApi_{cid}'];
-                    if (api && api.applyTransaction) {{
-                        // Add empty row with all column fields
-                        const newRow = {{}};
-                        {json.dumps([c for c in df.columns])}.forEach(col => newRow[col] = '');
-                        api.applyTransaction({{add: [newRow]}});
-                        // Trigger data update to sync with backend
-                        const allData = [];
-                        api.forEachNode(node => allData.push(node.data));
-                        {f"sendAction('{cid}', allData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(allData)}} , swap: 'none'}});"}
-                    }}
-                }};
+
+                if (document.readyState === 'loading') {{
+                    document.addEventListener('DOMContentLoaded', initEditor);
+                }} else {{
+                    initEditor();
+                }}
             }})();</script>
             '''
             _wd = self._get_widget_defaults("data_editor")

@@ -569,11 +569,19 @@ class TextWidgetsMixin:
             </div>
             <script>
             (function() {{
-                var el = document.getElementById('{cid}');
-                if (el && typeof hljs !== 'undefined') {{
-                    el.querySelectorAll('pre code').forEach(function(block) {{
-                        hljs.highlightElement(block);
-                    }});
+                function highlight() {{
+                    var el = document.getElementById('{cid}');
+                    if (el && typeof hljs !== 'undefined') {{
+                        el.querySelectorAll('pre code').forEach(function(block) {{
+                            hljs.highlightElement(block);
+                        }});
+                    }}
+                }}
+                
+                if (document.readyState === 'loading') {{
+                    document.addEventListener('DOMContentLoaded', highlight);
+                }} else {{
+                    highlight();
                 }}
             }})();
             </script>

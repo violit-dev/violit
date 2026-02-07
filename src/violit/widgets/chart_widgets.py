@@ -16,40 +16,48 @@ from ..style_utils import merge_cls, merge_style
 #   so the chart is created at the correct width the moment the tab becomes visible.
 _PLOTLY_RENDER_SCRIPT = """
 <script>(function(){{
-    var d = {fj};
-    var cid = '{cid}';
-    var cfg = {{responsive: true, displayModeBar: false}};
+    function initPlot() {{
+        var d = {fj};
+        var cid = '{cid}';
+        var cfg = {{responsive: true, displayModeBar: false}};
 
-    function _vlDraw() {{
+        function _vlDraw() {{
+            var el = document.getElementById(cid);
+            if (!el || !window.Plotly) return;
+            // autosize: true + responsive config handles all sizing.
+            // Do NOT set d.layout.width — it overrides responsive behavior.
+            d.layout.autosize = true;
+            delete d.layout.width;
+            Plotly.newPlot(cid, d.data, d.layout, cfg);
+        }}
+
+        function _vlSchedule() {{
+            requestAnimationFrame(function() {{
+                requestAnimationFrame(_vlDraw);
+            }});
+        }}
+
         var el = document.getElementById(cid);
-        if (!el || !window.Plotly) return;
-        // autosize: true + responsive config handles all sizing.
-        // Do NOT set d.layout.width — it overrides responsive behavior.
-        d.layout.autosize = true;
-        delete d.layout.width;
-        Plotly.newPlot(cid, d.data, d.layout, cfg);
+        if (!el) return;
+
+        // If container is hidden (inactive tab, clientWidth=0), defer until visible
+        if (el.clientWidth < 10) {{
+            var io = new IntersectionObserver(function(entries) {{
+                if (entries[0].isIntersecting && entries[0].boundingClientRect.width > 10) {{
+                    io.disconnect();
+                    _vlSchedule();
+                }}
+            }});
+            io.observe(el);
+        }} else {{
+            _vlSchedule();
+        }}
     }}
 
-    function _vlSchedule() {{
-        requestAnimationFrame(function() {{
-            requestAnimationFrame(_vlDraw);
-        }});
-    }}
-
-    var el = document.getElementById(cid);
-    if (!el) return;
-
-    // If container is hidden (inactive tab, clientWidth=0), defer until visible
-    if (el.clientWidth < 10) {{
-        var io = new IntersectionObserver(function(entries) {{
-            if (entries[0].isIntersecting && entries[0].boundingClientRect.width > 10) {{
-                io.disconnect();
-                _vlSchedule();
-            }}
-        }});
-        io.observe(el);
+    if (document.readyState === 'loading') {{
+        document.addEventListener('DOMContentLoaded', initPlot);
     }} else {{
-        _vlSchedule();
+        initPlot();
     }}
 }})();</script>
 """

@@ -1203,12 +1203,12 @@ class App(
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/dark.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace-autoloader.js"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js" defer></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@master/css-runtime@2.0.0-rc.67/dist/global.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@master/css-runtime@2.0.0-rc.67/dist/global.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" defer></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" />
     <style>
         .violit-code-light pre code.hljs { background: transparent !important; }
@@ -1219,15 +1219,16 @@ class App(
                 # Local/Offline Mode
                 # Note: Shoelace autoloader might need full assets for some components.
                 # Basic components should work with the downloaded files.
+                # Added 'defer' to non-critical heavy scripts to unblock rendering (LCP/FCP improvement)
                 vendor_resources = """
     <link rel="stylesheet" href="/static/vendor/shoelace/themes/light.css" />
     <link rel="stylesheet" href="/static/vendor/shoelace/themes/dark.css" />
     <script type="module" src="/static/vendor/shoelace/shoelace-autoloader.js"></script>
-    <script src="/static/vendor/htmx/htmx.min.js"></script>
-    <script src="/static/vendor/ag-grid/ag-grid-community.min.js"></script>
-    <script src="/static/vendor/plotly/plotly-2.27.0.min.js"></script>
-    <script src="/static/vendor/master-css/master-css-runtime.js"></script>
-    <script src="/static/vendor/highlightjs/highlight.min.js"></script>
+    <script src="/static/vendor/htmx/htmx.min.js" defer></script>
+    <script src="/static/vendor/ag-grid/ag-grid-community.min.js" defer></script>
+    <script src="/static/vendor/plotly/plotly-2.27.0.min.js" defer></script>
+    <script src="/static/vendor/master-css/master-css-runtime.js" defer></script>
+    <script src="/static/vendor/highlightjs/highlight.min.js" defer></script>
     <link rel="stylesheet" href="/static/vendor/highlightjs/atom-one-dark.min.css" />
     <style>
         .violit-code-light pre code.hljs { background: transparent !important; }
