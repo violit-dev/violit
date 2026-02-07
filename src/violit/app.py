@@ -1710,7 +1710,7 @@ class App(
             self._splash_html = f"""
             <div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--sl-bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);">
                 <sl-spinner style="font-size: 3rem; --indicator-color: var(--sl-primary); --track-color: var(--sl-border); margin-bottom: 1.25rem;"></sl-spinner>
-                <div style="font-size:1.25rem;font-weight:600;color:var(--sl-text);letter-spacing:-0.02em;" class="gradient-text">Violit is loading...</div>
+                <div style="font-size:1.25rem;font-weight:600;color:var(--sl-text);letter-spacing:-0.02em;" class="gradient-text">Loading...</div>
             </div>
             <script>
             (function() {{
