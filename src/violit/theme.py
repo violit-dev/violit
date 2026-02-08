@@ -714,7 +714,7 @@ class Theme:
                 }
             """
         },
-        'violit_light': {
+        'light_2nd': {
             'mode': 'light',
             'primary': '#7C3AED', 
             'secondary': '#8B5CF6',
