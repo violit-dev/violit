@@ -5,8 +5,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from ..component import Component
-from ..context import rendering_ctx
-from ..state import State
+from ..context import rendering_ctx, initial_render_ctx
+from ..state import State, get_session_store
 from ..style_utils import merge_cls, merge_style
 
 
@@ -64,6 +64,10 @@ _PLOTLY_RENDER_SCRIPT = """
 }})();</script>
 """
 
+# Threshold for asynchronous data loading (number of data points)
+# Large figures are deferred until the page is loaded to ensure O(1) initial page load
+_ASYNC_CHART_THRESHOLD = 50000
+
 
 class ChartWidgetsMixin:
     """Chart widgets (line, bar, area, scatter, plotly, pyplot, etc.)"""
@@ -88,14 +92,48 @@ class ChartWidgetsMixin:
                 return Component("div", id=f"{cid}_wrapper", content="No data")
 
             # [OPTIMIZATION] Automatically lighten large figures to reduce JSON size (Transport Bottleneck)
+            data_points = 0
             if hasattr(current_fig, "data"):
                 import numpy as np
                 for trace in current_fig.data:
                     # Rounding massive arrays to 4 decimals reduces JSON size by ~60% with no visual loss
-                    if hasattr(trace, "y") and trace.y is not None and len(trace.y) > 50000:
-                        trace.update(y=np.round(trace.y, 4))
-                    if hasattr(trace, "x") and trace.x is not None and len(trace.x) > 50000:
-                        trace.update(x=np.round(trace.x, 4))
+                    if hasattr(trace, "y") and trace.y is not None:
+                        count = len(trace.y)
+                        data_points += count
+                        if count > 50000:
+                            trace.update(y=np.round(trace.y, 4))
+                    if hasattr(trace, "x") and trace.x is not None:
+                        if len(trace.x) > 50000:
+                            trace.update(x=np.round(trace.x, 4))
+
+            # [OPTIMIZATION] Async load large figures on initial page load
+            # This ensures the first HTML response is small and the splash screen appears instantly.
+            if initial_render_ctx.get() and data_points > _ASYNC_CHART_THRESHOLD:
+                width_style = "width: 100%;" if use_container_width else ""
+                html = f'''
+                <div id="{cid}" class="js-plotly-plot" style="{width_style} height: 500px; display: flex; align-items: center; justify-content: center; background: var(--sl-bg-card); border: 1px solid var(--sl-border); border-radius: var(--sl-radius);">
+                    <div style="text-align: center;">
+                        <sl-spinner style="font-size: 2rem; --indicator-color: var(--sl-primary); margin-bottom: 0.75rem;"></sl-spinner>
+                        <div style="font-size: 0.85rem; color: var(--sl-text-muted); font-weight: 500;">Loading dataset ({data_points:,} points)...</div>
+                    </div>
+                </div>
+                <script>
+                    (function() {{
+                        const check = () => {{
+                            if (window.sendAction) {{
+                                window.sendAction('{cid}', '__REQUEST_DATA__');
+                            }} else {{
+                                setTimeout(check, 50);
+                            }}
+                        }};
+                        check();
+                    }})();
+                </script>
+                '''
+                _wd = self._get_widget_defaults("plotly_chart")
+                _fc = merge_cls(_wd.get("cls", ""), cls)
+                _fs = merge_style(_wd.get("style", ""), style)
+                return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
 
             # Force render_mode if requested (default: svg)
             if render_mode == "svg" and hasattr(current_fig, "data"):
@@ -123,7 +161,14 @@ class ChartWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
             
-        self._register_component(cid, builder)
+        def action(val):
+            if val == '__REQUEST_DATA__':
+                store = get_session_store()
+                if 'forced_dirty' not in store:
+                    store['forced_dirty'] = set()
+                store['forced_dirty'].add(cid)
+
+        self._register_component(cid, builder, action=action)
 
 
     def pyplot(self, fig=None, use_container_width=True, cls: str = "", style: str = "", **props):

@@ -29,7 +29,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 import plotly.io as pio
 
-from .context import session_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx
+from .context import session_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, initial_render_ctx
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
@@ -798,6 +798,13 @@ class App(
         dirty_states = store.get('dirty_states', set())
         aff = set()
         for s in dirty_states: aff.update(store['tracker'].get_dirty_components(s))
+        
+        # [NEW] Handle forced dirty components (async data loading)
+        forced = store.get('forced_dirty', set())
+        if forced:
+            aff.update(forced)
+            store['forced_dirty'] = set() # Clear after collection
+            
         store['dirty_states'] = set()
         
         res = []
@@ -1174,7 +1181,14 @@ class App(
             # Note: _theme_state, _selection_state, _animation_state and their updaters
             # are already initialized in __init__, no need to re-initialize here
             
-            main_c, sidebar_c = self._render_all()
+            # [CRITICAL] Set initial_render_ctx to True during first page load
+            # This allows widgets (like charts) to defer heavy data serialization
+            token = initial_render_ctx.set(True)
+            try:
+                main_c, sidebar_c = self._render_all()
+            finally:
+                initial_render_ctx.reset(token)
+                
             store = get_session_store()
             t = store['theme']
             
