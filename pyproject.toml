@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "violit"
-version = "0.1.10"
+version = "0.1.11"
 description = "Violit: Faster than Light, Beautiful as Violet. The High-Performance Python Web Framework (Streamlit Alternative with Zero Rerun)."
 readme = "README.md"
 requires-python = ">=3.10"
