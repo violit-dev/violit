@@ -6,7 +6,7 @@
 # 💜 Violit
 
 > **"Faster than Light, Beautiful as Violet."**
-> **Structure of Streamlit × Performance of React**
+> **Structure of Streamlit × Performance of React.**
 
 **Violit** is a next-generation Python web framework that adopts a **Fine-Grained State Architecture** for instant reactivity, unlike Streamlit's **Full Script Rerun** structure.
 
