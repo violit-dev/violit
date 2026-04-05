@@ -150,6 +150,27 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
+    @staticmethod
+    def _sl_encode(v):
+        """Encode a string for safe use as Shoelace sl-option value attribute.
+        
+        Shoelace sl-select treats the value attribute as a space-separated
+        token list (like HTML class). Spaces in values break selection/matching.
+        We percent-encode spaces (and %) to produce a single safe token.
+        """
+        s = str(v)
+        s = s.replace('%', '%25')  # encode % first
+        s = s.replace(' ', '%20')  # encode space
+        return s
+
+    @staticmethod
+    def _sl_decode(v):
+        """Decode a Shoelace-safe value back to the original string."""
+        s = str(v)
+        s = s.replace('%20', ' ')
+        s = s.replace('%25', '%')
+        return s
+
     def selectbox(self, label, options, index=0, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Single select dropdown"""
         cid = self._get_next_cid("select")
@@ -159,8 +180,9 @@ class InputWidgetsMixin:
         s = self.state(default_val, key=state_key)
         
         def action(v):
-            s.set(v)
-            if on_change: on_change(v)
+            decoded = InputWidgetsMixin._sl_decode(v)
+            s.set(decoded)
+            if on_change: on_change(decoded)
             
         def builder():
             token = rendering_ctx.set(cid)
@@ -169,8 +191,15 @@ class InputWidgetsMixin:
             
             opts_html = ""
             for opt in options:
+                encoded_opt = InputWidgetsMixin._sl_encode(opt)
+                escaped_encoded = html_lib.escape(encoded_opt, quote=True)
+                escaped_display = html_lib.escape(str(opt), quote=True)
                 sel = 'selected' if opt == cv else ''
-                opts_html += f'<sl-option value="{opt}" {sel}>{opt}</sl-option>'
+                opts_html += f'<sl-option value="{escaped_encoded}" {sel}>{escaped_display}</sl-option>'
+            
+            encoded_cv = InputWidgetsMixin._sl_encode(cv) if cv is not None else ''
+            escaped_cv = html_lib.escape(encoded_cv, quote=True)
+            escaped_label = html_lib.escape(str(label), quote=True)
             
             if self.mode == 'lite':
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "sl-change", "hx-swap": "none", "name": "value"}
@@ -178,21 +207,40 @@ class InputWidgetsMixin:
             else:
                 # WS mode: use addEventListener for Shoelace custom events
                 attrs = {}
+                desired_json = json.dumps(encoded_cv, ensure_ascii=False)
                 listener_script = f'''
                 <script>
                 (function() {{
                     const el = document.getElementById('{cid}');
-                    if (el && !el.hasAttribute('data-ws-listener')) {{
-                        el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-change', function(e) {{
-                            window.sendAction('{cid}', el.value);
+                    const desiredValue = {desired_json};
+                    if (el) {{
+                        function syncValue() {{
+                            if (el.value !== desiredValue) el.value = desiredValue;
+                        }}
+                        
+                        syncValue();
+                        
+                        if (el.updateComplete) {{
+                            el.updateComplete.then(syncValue);
+                        }}
+                        
+                        requestAnimationFrame(function() {{
+                            syncValue();
+                            setTimeout(syncValue, 150);
                         }});
+                        
+                        if (!el.hasAttribute('data-ws-listener')) {{
+                            el.setAttribute('data-ws-listener', 'true');
+                            el.addEventListener('sl-change', function(e) {{
+                                window.sendAction('{cid}', el.value);
+                            }});
+                        }}
                     }}
                 }})();
                 </script>
                 '''
             
-            select_html = f'<sl-select id="{cid}" label="{label}" value="{cv}"'
+            select_html = f'<sl-select id="{cid}" label="{escaped_label}" value="{escaped_cv}"'
             for k, v in {**attrs, **props}.items():
                 if v is True:
                     select_html += f' {k}'
@@ -218,9 +266,9 @@ class InputWidgetsMixin:
         
         def action(v):
             if isinstance(v, str):
-                selected = [x.strip() for x in v.split(',') if x.strip()]
+                selected = [InputWidgetsMixin._sl_decode(x.strip()) for x in v.split(',') if x.strip()]
             elif isinstance(v, list):
-                selected = v
+                selected = [InputWidgetsMixin._sl_decode(x) for x in v]
             else:
                 selected = []
             s.set(selected)
@@ -233,21 +281,61 @@ class InputWidgetsMixin:
             
             opts_html = ""
             for opt in options:
+                encoded_opt = InputWidgetsMixin._sl_encode(opt)
+                escaped_encoded = html_lib.escape(encoded_opt, quote=True)
+                escaped_display = html_lib.escape(str(opt), quote=True)
                 sel = 'selected' if opt in cv else ''
-                opts_html += f'<sl-option value="{opt}" {sel}>{opt}</sl-option>'
+                opts_html += f'<sl-option value="{escaped_encoded}" {sel}>{escaped_display}</sl-option>'
             
-            attrs = {}
+            listener_script = ""
             if self.mode == 'ws':
-                attrs = {"on_sl_change": f"window.sendAction('{cid}', this.value)"}
+                encoded_cv = [InputWidgetsMixin._sl_encode(x) for x in cv] if cv else []
+                desired_json = json.dumps(encoded_cv, ensure_ascii=False)
+                listener_script = f'''
+                <script>
+                (function() {{
+                    const el = document.getElementById('{cid}');
+                    const desiredValue = {desired_json};
+                    if (el) {{
+                        function syncValue() {{
+                            const current = Array.isArray(el.value) ? el.value.join(',') : '';
+                            const desired = desiredValue.join(',');
+                            if (current !== desired) el.value = desiredValue;
+                        }}
+                        
+                        syncValue();
+                        
+                        if (el.updateComplete) {{
+                            el.updateComplete.then(syncValue);
+                        }}
+                        
+                        requestAnimationFrame(function() {{
+                            syncValue();
+                            setTimeout(syncValue, 150);
+                        }});
+                        
+                        if (!el.hasAttribute('data-ws-listener')) {{
+                            el.setAttribute('data-ws-listener', 'true');
+                            el.addEventListener('sl-change', function(e) {{
+                                const vals = Array.isArray(el.value) ? el.value : (el.value ? [el.value] : []);
+                                window.sendAction('{cid}', vals.join(','));
+                            }});
+                        }}
+                    }}
+                }})();
+                </script>
+                '''
 
             _wd = self._get_widget_defaults("multiselect")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
             # sl-select: cls/style applied via wrapper since this is a Shoelace component
-            inner = Component("sl-select", id=cid, label=label, content=opts_html, multiple=True, clearable=True, **attrs)
+            # label escaping handled by Component.render(); opts_html is raw so manually escaped above
+            inner = Component("sl-select", id=cid, label=label, content=opts_html, multiple=True, clearable=True)
+            inner_html = inner.render() + listener_script
             if _fc or _fs:
-                return Component("div", id=f"{cid}_wrap", content=inner.render(), class_=_fc or None, style=_fs or None)
-            return inner
+                return Component(None, id=f"{cid}_wrap", content=wrap_html(inner_html, _fc, _fs))
+            return Component(None, id=cid, content=inner_html)
         
         self._register_component(cid, builder, action=action)
         
