@@ -41,10 +41,15 @@ class InputWidgetsMixin:
         """Single-line text input"""
         return self._input_component("input", "sl-input", label, value, on_change, key, cls=cls, style=style, **props)
 
-    def slider(self, label, min_value=0, max_value=100, value=None, step=1, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Slider widget"""
+    def slider(self, label, min_value=0, max_value=100, value=None, step=1, key=None, on_change=None, live_update=False, cls: str = "", style: str = "", **props):
+        """Slider widget
+        
+        Args:
+            live_update: If True, value updates in real-time while dragging.
+                         If False (default), value updates only when released.
+        """
         if value is None: value = min_value
-        return self._input_component("slider", "sl-range", label, value, on_change, key, cls=cls, style=style, min=min_value, max=max_value, step=step, **props)
+        return self._input_component("slider", "sl-range", label, value, on_change, key, cls=cls, style=style, live_update=live_update, min=min_value, max=max_value, step=step, **props)
 
     def checkbox(self, label, value=False, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Checkbox widget"""
@@ -834,7 +839,7 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, cls: str = "", style: str = "", **props):
+    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, cls: str = "", style: str = "", live_update=False, **props):
         """Generic input component builder"""
         cid = self._get_next_cid(type_name)
         
@@ -847,13 +852,16 @@ class InputWidgetsMixin:
             s.set(v)
             if on_change: on_change(v)
         
+        # Choose event: sl-input fires during drag, sl-change fires on release
+        sl_event = 'sl-input' if live_update else 'sl-change'
+        
         def builder():
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="sl-change" hx-swap="none" name="value"'
+                attrs_str = f'hx-post="/action/{cid}" hx-trigger="{sl_event}" hx-swap="none" name="value"'
                 listener_script = ""
             else:
                 # WS mode: use addEventListener for Shoelace custom events
@@ -864,7 +872,7 @@ class InputWidgetsMixin:
                     const el = document.getElementById('{cid}');
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-change', function(e) {{
+                        el.addEventListener('{sl_event}', function(e) {{
                             window.sendAction('{cid}', el.value);
                         }});
                     }}

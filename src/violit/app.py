@@ -205,7 +205,7 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', use_cdn=False):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False):
         self.mode = mode
         self.use_cdn = use_cdn
         self.app_title = title  # Renamed to avoid conflict with title() method
@@ -313,6 +313,12 @@ class App(
             self.container_max_width = f'{container_width}px'
         else:
             self.container_max_width = container_width
+
+        # Widget gap: controls spacing between widgets in page-container
+        if isinstance(widget_gap, (int, float)):
+            self.widget_gap = f'{widget_gap}rem'
+        else:
+            self.widget_gap = widget_gap
 
         
         # Static definitions
@@ -1675,7 +1681,7 @@ class App(
             if self._user_css:
                 user_css = "<style id=\"violit-user-css\">\n" + "\n".join(self._user_css) + "\n</style>"
             
-            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%THEME_CLASS%", t.theme_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css)
+            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%THEME_CLASS%", t.theme_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css)
             return HTMLResponse(html)
 
         @self.fastapi.post("/action/{cid}")
@@ -2359,7 +2365,7 @@ HTML_TEMPLATE = """
         #app { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; display: flex; flex-direction: column; gap: 1.5rem; }
         
         .fragment { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; }
-        .page-container { display: flex; flex-direction: column; gap: 1rem; width: 100%; }
+        .page-container { display: flex; flex-direction: column; gap: %WIDGET_GAP%; width: 100%; }
         .card { background: var(--sl-bg-card); border: 1px solid var(--sl-border); padding: 1.5rem; border-radius: var(--sl-radius); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 0.5rem; }
         
         /* Widget spacing - natural breathing room */
@@ -2891,6 +2897,24 @@ HTML_TEMPLATE = """
                                             // Only update if different to avoid interrupting user interaction
                                             if (checkboxEl.checked !== shouldBeChecked) {
                                                 checkboxEl.checked = shouldBeChecked;
+                                            }
+                                            smartUpdated = true;
+                                        }
+                                    }
+                                }
+                                
+                                // Slider: Update value property only (preserve drag interaction)
+                                if (widgetType === 'slider') {
+                                    const temp = document.createElement('div');
+                                    temp.innerHTML = item.html;
+                                    const newRange = temp.querySelector('sl-range');
+                                    if (newRange) {
+                                        const rangeEl = el.tagName && el.tagName.toLowerCase() === 'sl-range'
+                                            ? el : el.querySelector('sl-range');
+                                        if (rangeEl) {
+                                            const newVal = newRange.getAttribute('value');
+                                            if (newVal !== null && rangeEl.value !== parseFloat(newVal)) {
+                                                rangeEl.value = parseFloat(newVal);
                                             }
                                             smartUpdated = true;
                                         }

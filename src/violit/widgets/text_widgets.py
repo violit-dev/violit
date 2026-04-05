@@ -638,3 +638,16 @@ class TextWidgetsMixin:
             return Component("sl-divider", id=cid, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
 
+    def space(self, size="1rem"):
+        """Add vertical space between widgets.
+        
+        Args:
+            size: CSS size value (e.g. '0.5rem', '2rem', '20px')
+        """
+        if isinstance(size, (int, float)):
+            size = f'{size}rem'
+        cid = self._get_next_cid("space")
+        def builder():
+            return Component(None, id=cid, content=f'<div style="height:{size}"></div>')
+        self._register_component(cid, builder)
+
