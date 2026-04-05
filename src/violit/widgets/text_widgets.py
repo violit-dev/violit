@@ -276,12 +276,14 @@ class TextWidgetsMixin:
             val = " ".join(parts)
             rendering_ctx.reset(token)
             
+            import html as html_lib
             text_cls = f"text-{size} {'text-muted' if muted else ''}"
             _wd = self._get_widget_defaults("text")
             _fc = merge_cls(_wd.get("cls", ""), text_cls, cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            # XSS protection: enable content escaping
-            return Component("p", id=cid, content=val, escape_content=True, class_=_fc, style=_fs or None)
+            # XSS protection: escape manually, then convert newlines to <br>
+            safe_val = html_lib.escape(val).replace('\n', '<br>')
+            return Component("p", id=cid, content=safe_val, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
     
     def caption(self, *args, cls: str = "", style: str = ""):
@@ -362,9 +364,9 @@ class TextWidgetsMixin:
                 elif not stripped:
                     result.append('<br>')
                     i += 1
-                # Regular text
+                # Regular text — single newline produces <br> (GFM-style)
                 else:
-                    result.append(line)
+                    result.append(f'{line}<br>')
                     i += 1
             
             html = '\n'.join(result)

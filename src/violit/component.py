@@ -17,7 +17,9 @@ class Component:
         attrs = []
         for k, v in self.props.items():
             if k == 'content': continue
-            clean_k = k.replace('_', '-') if not k.startswith('on') else k
+            # Strip single trailing underscore (PEP 8 convention for reserved words: class_, for_)
+            raw_k = k[:-1] if k.endswith('_') and not k.endswith('__') else k
+            clean_k = raw_k.replace('_', '-') if not raw_k.startswith('on') else raw_k
             if clean_k.startswith('on'):
                 attrs.append(f'{clean_k}="{v}"')
             else:

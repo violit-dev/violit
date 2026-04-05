@@ -44,7 +44,13 @@ class StatusWidgetsMixin:
             finally:
                 rendering_ctx.reset(token)
 
+            import re as _re
             escaped_val = html_lib.escape(" ".join(parts))
+            # Inline markdown: bold, italic, code + newline support
+            escaped_val = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', escaped_val)
+            escaped_val = _re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', escaped_val)
+            escaped_val = _re.sub(r'`(.+?)`', r'<code>\1</code>', escaped_val)
+            escaped_val = escaped_val.replace('\n', '<br>')
             icon_html = f'<sl-icon slot="icon" name="{icon}"></sl-icon>' if icon else ""
             html_output = f'<sl-alert variant="{variant}" open>{icon_html}{escaped_val}</sl-alert>'
             _wd = self._get_widget_defaults("alert")
