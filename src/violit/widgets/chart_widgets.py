@@ -1,9 +1,6 @@
 """Chart Widgets Mixin for Violit"""
 
 from typing import Union, Optional, Any, Callable
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.io as pio
 from ..component import Component
 from ..context import rendering_ctx, initial_render_ctx
 from ..state import State, get_session_store
@@ -21,8 +18,6 @@ _PLOTLY_RENDER_SCRIPT = """
     var cid = '{cid}';
     var cfg = {{responsive: true, displayModeBar: false}};
 
-    // ✅ Use global Set instead of DOM attribute.
-    // DOM attribute is wiped on outerHTML replacement; JS memory is not.
     if (!window._vlPlotlyInited) window._vlPlotlyInited = new Set();
 
     function _vlDraw() {{
@@ -30,9 +25,8 @@ _PLOTLY_RENDER_SCRIPT = """
         if (!el || !window.Plotly) return;
         d.layout.autosize = true;
         delete d.layout.width;
-        delete d.layout.height;  // Let CSS/container control height
+        delete d.layout.height;
         if (window._vlPlotlyInited.has(cid)) {{
-            // Already initialized (even after DOM replacement): use react()
             Plotly.react(cid, d.data, d.layout, cfg);
         }} else {{
             window._vlPlotlyInited.add(cid);
@@ -48,8 +42,6 @@ _PLOTLY_RENDER_SCRIPT = """
         var el = document.getElementById(cid);
         if (!el) return;
 
-        // ✅ Already initialized: skip clientWidth check and IntersectionObserver.
-        // After outerHTML replacement the element is new but _vlPlotlyInited remembers it.
         if (window._vlPlotlyInited.has(cid)) {{
             _vlSchedule();
             return;
@@ -68,12 +60,14 @@ _PLOTLY_RENDER_SCRIPT = """
         }}
     }}
 
-    // Ensure DOM is ready before initializing
-    if (document.readyState === 'loading') {{
-        document.addEventListener('DOMContentLoaded', initPlot);
-    }} else {{
-        initPlot();
-    }}
+    // Wait for Plotly library to load (lazy loaded)
+    window._vlLoadLib('Plotly', function() {{
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', initPlot);
+        }} else {{
+            initPlot();
+        }}
+    }});
 }})();</script>
 """
 
@@ -85,11 +79,13 @@ _ASYNC_CHART_THRESHOLD = 50000
 class ChartWidgetsMixin:
     """Chart widgets (line, bar, area, scatter, plotly, pyplot, etc.)"""
     
-    def plotly_chart(self, fig: Union[go.Figure, Callable, State], use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def plotly_chart(self, fig: Union['go.Figure', Callable, State], use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display Plotly chart with Signal/Lambda support"""
         cid = self._get_next_cid("plot")
         
         def builder():
+            import plotly.graph_objects as go
+            import plotly.io as pio
             # Handle Signal/Lambda/Direct Figure
             current_fig = fig
             if isinstance(fig, State):
@@ -217,6 +213,8 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("line_chart")
         
         def builder():
+            import plotly.graph_objects as go
+            import plotly.io as pio
             x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
             
             fig = go.Figure()
@@ -245,6 +243,8 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("bar_chart")
         
         def builder():
+            import plotly.graph_objects as go
+            import plotly.io as pio
             x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
             
             fig = go.Figure()
@@ -272,6 +272,8 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("area_chart")
         
         def builder():
+            import plotly.graph_objects as go
+            import plotly.io as pio
             x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
             
             fig = go.Figure()
@@ -300,6 +302,8 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("scatter_chart")
         
         def builder():
+            import plotly.graph_objects as go
+            import plotly.io as pio
             x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
             
             fig = go.Figure()
@@ -347,6 +351,7 @@ class ChartWidgetsMixin:
 
     def _parse_chart_data(self, data, x, y):
         """Parse chart data into x, y, and trace name"""
+        import pandas as pd
         if isinstance(data, pd.DataFrame):
             if x and y:
                 x_data = data[x].tolist()

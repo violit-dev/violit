@@ -21,13 +21,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.gzip import GZipMiddleware
 import inspect
 import uvicorn
-import webview
-import pandas as pd
 import os
 import subprocess
 from pathlib import Path
-import plotly.graph_objects as go
-import plotly.io as pio
 
 from .context import session_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, initial_render_ctx
 from .theme import Theme
@@ -209,13 +205,22 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=True, container_width='800px', use_cdn=False):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', use_cdn=False):
         self.mode = mode
         self.use_cdn = use_cdn
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
         self.fastapi = FastAPI()
         self.fastapi.add_middleware(GZipMiddleware, minimum_size=1000)
+        
+        # Background preload: import heavy libraries after server starts
+        # so they're cached in sys.modules before any widget needs them
+        @self.fastapi.on_event("startup")
+        async def _preload_heavy_libs():
+            def _do():
+                import pandas  # noqa: F401
+                import plotly.graph_objects  # noqa: F401
+            threading.Thread(target=_do, daemon=True).start()
         
         # Mount static files for offline support
         static_path = Path(__file__).parent / "static"
@@ -1518,16 +1523,64 @@ class App(
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/dark.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace-autoloader.js"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js" defer></script>
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@master/css-runtime@2.0.0-rc.67/dist/global.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js" defer></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" />
     <style>
         .violit-code-light pre code.hljs { background: transparent !important; }
         .violit-code-dark pre code.hljs { background: transparent !important; }
     </style>
+    <script>
+    // Lazy library loader with background preload
+    (function() {
+        var _libs = {
+            'Plotly':  'https://cdn.plot.ly/plotly-2.27.0.min.js',
+            'agGrid':  'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js',
+            'hljs':    'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js'
+        };
+        var _q = {};  // callback queues per lib
+        var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
+        window._vlLoadLib = function(name, cb) {
+            if (window[name]) { cb(); return; }
+            if (!_q[name]) _q[name] = [];
+            _q[name].push(cb);
+            if (_s[name]) return;  // already loading
+            _s[name] = 1;
+            var s = document.createElement('script');
+            s.src = _libs[name];
+            s.onload = function() {
+                _s[name] = 2;
+                var cbs = _q[name] || [];
+                _q[name] = [];
+                cbs.forEach(function(fn) { fn(); });
+            };
+            document.head.appendChild(s);
+        };
+        // Background preload: load heavy libs during idle time after first paint
+        var _preload = function() {
+            Object.keys(_libs).forEach(function(name) {
+                if (!_s[name]) {
+                    var link = document.createElement('link');
+                    link.rel = 'preload';
+                    link.as = 'script';
+                    link.href = _libs[name];
+                    document.head.appendChild(link);
+                }
+            });
+            // Actually load after a short delay to not compete with initial render
+            setTimeout(function() {
+                Object.keys(_libs).forEach(function(name) {
+                    if (!_s[name]) window._vlLoadLib(name, function() {});
+                });
+            }, 200);
+        };
+        if (typeof requestIdleCallback !== 'undefined') {
+            requestIdleCallback(_preload);
+        } else {
+            window.addEventListener('load', function() { setTimeout(_preload, 100); });
+        }
+    })();
+    </script>
                 """
             else:
                 # Local/Offline Mode
@@ -1539,15 +1592,63 @@ class App(
     <link rel="stylesheet" href="/static/vendor/shoelace/themes/dark.css" />
     <script type="module" src="/static/vendor/shoelace/shoelace-autoloader.js"></script>
     <script src="/static/vendor/htmx/htmx.min.js" defer></script>
-    <script src="/static/vendor/ag-grid/ag-grid-community.min.js" defer></script>
-    <script src="/static/vendor/plotly/plotly-2.27.0.min.js" defer></script>
     <script src="/static/vendor/master-css/master-css-runtime.js" defer></script>
-    <script src="/static/vendor/highlightjs/highlight.min.js" defer></script>
     <link rel="stylesheet" href="/static/vendor/highlightjs/atom-one-dark.min.css" />
     <style>
         .violit-code-light pre code.hljs { background: transparent !important; }
         .violit-code-dark pre code.hljs { background: transparent !important; }
     </style>
+    <script>
+    // Lazy library loader with background preload
+    (function() {
+        var _libs = {
+            'Plotly':  '/static/vendor/plotly/plotly-2.27.0.min.js',
+            'agGrid':  '/static/vendor/ag-grid/ag-grid-community.min.js',
+            'hljs':    '/static/vendor/highlightjs/highlight.min.js'
+        };
+        var _q = {};  // callback queues per lib
+        var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
+        window._vlLoadLib = function(name, cb) {
+            if (window[name]) { cb(); return; }
+            if (!_q[name]) _q[name] = [];
+            _q[name].push(cb);
+            if (_s[name]) return;  // already loading
+            _s[name] = 1;
+            var s = document.createElement('script');
+            s.src = _libs[name];
+            s.onload = function() {
+                _s[name] = 2;
+                var cbs = _q[name] || [];
+                _q[name] = [];
+                cbs.forEach(function(fn) { fn(); });
+            };
+            document.head.appendChild(s);
+        };
+        // Background preload: load heavy libs during idle time after first paint
+        var _preload = function() {
+            Object.keys(_libs).forEach(function(name) {
+                if (!_s[name]) {
+                    var link = document.createElement('link');
+                    link.rel = 'preload';
+                    link.as = 'script';
+                    link.href = _libs[name];
+                    document.head.appendChild(link);
+                }
+            });
+            // Actually load after a short delay to not compete with initial render
+            setTimeout(function() {
+                Object.keys(_libs).forEach(function(name) {
+                    if (!_s[name]) window._vlLoadLib(name, function() {});
+                });
+            }, 200);
+        };
+        if (typeof requestIdleCallback !== 'undefined') {
+            requestIdleCallback(_preload);
+        } else {
+            window.addEventListener('load', function() { setTimeout(_preload, 100); });
+        }
+    })();
+    </script>
     <!-- Fonts: Inter (local vendor woff2) -->
     <style>
         @font-face {
@@ -1858,6 +1959,7 @@ class App(
 
     def _run_native_reload(self, args):
         """Run with hot reload in desktop mode"""
+        import webview
         # Generate security token for native mode
         self.native_token = secrets.token_urlsafe(32)
         self.is_native_mode = True
@@ -1949,7 +2051,16 @@ class App(
         if 'icon' in sig_start.parameters and self.app_icon:
             start_args['icon'] = self.app_icon
 
-        webview.create_window(self.app_title, f"http://127.0.0.1:{args.port}?_native_token={self.native_token}", **win_args)
+        window = webview.create_window(self.app_title, f"http://127.0.0.1:{args.port}?_native_token={self.native_token}", **win_args)
+        # Bring window to front when it appears (proper Win32 approach, no on_top hack)
+        def _bring_to_front():
+            try:
+                import ctypes
+                hwnd = window.gui  # pywebview internal handle
+                ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
+            except Exception:
+                pass
+        window.events.shown += _bring_to_front
         webview.start(**start_args)
         
         # Cleanup
@@ -2005,7 +2116,7 @@ class App(
             exclude_current=exclude_current
         )
 
-    def run(self):
+    def run(self, port: int = None):
         """Run the application"""
         p = argparse.ArgumentParser()
         p.add_argument("--native", action="store_true")
@@ -2013,8 +2124,13 @@ class App(
         p.add_argument("--reload", action="store_true", help="Enable hot reload")
         p.add_argument("--lite", action="store_true", help="Use Lite mode (HTMX)")
         p.add_argument("--debug", action="store_true", help="Enable developer tools (native mode)")
+        p.add_argument("--on-top", action="store_true", help="Keep window always on top (native mode)")
         p.add_argument("--port", type=int, default=8000)
         args, _ = p.parse_known_args()
+        if port is not None:
+            args.port = port
+        if args.on_top:
+            self.on_top = True
 
         # [Logging Filter] Reduce noise by filtering out polling requests
         try:
@@ -2061,6 +2177,7 @@ class App(
         # Splash screen logic is already initialized in __init__ using OS environment vars
 
         if args.native:
+            import webview
             # Generate security token for native mode
             self.native_token = secrets.token_urlsafe(32)
             self.is_native_mode = True
@@ -2092,7 +2209,8 @@ class App(
             t = threading.Thread(target=srv, daemon=True)
             t.start()
             
-            time.sleep(1)
+            # Don't wait for server — let webview engine init in parallel
+            # By the time WebView2 engine initializes (~1s), the server will already be ready
             
             # Patch webview to use custom icon (Windows)
             self._patch_webview_icon()
@@ -2102,7 +2220,8 @@ class App(
                 'text_select': True, 
                 'width': self.width, 
                 'height': self.height, 
-                'on_top': self.on_top
+                'on_top': self.on_top,
+                'hidden': True  # Start hidden, show after page loads
             }
             
             # Pass icon and debug mode to start (for non-WinForms backends)
@@ -2118,7 +2237,18 @@ class App(
                 start_args['icon'] = self.app_icon
 
             # Add native token to URL for initial access
-            webview.create_window(self.app_title, f"http://127.0.0.1:{args.port}?_native_token={self.native_token}", **win_args)
+            window = webview.create_window(self.app_title, f"http://127.0.0.1:{args.port}?_native_token={self.native_token}", **win_args)
+            # Show window and bring to front once page is loaded (no white flash)
+            def _show_and_focus():
+                try:
+                    window.show()
+                    import ctypes
+                    hwnd = window.gui
+                    ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
+                except Exception:
+                    try: window.show()
+                    except: pass
+            window.events.loaded += _show_and_focus
             webview.start(**start_args)
             
             # Force exit after window closes to kill the uvicorn thread immediately
@@ -2184,9 +2314,8 @@ HTML_TEMPLATE = """
         }
         body { margin: 0; background: var(--sl-bg); color: var(--sl-text); font-family: 'Inter', sans-serif; min-height: 100vh; transition: background 0.3s, color 0.3s; }
         
-        /* Soft Animation Mode - Only for sidebar and page transitions */
+        /* Soft Animation Mode - Only for sidebar; page transitions are applied by JS on navigation only */
         body.anim-soft #sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, opacity 0.3s ease; }
-        body.anim-soft .page-container { animation: fade-in 0.3s ease-out; }
         
         /* Hard Animation Mode */
         body.anim-hard *, body.anim-hard ::part(base) { transition: none !important; animation: none !important; }
@@ -2301,8 +2430,8 @@ HTML_TEMPLATE = """
         .no-select { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
         
         @keyframes fade-in {
-            from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
-            to { opacity: 1; transform: translateY(0); filter: blur(0); }
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
         /* Animations for Balloons and Snow */
@@ -2797,7 +2926,7 @@ HTML_TEMPLATE = """
                                     // When replacing outerHTML with same ID, browser might optimize away the animation.
                                     // We force a reflow to ensure the fade-in plays.
                                     const newEl = document.getElementById(item.id);
-                                    if (newEl && newEl.classList.contains('page-container') && document.body.classList.contains('anim-soft')) {
+                                    if (isNavigation && newEl && newEl.classList.contains('page-container') && document.body.classList.contains('anim-soft')) {
                                         newEl.style.animation = 'none';
                                         void newEl.offsetWidth; // Trigger reflow
                                         newEl.style.animation = 'fade-in 0.3s ease-out';

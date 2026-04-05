@@ -2,7 +2,6 @@
 
 from typing import Union, Callable, Optional, Any
 import json
-import pandas as pd
 from ..component import Component
 from ..context import rendering_ctx
 from ..state import State
@@ -12,7 +11,7 @@ from ..style_utils import merge_cls, merge_style, resolve_value
 class DataWidgetsMixin:
     """Data display widgets (dataframe, table, data_editor, metric, json)"""
     
-    def dataframe(self, df: Union[pd.DataFrame, Callable, State], height=400, 
+    def dataframe(self, df: Union['pd.DataFrame', Callable, State], height=400, 
                   column_defs=None, grid_options=None, on_cell_clicked=None, cls: str = "", style: str = "", **props):
         """Display interactive dataframe with AG Grid"""
         cid = self._get_next_cid("df")
@@ -23,6 +22,7 @@ class DataWidgetsMixin:
                 on_cell_clicked(v)
         
         def builder():
+            import pandas as pd
             # Handle Signal
             token = rendering_ctx.set(cid)
             try:
@@ -80,11 +80,13 @@ class DataWidgetsMixin:
                     else {{ console.error("agGrid not found"); }}
                 }}
                 
-                if (document.readyState === 'loading') {{
-                    document.addEventListener('DOMContentLoaded', initGrid);
-                }} else {{
-                    initGrid();
-                }}
+                window._vlLoadLib('agGrid', function() {{
+                    if (document.readyState === 'loading') {{
+                        document.addEventListener('DOMContentLoaded', initGrid);
+                    }} else {{
+                        initGrid();
+                    }}
+                }});
             }})();</script>
             '''
             _wd = self._get_widget_defaults("dataframe")
@@ -94,10 +96,11 @@ class DataWidgetsMixin:
         
         self._register_component(cid, builder, action=action if on_cell_clicked else None)
 
-    def table(self, df: Union[pd.DataFrame, Callable, State], cls: str = "", style: str = "", **props):
+    def table(self, df: Union['pd.DataFrame', Callable, State], cls: str = "", style: str = "", **props):
         """Display static HTML table (Signal support)"""
         cid = self._get_next_cid("table")
         def builder():
+            import pandas as pd
             # Handle Signal
             token = rendering_ctx.set(cid)
             try:
@@ -142,8 +145,9 @@ class DataWidgetsMixin:
             return Component("div", id=cid, content=styled_html, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def data_editor(self, df: pd.DataFrame, num_rows="fixed", height=400, key=None, on_change=None, cls: str = "", style: str = "", **props):
+    def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None, cls: str = "", style: str = "", **props):
         """Interactive data editor (simplified version)"""
+        import pandas as pd
         cid = self._get_next_cid("data_editor")
         
         state_key = key or f"data_editor:{cid}"

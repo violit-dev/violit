@@ -612,11 +612,13 @@ class TextWidgetsMixin:
                     }}
                 }}
                 
-                if (document.readyState === 'loading') {{
-                    document.addEventListener('DOMContentLoaded', highlight);
-                }} else {{
-                    highlight();
-                }}
+                window._vlLoadLib('hljs', function() {{
+                    if (document.readyState === 'loading') {{
+                        document.addEventListener('DOMContentLoaded', highlight);
+                    }} else {{
+                        highlight();
+                    }}
+                }});
             }})();
             </script>
             '''
