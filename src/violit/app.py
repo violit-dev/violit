@@ -322,6 +322,8 @@ class App(
 
         
         # Static definitions
+        from .state import STATIC_STORE
+        STATIC_STORE.clear() # Prevent leakage across hot reloads when forked on Linux
         self.static_builders: Dict[str, Callable] = {}
         self.static_order: List[str] = []
         self.static_sidebar_order: List[str] = []
@@ -1954,7 +1956,7 @@ class App(
             try:
                 uvicorn.run(
                     uvicorn_target,
-                    host="0.0.0.0",
+                    host="127.0.0.1",
                     port=args.port,
                     reload=True,
                     reload_dirs=[reload_dir],
