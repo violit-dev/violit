@@ -50,8 +50,9 @@ from .widgets import (
 )
 
 class FileWatcher:
-    """Simple file watcher to detect changes"""
-    def __init__(self, debug_mode=False):
+    """Simple file watcher to detect changes (cross-platform)"""
+    def __init__(self, watch_dir=None, debug_mode=False):
+        self.watch_dir = Path(watch_dir).resolve() if watch_dir else Path(".").resolve()
         self.mtimes = {}
         self.initialized = False
         self.ignore_dirs = {'.git', '__pycache__', 'venv', '.venv', 'env', 'node_modules', '.idea', '.vscode'}
@@ -65,11 +66,10 @@ class FileWatcher:
         return False
 
     def scan(self):
-        """Scan current directory for py files and their mtimes"""
-        for p in Path(".").rglob("*.py"):
+        """Scan watch directory for py files and their mtimes"""
+        for p in self.watch_dir.rglob("*.py"):
             if self._is_ignored(p): continue
             try:
-                # Use absolute path to ensure consistency
                 abs_p = p.resolve()
                 self.mtimes[abs_p] = abs_p.stat().st_mtime
             except OSError:
@@ -81,7 +81,7 @@ class FileWatcher:
         # Optimization: Scan is cheap for small projects, but we could optimize.
         # For now, simplistic scan is fine.
         changed = False
-        for p in list(Path(".").rglob("*.py")): 
+        for p in list(self.watch_dir.rglob("*.py")): 
             if self._is_ignored(p): continue
             try:
                 abs_p = p.resolve()
@@ -1942,18 +1942,24 @@ class App(
             # Use uvicorn's run with reload=True
             reload_dir = os.path.dirname(os.path.abspath(file_path)) if file_path else os.getcwd()
             
+            # [CROSS-PLATFORM] Ensure the script's directory is importable
+            # On Linux/macOS, CWD may differ from the script's directory,
+            # which would prevent uvicorn workers from importing the module.
+            if reload_dir not in sys.path:
+                sys.path.insert(0, reload_dir)
+            
             # Must set VIOLIT_WORKER so that the child workers don't hit this block again
             os.environ["VIOLIT_WORKER"] = "1"
             
             try:
                 uvicorn.run(
                     uvicorn_target,
-                    host="127.0.0.1",
+                    host="0.0.0.0",
                     port=args.port,
                     reload=True,
                     reload_dirs=[reload_dir],
-                    reload_includes=["*.py"], # 속도 확보를 위해 py 확장자만 감시
-                    reload_delay=0.1  # Reduce watch delay from 0.25s (default) to 0.1s
+                    reload_includes=["*.py"],
+                    reload_delay=0.1
                 )
             except Exception as e:
                 self.debug_print(f"[HOT RELOAD] Failed to start uvicorn: {e}")
@@ -1970,11 +1976,38 @@ class App(
         self.native_token = secrets.token_urlsafe(32)
         self.is_native_mode = True
         
-        self.debug_print(f"[HOT RELOAD] Desktop mode - Watching {os.getcwd()}...")
+        # [CROSS-PLATFORM] Watch the script's directory, not CWD
+        script_dir = os.path.dirname(os.path.abspath(sys.argv[0])) or os.getcwd()
+        self.debug_print(f"[HOT RELOAD] Desktop mode - Watching {script_dir}...")
+        
+        is_unix = sys.platform != 'win32'
         
         # Shared state for the server process
         server_process = [None]
         should_exit = [False]
+        
+        def _terminate_process(proc):
+            """Cross-platform process termination with process group support"""
+            try:
+                if is_unix:
+                    # On Unix, kill the entire process group to clean up children
+                    import signal
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                else:
+                    proc.terminate()
+            except (ProcessLookupError, OSError):
+                pass
+        
+        def _kill_process(proc):
+            """Cross-platform force kill"""
+            try:
+                if is_unix:
+                    import signal
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                else:
+                    proc.kill()
+            except (ProcessLookupError, OSError):
+                pass
         
         def server_manager():
             iteration = 0
@@ -1988,17 +2021,21 @@ class App(
                 
                 # Start server
                 self.debug_print(f"\n[Server Manager] Starting server (iteration {iteration})...", flush=True)
+                popen_kwargs = {}
+                if is_unix:
+                    popen_kwargs['start_new_session'] = True
                 server_process[0] = subprocess.Popen(
                     [sys.executable] + sys.argv, 
                     env=env,
                     stdout=subprocess.PIPE if iteration > 1 else None,
-                    stderr=subprocess.STDOUT if iteration > 1 else None
+                    stderr=subprocess.STDOUT if iteration > 1 else None,
+                    **popen_kwargs
                 )
                 
                 # Give server time to start
                 time.sleep(0.3)
                 
-                watcher = FileWatcher(debug_mode=self.debug_mode)
+                watcher = FileWatcher(watch_dir=script_dir, debug_mode=self.debug_mode)
                 
                 # Watch loop
                 intentional_restart = False
@@ -2006,13 +2043,13 @@ class App(
                     if watcher.check():
                         self.debug_print("\n[Server Manager] 🔄 Reloading server...", flush=True)
                         intentional_restart = True
-                        server_process[0].terminate()
+                        _terminate_process(server_process[0])
                         try:
                             server_process[0].wait(timeout=2)
                             self.debug_print("[Server Manager] ✓ Server stopped gracefully", flush=True)
                         except subprocess.TimeoutExpired:
                             self.debug_print("[Server Manager] WARNING: Force killing server...", flush=True)
-                            server_process[0].kill()
+                            _kill_process(server_process[0])
                             server_process[0].wait()
                         break
                     time.sleep(0.5)
@@ -2073,7 +2110,7 @@ class App(
         should_exit[0] = True
         if server_process[0]:
             try:
-                server_process[0].terminate()
+                _terminate_process(server_process[0])
             except: 
                 pass
         sys.exit(0)
