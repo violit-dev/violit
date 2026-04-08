@@ -1953,10 +1953,19 @@ class App(
             # Must set VIOLIT_WORKER so that the child workers don't hit this block again
             os.environ["VIOLIT_WORKER"] = "1"
             
+            # Suppress uvicorn's default "Uvicorn running on http://0.0.0.0:..." message
+            # so only our user-friendly localhost URL is shown
+            class _SuppressUvicornRunningFilter(logging.Filter):
+                def filter(self, record):
+                    return 'Uvicorn running on' not in record.getMessage()
+            logging.getLogger("uvicorn.error").addFilter(_SuppressUvicornRunningFilter())
+            
             try:
+                print(f"INFO:     Violit web app running on http://localhost:{args.port} (hot reload)")
+                print(f"INFO:     (listening on all interfaces: 0.0.0.0:{args.port})")
                 uvicorn.run(
                     uvicorn_target,
-                    host="127.0.0.1",
+                    host="0.0.0.0",
                     port=args.port,
                     reload=True,
                     reload_dirs=[reload_dir],
