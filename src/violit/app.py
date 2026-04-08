@@ -2096,7 +2096,7 @@ class App(
             'text_select': True, 
             'width': self.width, 
             'height': self.height, 
-            'on_top': self.on_top
+            'on_top': self.on_top,
         }
         
         # Pass icon to start (for non-WinForms backends)
@@ -2106,15 +2106,15 @@ class App(
             start_args['icon'] = self.app_icon
 
         window = webview.create_window(self.app_title, f"http://127.0.0.1:{args.port}?_native_token={self.native_token}", **win_args)
-        # Bring window to front when it appears (proper Win32 approach, no on_top hack)
-        def _bring_to_front():
+        # Bring window to front when it appears
+        def _bring_to_front_reload():
             try:
                 import ctypes
-                hwnd = window.gui  # pywebview internal handle
+                hwnd = window.gui
                 ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
             except Exception:
                 pass
-        window.events.shown += _bring_to_front
+        window.events.shown += _bring_to_front_reload
         webview.start(**start_args)
         
         # Cleanup
@@ -2275,7 +2275,6 @@ class App(
                 'width': self.width, 
                 'height': self.height, 
                 'on_top': self.on_top,
-                'hidden': True  # Start hidden, show after page loads
             }
             
             # Pass icon and debug mode to start (for non-WinForms backends)
@@ -2292,17 +2291,15 @@ class App(
 
             # Add native token to URL for initial access
             window = webview.create_window(self.app_title, f"http://127.0.0.1:{args.port}?_native_token={self.native_token}", **win_args)
-            # Show window and bring to front once page is loaded (no white flash)
-            def _show_and_focus():
+            # Bring window to front when it appears
+            def _bring_to_front():
                 try:
-                    window.show()
                     import ctypes
                     hwnd = window.gui
                     ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
                 except Exception:
-                    try: window.show()
-                    except: pass
-            window.events.loaded += _show_and_focus
+                    pass
+            window.events.shown += _bring_to_front
             webview.start(**start_args)
             
             # Force exit after window closes to kill the uvicorn thread immediately
