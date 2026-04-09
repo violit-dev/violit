@@ -622,6 +622,10 @@ class InputWidgetsMixin:
             if on_change: on_change(v)
         
         def builder():
+            # Create local shallow copies of cls/style to avoid shadowing/unbound errors
+            _cls = cls
+            _style = style
+
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
@@ -646,7 +650,23 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            textarea_props = {"rows": height or 3, "resize": "auto"}
+            textarea_props = {"resize": "auto"}
+            if height:
+                h_str = str(height)
+                if h_str.endswith("rows"):
+                    # Explicit rows: "10rows" -> 10
+                    try:
+                        textarea_props["rows"] = int(h_str.replace("rows", "").strip())
+                    except ValueError:
+                        textarea_props["rows"] = 3
+                else:
+                    # Everything else: Treat as pixels (Streamlit default)
+                    # "200", 200, "200px" -> 200px
+                    val = h_str.replace("px", "").strip()
+                    _style = merge_style(f"height: {val}px;", _style)
+            else:
+                textarea_props["rows"] = 3
+
             if max_chars is not None: textarea_props["maxlength"] = max_chars
             if placeholder: textarea_props["placeholder"] = placeholder
             if disabled: textarea_props["disabled"] = True
@@ -658,8 +678,8 @@ class InputWidgetsMixin:
             html += f'></sl-textarea>{listener_script}'
             
             _wd = self._get_widget_defaults("text_area")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
-            _fs = merge_style(_wd.get("style", ""), style)
+            _fc = merge_cls(_wd.get("cls", ""), _cls)
+            _fs = merge_style(_wd.get("style", ""), _style)
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         
         self._register_component(cid, builder, action=action)

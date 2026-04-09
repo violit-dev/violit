@@ -67,17 +67,69 @@ class MediaWidgetsMixin:
             if use_container_width or use_column_width or width == "auto":
                 width_style = "width: 100%;"
             elif width:
-                width_style = f"width: {width}px;"
+                width_style = f"width: {width if isinstance(width, str) else str(width) + 'px'};"
             
             caption_html = ""
             if caption:
                 caption_html = f'<div style="text-align:center;margin-top:0.5rem;color:var(--sl-text-muted);font-size:0.875rem;">{caption}</div>'
             
+            # Modal HTML for enlarged image
+            modal_id = f"modal-{cid}"
+            modal_html = f'''
+            <sl-dialog id="{modal_id}" no-header style="--width: 100%; position: fixed; z-index: 10000;">
+                <div style="display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.05); border-radius: 0.5rem; overflow: hidden; padding: 1rem;">
+                    <img src="{img_src}" style="max-width: 100%; max-height: 70vh; object-fit: contain; box-shadow: 0 10px 25px rgba(0,0,0,0.2);" />
+                </div>
+                {caption_html}
+                <div slot="footer" style="padding: 0; display: flex; justify-content: flex-end;">
+                    <sl-button variant="primary" onclick="document.getElementById('{modal_id}').hide()">닫기</sl-button>
+                </div>
+                <style>
+                    #{modal_id} {{
+                        --sl-panel-background-color: white;
+                    }}
+                    #{modal_id}::part(panel) {{
+                        max-width: 900px;
+                        width: calc(100% - 40px);
+                        border-radius: 1rem;
+                    }}
+                    #{modal_id}::part(overlay) {{
+                        backdrop-filter: blur(8px);
+                        background-color: rgba(0, 0, 0, 0.4);
+                    }}
+                    #{modal_id}::part(body) {{
+                        padding: 1.5rem;
+                    }}
+                    /* Force the dialog to be contained within the main content area if possible, 
+                       or at least push it away from the sidebar */
+                    #{modal_id}::part(base) {{
+                        margin-left: 0;
+                        padding-left: 0;
+                    }}
+                    
+                    @media (min-width: 769px) {{
+                        /* On desktop, keep the dialog centered in the remaining space of the main area */
+                        #{modal_id}::part(base) {{
+                            padding-left: var(--vl-sidebar-width, 300px);
+                        }}
+                        /* If sidebar is collapsed, adjust padding */
+                        .sidebar-collapsed #{modal_id}::part(base) {{
+                            padding-left: 0;
+                        }}
+                    }}
+                </style>
+            </sl-dialog>
+            '''
+
             html = f'''
             <div class="image-container" style="text-align:center;">
-                <img src="{img_src}" loading="lazy" style="{width_style} height:auto;border-radius:0.5rem;" alt="{caption or ''}" />
+                <img src="{img_src}" loading="lazy" 
+                     style="{width_style} height:auto; border-radius:0.5rem; cursor: zoom-in;" 
+                     alt="{caption or ''}" 
+                     onclick="document.getElementById('{modal_id}').show()" />
                 {caption_html}
             </div>
+            {modal_html}
             '''
             _wd = self._get_widget_defaults("image")
             _fc = merge_cls(_wd.get("cls", ""), cls)

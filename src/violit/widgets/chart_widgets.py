@@ -187,6 +187,33 @@ class ChartWidgetsMixin:
         import matplotlib.pyplot as plt
         import io
         import base64
+        import sys
+
+        # Set Korean font defaults for Matplotlib
+        try:
+            from matplotlib import rc
+            if sys.platform == 'win32':
+                # Windows fonts
+                fonts = ['Malgun Gothic', 'NanumGothic', 'NanumSquare']
+            elif sys.platform == 'darwin':
+                # macOS fonts
+                fonts = ['AppleGothic', 'NanumGothic', 'NanumSquare']
+            else:
+                # Linux/other
+                fonts = ['NanumGothic', 'DejaVu Sans']
+            
+            # Find first available font
+            from matplotlib import font_manager
+            available_fonts = [f.name for f in font_manager.fontManager.ttflist]
+            for font in fonts:
+                if font in available_fonts:
+                    rc('font', family=font)
+                    break
+            
+            # Fix minus sign display issue
+            matplotlib.rcParams['axes.unicode_minus'] = False
+        except Exception:
+            pass
         
         cid = self._get_next_cid("pyplot")
         
