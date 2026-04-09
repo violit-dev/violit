@@ -10,7 +10,7 @@ from ..style_utils import merge_cls, merge_style
 class MediaWidgetsMixin:
     """Media widgets (image, audio, video)"""
     
-    def image(self, image, caption=None, width=None, use_column_width=False, cls: str = "", style: str = "", **props):
+    def image(self, image, caption=None, width=None, use_column_width=False, use_container_width=False, cls: str = "", style: str = "", **props):
         """Display image from various sources"""
         cid = self._get_next_cid("image")
         
@@ -64,7 +64,7 @@ class MediaWidgetsMixin:
             
             # Build image HTML
             width_style = ""
-            if use_column_width or width == "auto":
+            if use_container_width or use_column_width or width == "auto":
                 width_style = "width: 100%;"
             elif width:
                 width_style = f"width: {width}px;"
@@ -86,7 +86,7 @@ class MediaWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def audio(self, audio, format="audio/mp3", start_time=0, cls: str = "", style: str = "", **props):
+    def audio(self, audio, format="audio/mp3", start_time=0, loop=False, autoplay=False, end_time=None, sample_rate=None, cls: str = "", style: str = "", **props):
         """Display audio player"""
         cid = self._get_next_cid("audio")
         
@@ -127,8 +127,13 @@ class MediaWidgetsMixin:
                 except Exception:
                     audio_src = str(audio)
             
+            # Audio attrs
+            audio_attrs = ["controls"]
+            if loop: audio_attrs.append("loop")
+            if autoplay: audio_attrs.append("autoplay")
+
             html = f'''
-            <audio controls style="width:100%;border-radius:0.5rem;">
+            <audio {" ".join(audio_attrs)} style="width:100%;border-radius:0.5rem;">
                 <source src="{audio_src}" type="{format}">
                 Your browser does not support the audio element.
             </audio>

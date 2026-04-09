@@ -208,18 +208,19 @@ class ChartWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def line_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def line_chart(self, data, x=None, y=None, color=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display simple line chart"""
         cid = self._get_next_cid("line_chart")
         
         def builder():
             import plotly.graph_objects as go
             import plotly.io as pio
-            x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
+            traces = self._parse_chart_data(data, x, y, color=color)
             
             fig = go.Figure()
             trace_cls = go.Scattergl if render_mode == "webgl" else go.Scatter
-            fig.add_trace(trace_cls(x=x_data, y=y_data, mode='lines+markers', name=trace_name))
+            for t in traces:
+                fig.add_trace(trace_cls(x=t['x'], y=t['y'], mode='lines+markers', name=t['name']))
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
@@ -238,17 +239,23 @@ class ChartWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def bar_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def bar_chart(self, data, x=None, y=None, color=None, horizontal=False, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display simple bar chart"""
         cid = self._get_next_cid("bar_chart")
         
         def builder():
             import plotly.graph_objects as go
             import plotly.io as pio
-            x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
+            traces = self._parse_chart_data(data, x, y, color=color)
             
             fig = go.Figure()
-            fig.add_trace(go.Bar(x=x_data, y=y_data, name=trace_name))
+            for t in traces:
+                if horizontal:
+                    fig.add_trace(go.Bar(x=t['y'], y=t['x'], name=t['name'], orientation='h'))
+                else:
+                    fig.add_trace(go.Bar(x=t['x'], y=t['y'], name=t['name']))
+            if stack:
+                fig.update_layout(barmode='stack')
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
@@ -267,18 +274,20 @@ class ChartWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def area_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def area_chart(self, data, x=None, y=None, color=None, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display area chart"""
         cid = self._get_next_cid("area_chart")
         
         def builder():
             import plotly.graph_objects as go
             import plotly.io as pio
-            x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
+            traces = self._parse_chart_data(data, x, y, color=color)
             
             fig = go.Figure()
             trace_cls = go.Scattergl if render_mode == "webgl" else go.Scatter
-            fig.add_trace(trace_cls(x=x_data, y=y_data, fill='tozeroy', name=trace_name))
+            for t in traces:
+                fill_kw = {'stackgroup': 'one'} if stack else {'fill': 'tozeroy'}
+                fig.add_trace(trace_cls(x=t['x'], y=t['y'], name=t['name'], **fill_kw))
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
@@ -297,18 +306,22 @@ class ChartWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def scatter_chart(self, data, x=None, y=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def scatter_chart(self, data, x=None, y=None, color=None, size=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display scatter chart"""
         cid = self._get_next_cid("scatter_chart")
         
         def builder():
             import plotly.graph_objects as go
             import plotly.io as pio
-            x_data, y_data, trace_name = self._parse_chart_data(data, x, y)
+            traces = self._parse_chart_data(data, x, y, color=color)
             
             fig = go.Figure()
             trace_cls = go.Scattergl if render_mode == "webgl" else go.Scatter
-            fig.add_trace(trace_cls(x=x_data, y=y_data, mode='markers', name=trace_name))
+            for t in traces:
+                marker_kw = {}
+                if size and isinstance(data, __import__('pandas').DataFrame) and size in data.columns:
+                    marker_kw['size'] = data[size].tolist()
+                fig.add_trace(trace_cls(x=t['x'], y=t['y'], mode='markers', name=t['name'], marker=marker_kw or None))
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
@@ -349,30 +362,51 @@ class ChartWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def _parse_chart_data(self, data, x, y):
-        """Parse chart data into x, y, and trace name"""
+    def _parse_chart_data(self, data, x, y, color=None):
+        """Parse chart data into list of trace dicts [{x, y, name}, ...]
+        
+        Supports multi-series via:
+        - color param: column name to group by for multiple traces
+        - y as list: multiple y columns become separate traces
+        """
         import pandas as pd
         if isinstance(data, pd.DataFrame):
-            if x and y:
-                x_data = data[x].tolist()
-                y_data = data[y].tolist()
-                trace_name = y
-            elif y:
-                x_data = list(range(len(data)))
-                y_data = data[y].tolist()
-                trace_name = y
+            # Determine x column
+            cols = data.columns.tolist()
+            if x:
+                x_col = x
             else:
-                cols = data.columns.tolist()
+                x_col = cols[0] if len(cols) > 1 else None
+
+            # Multi-series via color (group-by column)
+            if color and color in data.columns:
+                traces = []
+                x_src = x_col or cols[0]
+                y_src = y or (cols[1] if len(cols) > 1 else cols[0])
+                for group_val, group_df in data.groupby(color):
+                    traces.append({
+                        'x': group_df[x_src].tolist(),
+                        'y': group_df[y_src].tolist(),
+                        'name': str(group_val)
+                    })
+                return traces
+
+            # Multi-series via y as list
+            if isinstance(y, (list, tuple)):
+                x_data = data[x_col].tolist() if x_col else list(range(len(data)))
+                return [{'x': x_data, 'y': data[col].tolist(), 'name': col} for col in y if col in data.columns]
+
+            # Single series
+            if x and y:
+                return [{'x': data[x].tolist(), 'y': data[y].tolist(), 'name': y}]
+            elif y:
+                return [{'x': list(range(len(data))), 'y': data[y].tolist(), 'name': y}]
+            else:
                 x_data = data[cols[0]].tolist()
                 y_data = data[cols[1]].tolist() if len(cols) > 1 else list(range(len(data)))
-                trace_name = cols[1] if len(cols) > 1 else 'Value'
+                name = cols[1] if len(cols) > 1 else 'Value'
+                return [{'x': x_data, 'y': y_data, 'name': name}]
         elif isinstance(data, (list, tuple)):
-            x_data = list(range(len(data)))
-            y_data = list(data)
-            trace_name = 'Value'
+            return [{'x': list(range(len(data))), 'y': list(data), 'name': 'Value'}]
         else:
-            x_data = []
-            y_data = []
-            trace_name = 'Value'
-        
-        return x_data, y_data, trace_name
+            return [{'x': [], 'y': [], 'name': 'Value'}]

@@ -76,23 +76,25 @@ def resolve_value(arg):
     return arg
 
 
-def wrap_html(html: str, cls: str = "", style: str = "") -> str:
-    """Wrap HTML content with a div if cls or style are provided.
+def wrap_html(html: str, cls: str = "", style: str = "", wrapper_id: str = "") -> str:
+    """Wrap HTML content with a div if cls or style are provided (and optionally give it an ID).
     
-    Used for Component(None, ...) widgets where we can't pass class/style
-    directly to the Component constructor.
+    If wrapper_id is provided, the wrapper div will always be created.
     
     Args:
         html: Raw HTML content
         cls: CSS classes to apply
         style: Inline CSS styles to apply
+        wrapper_id: Optional ID for the wrapping div
         
     Returns:
-        Original HTML if no cls/style, wrapped HTML otherwise.
+        Original HTML if no cls/style/id, wrapped HTML otherwise.
     """
-    if not cls and not style:
+    if not cls and not style and not wrapper_id:
         return html
     attrs = []
+    if wrapper_id:
+        attrs.append(f'id="{wrapper_id}"')
     if cls:
         attrs.append(f'class="{cls}"')
     if style:

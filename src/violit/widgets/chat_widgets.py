@@ -94,7 +94,8 @@ class ChatWidgetsMixin:
                 
         return ChatMessageContext(self, cid, name, avatar, cls, style)
 
-    def chat_input(self, placeholder: str = "Your message", on_submit: Optional[Callable[[str], None]] = None, auto_scroll: bool = True, cls: str = "", style: str = ""):
+    def chat_input(self, placeholder: str = "Your message", on_submit: Optional[Callable[[str], None]] = None, auto_scroll: bool = True,
+                   max_chars: int = None, disabled: bool = False, cls: str = "", style: str = ""):
         """
         Display a chat input widget at the bottom of the page.
         
@@ -148,6 +149,8 @@ class ChatWidgetsMixin:
                     pointer-events: auto;
                 ">
                     <input type="text" id="input_{cid}" class="chat-input-box" placeholder="{placeholder}" 
+                        {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
+                        {"disabled" if disabled else ""}
                         style="
                             flex: 1; 
                             border: none; 
@@ -163,7 +166,7 @@ class ChatWidgetsMixin:
                             this.value = ''; 
                         }}"
                     >
-                    <sl-button size="small" variant="primary" circle onclick="
+                    <sl-button size="small" variant="primary" circle {"disabled" if disabled else ""} onclick="
                         const el = document.getElementById('input_{cid}');
                         window.chatInputWasActive = true;
                         {f"sendAction('{cid}', el.value);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: el.value}}, swap: 'none'}});"}

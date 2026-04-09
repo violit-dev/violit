@@ -6,6 +6,7 @@ rendering_ctx = contextvars.ContextVar("rendering_component", default=None)
 fragment_ctx = contextvars.ContextVar("current_fragment", default=None)
 page_ctx = contextvars.ContextVar("current_page_renderer", default=None)
 layout_ctx = contextvars.ContextVar("layout_ctx", default="main")  # "main" or "sidebar"
+action_ctx = contextvars.ContextVar("action_ctx", default=False)
 initial_render_ctx = contextvars.ContextVar("initial_render", default=False) # for large-scale data rendering
 
 # Global Reference for App Instance (used for initial theme sync)

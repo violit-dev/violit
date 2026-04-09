@@ -36,23 +36,186 @@ class UploadedFile(io.BytesIO):
 
 
 class InputWidgetsMixin:
-    
-    def text_input(self, label, value="", key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Single-line text input"""
-        return self._input_component("input", "sl-input", label, value, on_change, key, cls=cls, style=style, **props)
 
-    def slider(self, label, min_value=0, max_value=100, value=None, step=1, key=None, on_change=None, live_update=False, cls: str = "", style: str = "", **props):
+    @staticmethod
+    def _label_vis_attrs(label_visibility):
+        """Return (label_style, wrapper_style) for Streamlit label_visibility compat."""
+        if label_visibility == "hidden":
+            return 'style="visibility:hidden;height:0;overflow:hidden;"', ''
+        elif label_visibility == "collapsed":
+            return 'style="display:none;"', ''
+        return '', ''  # "visible"
+
+    def text_input(self, label, value="", key=None, on_change=None,
+                   type="default", max_chars=None, placeholder="",
+                   autocomplete=None, disabled=False,
+                   label_visibility="visible", help=None,
+                   cls: str = "", style: str = "", **props):
+        """Single-line text input
+
+        Args:
+            type: Input type - "default" or "password"
+            max_chars: Maximum number of characters
+            placeholder: Placeholder text when empty
+            autocomplete: HTML autocomplete attribute
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text shown below the input
+        """
+        _type = "password" if type == "password" else "text"
+        extra = {}
+        if _type != "text": extra["type"] = _type
+        if max_chars is not None: extra["maxlength"] = max_chars
+        if placeholder: extra["placeholder"] = placeholder
+        if autocomplete: extra["autocomplete"] = autocomplete
+        if disabled: extra["disabled"] = True
+        if help: extra["help-text"] = help
+        return self._input_component("input", "sl-input", label, value, on_change, key,
+                                     cls=cls, style=style, label_visibility=label_visibility,
+                                     **extra, **props)
+
+    def slider(self, label, min_value=0, max_value=100, value=None, step=1,
+               key=None, on_change=None, live_update=False,
+               disabled=False, label_visibility="visible", help=None,
+               cls: str = "", style: str = "", **props):
         """Slider widget
-        
+
         Args:
             live_update: If True, value updates in real-time while dragging.
                          If False (default), value updates only when released.
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text shown below the slider
         """
         if value is None: value = min_value
-        return self._input_component("slider", "sl-range", label, value, on_change, key, cls=cls, style=style, live_update=live_update, min=min_value, max=max_value, step=step, **props)
+        extra = {}
+        if disabled: extra["disabled"] = True
+        if help: extra["help-text"] = help
+        return self._input_component("slider", "sl-range", label, value, on_change, key,
+                                     cls=cls, style=style, live_update=live_update,
+                                     label_visibility=label_visibility,
+                                     min=min_value, max=max_value, step=step,
+                                     **extra, **props)
 
-    def checkbox(self, label, value=False, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Checkbox widget"""
+    def select_slider(self, label, options=None, value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
+        """Slider widget with discrete values from a list
+        
+        Args:
+            label: Display label
+            options: List of option values (strings, numbers, etc.)
+            value: Default value (must be in options list)
+            key: Widget key for state management
+            on_change: Callback when value changes
+        """
+        if options is None or len(options) == 0:
+            return None
+
+        cid = self._get_next_cid("select_slider")
+        state_key = key or f"select_slider:{label}"
+        default_val = value if value is not None else options[0]
+        s = self.state(default_val, key=state_key)
+        options_str = [str(o) for o in options]
+
+        def action(v):
+            idx = int(v)
+            actual = options[idx] if 0 <= idx < len(options) else options[0]
+            s.set(actual)
+            if on_change:
+                on_change(actual)
+
+        def builder():
+            token = rendering_ctx.set(cid)
+            cv = s.value
+            rendering_ctx.reset(token)
+
+            try:
+                current_idx = options.index(cv)
+            except ValueError:
+                current_idx = 0
+
+            max_idx = len(options) - 1
+            n = len(options)
+            # The labels will be calculated in ticks_html instead
+            current_label = html_lib.escape(str(cv))
+            range_id = f"{cid}_range"
+
+            if self.mode == 'lite':
+                attrs_str = f'hx-post="/action/{cid}" hx-trigger="sl-change" hx-swap="none" hx-vals="js:{{value: event.target.value}}"'
+                listener_script = ""
+            else:
+                attrs_str = ""
+                listener_script = f'''
+                <script>
+                (function() {{
+                    var el = document.getElementById('{range_id}');
+                    var display = document.getElementById('{cid}_display');
+                    var opts = {json.dumps(options_str)};
+                    if (el && !el.hasAttribute('data-ws-listener')) {{
+                        el.setAttribute('data-ws-listener', 'true');
+                        el.addEventListener('sl-input', function() {{
+                            if (display) display.textContent = opts[parseInt(el.value)];
+                        }});
+                        el.addEventListener('sl-change', function() {{
+                            window.sendAction('{cid}', el.value);
+                        }});
+                    }}
+                }})();
+                </script>
+                '''
+
+            props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
+
+            # 5. Position labels precisely using relative/absolute positioning
+            # A standard Shoelace slider thumb is typically 15px-16px.
+            # It travels from ~8px from the left to ~8px from the right.
+            ticks_html = []
+            if max_idx > 0:
+                for i, o in enumerate(options):
+                    percent = (i / max_idx) * 100
+                    # Position explicitly on the track taking thumb size into account
+                    ticks_html.append(
+                        f'<span style="position:absolute; left:calc({percent}% - {percent / 100 * 16}px + 8px); '
+                        f'transform:translateX(-50%); font-size:0.75rem; opacity:0.7; pointer-events:none;">'
+                        f'{html_lib.escape(str(o))}</span>'
+                    )
+            else:
+                ticks_html.append(
+                    f'<span style="position:absolute; left:50%; transform:translateX(-50%); '
+                    f'font-size:0.75rem; opacity:0.7;">{html_lib.escape(str(options[0]))}</span>'
+                )
+            ticks = ''.join(ticks_html)
+
+            # 6. HTML Construction
+            html_content = f'''
+                <label style="display:block; font-size:0.875rem; font-weight:500; margin-bottom:0.25rem;">{html_lib.escape(str(label))}</label>
+                <sl-range id="{range_id}" min="0" max="{max_idx}" step="1" value="{current_idx}" tooltip="none" {attrs_str} {props_str}></sl-range>
+                <div style="position:relative; width:100%; height:1rem; margin-top:0.15rem;">
+                    {ticks}
+                </div>
+                <div id="{cid}_display" style="text-align:center; font-weight:600; margin-top:0.25rem; font-size:0.875rem;">{current_label}</div>
+            {listener_script}
+            '''
+            _wd = self._get_widget_defaults("select_slider")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            # Add default margin bottom
+            base_style = "margin-bottom:1rem;"
+            _fs = merge_style(base_style, _wd.get("style", ""))
+            _fs = merge_style(_fs, style)
+            
+            return Component("div", id=cid, class_=_fc or None, style=_fs or None, content=html_content)
+        self._register_component(cid, builder, action=action)
+        return s
+
+    def checkbox(self, label, value=False, key=None, on_change=None,
+                  disabled=False, label_visibility="visible", help=None,
+                  cls: str = "", style: str = "", **props):
+        """Checkbox widget
+
+        Args:
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text
+        """
         cid = self._get_next_cid("checkbox")
         
         state_key = key or f"checkbox:{label}"
@@ -92,7 +255,9 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            html = f'<sl-checkbox id="{cid}" {checked_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}</sl-checkbox>{listener_script}'
+            disabled_attr = 'disabled' if disabled else ''
+            help_html = f'<br><span style="font-size:0.75rem;color:var(--sl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
+            html = f'<sl-checkbox id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</sl-checkbox>{listener_script}'
             _wd = self._get_widget_defaults("checkbox")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -100,8 +265,19 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def radio(self, label, options, index=0, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Radio button group"""
+    def radio(self, label, options, index=0, key=None, on_change=None,
+              horizontal=False, captions=None,
+              disabled=False, label_visibility="visible", help=None,
+              cls: str = "", style: str = "", **props):
+        """Radio button group
+
+        Args:
+            horizontal: If True, display options in a row
+            captions: List of caption strings shown below each option
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text
+        """
         cid = self._get_next_cid("radio_group")
         
         state_key = key or f"radio:{label}"
@@ -118,10 +294,13 @@ class InputWidgetsMixin:
             rendering_ctx.reset(token)
             
             opts_html = ""
-            for opt in options:
+            for i_opt, opt in enumerate(options):
                 sel = 'checked' if opt == cv else ''
                 escaped_opt = html_lib.escape(str(opt), quote=True)
-                opts_html += f'<sl-radio value="{escaped_opt}" {sel}>{escaped_opt}</sl-radio>'
+                caption_html = ''
+                if captions and i_opt < len(captions) and captions[i_opt]:
+                    caption_html = f'<br><span style="font-size:0.75rem;color:var(--sl-text-muted);font-weight:normal;">{html_lib.escape(str(captions[i_opt]))}</span>'
+                opts_html += f'<sl-radio value="{escaped_opt}" {sel}>{escaped_opt}{caption_html}</sl-radio>'
             
             if self.mode == 'lite':
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="sl-change" hx-swap="none" name="value"'
@@ -145,7 +324,11 @@ class InputWidgetsMixin:
             
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
             escaped_cv = html_lib.escape(str(cv), quote=True)
-            html = f'<sl-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {attrs_str} {props_str}>{opts_html}</sl-radio-group>{listener_script}'
+            disabled_attr = 'disabled' if disabled else ''
+            help_attr = f'help-text="{html_lib.escape(str(help), quote=True)}"' if help else ''
+            # Horizontal layout via fieldset attribute (Shoelace) + CSS override
+            horiz_style = ' style="display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;"' if horizontal else ''
+            html = f'<sl-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div{horiz_style}>{opts_html}</div></sl-radio-group>{listener_script}'
             
             _wd = self._get_widget_defaults("radio")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -176,8 +359,18 @@ class InputWidgetsMixin:
         s = s.replace('%25', '%')
         return s
 
-    def selectbox(self, label, options, index=0, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Single select dropdown"""
+    def selectbox(self, label, options, index=0, key=None, on_change=None,
+                   placeholder=None, disabled=False,
+                   label_visibility="visible", help=None,
+                   cls: str = "", style: str = "", **props):
+        """Single select dropdown
+
+        Args:
+            placeholder: Placeholder text when nothing is selected
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text
+        """
         cid = self._get_next_cid("select")
         
         state_key = key or f"select:{label}"
@@ -246,7 +439,11 @@ class InputWidgetsMixin:
                 '''
             
             select_html = f'<sl-select id="{cid}" label="{escaped_label}" value="{escaped_cv}"'
-            for k, v in {**attrs, **props}.items():
+            extra_attrs = {}
+            if placeholder: extra_attrs['placeholder'] = placeholder
+            if disabled: extra_attrs['disabled'] = True
+            if help: extra_attrs['help-text'] = help
+            for k, v in {**attrs, **extra_attrs, **props}.items():
                 if v is True:
                     select_html += f' {k}'
                 elif v is not False and v is not None:
@@ -261,8 +458,19 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def multiselect(self, label, options, default=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Multi-select dropdown"""
+    def multiselect(self, label, options, default=None, key=None, on_change=None,
+                     max_selections=None, placeholder=None, disabled=False,
+                     label_visibility="visible", help=None,
+                     cls: str = "", style: str = "", **props):
+        """Multi-select dropdown
+
+        Args:
+            max_selections: Maximum number of selections allowed
+            placeholder: Placeholder text when nothing is selected
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text
+        """
         cid = self._get_next_cid("multiselect")
         
         state_key = key or f"multiselect:{label}"
@@ -336,7 +544,12 @@ class InputWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             # sl-select: cls/style applied via wrapper since this is a Shoelace component
             # label escaping handled by Component.render(); opts_html is raw so manually escaped above
-            inner = Component("sl-select", id=cid, label=label, content=opts_html, multiple=True, clearable=True)
+            _ms_extra = {}
+            if placeholder: _ms_extra['placeholder'] = placeholder
+            if disabled: _ms_extra['disabled'] = True
+            if help: _ms_extra['help-text'] = help
+            if max_selections: _ms_extra['max-options-visible'] = max_selections
+            inner = Component("sl-select", id=cid, label=label, content=opts_html, multiple=True, clearable=True, **_ms_extra)
             inner_html = inner.render() + listener_script
             if _fc or _fs:
                 return Component(None, id=f"{cid}_wrap", content=wrap_html(inner_html, _fc, _fs))
@@ -385,8 +598,20 @@ class InputWidgetsMixin:
         
         return s
 
-    def text_area(self, label, value="", height=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Multi-line text input"""
+    def text_area(self, label, value="", height=None, key=None, on_change=None,
+                   max_chars=None, placeholder="", disabled=False,
+                   label_visibility="visible", help=None,
+                   cls: str = "", style: str = "", **props):
+        """Multi-line text input
+
+        Args:
+            height: Number of visible text rows (default: 3)
+            max_chars: Maximum number of characters
+            placeholder: Placeholder text when empty
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text
+        """
         cid = self._get_next_cid("textarea")
         
         state_key = key or f"textarea:{label}"
@@ -422,7 +647,10 @@ class InputWidgetsMixin:
                 '''
             
             textarea_props = {"rows": height or 3, "resize": "auto"}
-            # Remove attrs from args to Component and inject script after
+            if max_chars is not None: textarea_props["maxlength"] = max_chars
+            if placeholder: textarea_props["placeholder"] = placeholder
+            if disabled: textarea_props["disabled"] = True
+            if help: textarea_props["help-text"] = help
             html = f'<sl-textarea id="{cid}" label="{label}" value="{cv}"'
             for k, v in {**attrs, **textarea_props, **props}.items():
                 if v is True: html += f' {k}'
@@ -437,8 +665,19 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def number_input(self, label, value=0, min_value=None, max_value=None, step=1, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Numeric input"""
+    def number_input(self, label, value=0, min_value=None, max_value=None, step=1,
+                      key=None, on_change=None,
+                      placeholder="", disabled=False,
+                      label_visibility="visible", help=None,
+                      cls: str = "", style: str = "", **props):
+        """Numeric input
+
+        Args:
+            placeholder: Placeholder text when empty
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text
+        """
         cid = self._get_next_cid("number")
         
         state_key = key or f"number:{label}"
@@ -481,6 +720,9 @@ class InputWidgetsMixin:
             if min_value is not None: num_props["min"] = min_value
             if max_value is not None: num_props["max"] = max_value
             if step is not None: num_props["step"] = step
+            if placeholder: num_props["placeholder"] = placeholder
+            if disabled: num_props["disabled"] = True
+            if help: num_props["help-text"] = help
             
             html = f'<sl-input id="{cid}" label="{label}" value="{cv}"'
             for k, v in {**attrs, **num_props, **props}.items():
@@ -496,8 +738,26 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def file_uploader(self, label, accept=None, multiple=False, key=None, on_change=None, help=None, cls: str = "", style: str = "", **props):
-        """File upload widget"""
+    def file_uploader(self, label, type=None, accept=None, accept_multiple_files=False, multiple=False,
+                       key=None, on_change=None, help=None, disabled=False,
+                       label_visibility="visible",
+                       cls: str = "", style: str = "", **props):
+        """File upload widget
+
+        Args:
+            type: Accepted file types (Streamlit compat alias for accept)
+            accept: Accepted file types (e.g. "image/*", ".csv,.xlsx")
+            accept_multiple_files: If True, allow multiple files (Streamlit compat)
+            multiple: If True, allow multiple files
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+        """
+        # Streamlit compat: 'type' maps to 'accept'
+        if type is not None and accept is None:
+            if isinstance(type, list): accept = ','.join(type)
+            else: accept = type
+        # Streamlit compat: accept_multiple_files
+        if accept_multiple_files: multiple = True
         cid = self._get_next_cid("file")
         
         state_key = key or f"file:{label}"
@@ -641,8 +901,16 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def toggle(self, label, value=False, key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Toggle switch widget"""
+    def toggle(self, label, value=False, key=None, on_change=None,
+               disabled=False, label_visibility="visible", help=None,
+               cls: str = "", style: str = "", **props):
+        """Toggle switch widget
+
+        Args:
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+            help: Tooltip / help text
+        """
         cid = self._get_next_cid("toggle")
         
         state_key = key or f"toggle:{label}"
@@ -682,7 +950,9 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            html = f'<sl-switch id="{cid}" {checked_attr} {attrs_str} {props_str}>{label}</sl-switch>{listener_script}'
+            disabled_attr = 'disabled' if disabled else ''
+            help_html = f'<br><span style="font-size:0.75rem;color:var(--sl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
+            html = f'<sl-switch id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{label}{help_html}</sl-switch>{listener_script}'
             _wd = self._get_widget_defaults("toggle")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -690,8 +960,15 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def color_picker(self, label="Pick a color", value="#000000", key=None, on_change=None, cls: str = "", style: str = "", **props):
-        """Color picker widget"""
+    def color_picker(self, label="Pick a color", value="#000000", key=None, on_change=None,
+                      disabled=False, label_visibility="visible",
+                      cls: str = "", style: str = "", **props):
+        """Color picker widget
+
+        Args:
+            disabled: If True, widget is grayed out
+            label_visibility: "visible", "hidden", or "collapsed"
+        """
         cid = self._get_next_cid("color")
         
         state_key = key or f"color:{label}"
@@ -839,7 +1116,7 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, cls: str = "", style: str = "", live_update=False, **props):
+    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, cls: str = "", style: str = "", live_update=False, label_visibility="visible", **props):
         """Generic input component builder"""
         cid = self._get_next_cid(type_name)
         
@@ -880,9 +1157,24 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
+            # Build props - handle boolean attrs & hyphenated names (e.g. help-text)
+            parts = []
+            for k, v in props.items():
+                if v is None or v is False:
+                    continue
+                if v is True:
+                    parts.append(k)
+                else:
+                    parts.append(f'{k}="{v}"')
+            props_str = ' '.join(parts)
             escaped_cv = html_lib.escape(str(cv), quote=True)
-            html = f'<{tag_name} id="{cid}" label="{label}" value="{escaped_cv}" {attrs_str} {props_str}></{tag_name}>{listener_script}'
+            # label_visibility support
+            _lbl = label
+            if label_visibility == "hidden":
+                _lbl = ""  # Shoelace still reserves space for empty label
+            elif label_visibility == "collapsed":
+                _lbl = ""
+            html = f'<{tag_name} id="{cid}" label="{_lbl}" value="{escaped_cv}" {attrs_str} {props_str}></{tag_name}>{listener_script}'
             
             _wd = self._get_widget_defaults(type_name)
             _fc = merge_cls(_wd.get("cls", ""), cls)

@@ -9,8 +9,16 @@ from ..style_utils import merge_cls, merge_style
 class LayoutWidgetsMixin:
     """Layout widgets (columns, container, expander, tabs, empty, dialog)"""
     
-    def columns(self, spec=2, gap="1rem", cls: str = "", style: str = ""):
-        """Create column layout - spec can be an int (equal width) or list of weights"""
+    def columns(self, spec=2, gap="1rem", vertical_alignment="top", cls: str = "", style: str = ""):
+        """Create column layout - spec can be an int (equal width) or list of weights
+        
+        Args:
+            spec: Number of equal-width columns (int) or list of weight ratios (e.g. [1, 2, 1])
+            gap: Gap between columns (CSS value, default: "1rem")
+            vertical_alignment: Vertical alignment of column contents - "top", "center", or "bottom"
+            cls: Additional CSS classes
+            style: Additional inline styles
+        """
         if isinstance(spec, int):
             count = spec
             weights = ["1fr"] * count
@@ -52,7 +60,10 @@ class LayoutWidgetsMixin:
             grid_tmpl = " ".join(weights)
             # Use CSS variable for grid-template-columns so it can be overridden by CSS
             # The --vl-cols variable and gap are set inline, but display:grid is handled by CSS class
-            container_html = f'<div id="{columns_id}" class="columns" style="--vl-cols: {grid_tmpl}; --vl-gap: {gap};">{"".join(columns_html)}</div>'
+            _va_map = {"top": "start", "center": "center", "bottom": "end"}
+            _va = _va_map.get(vertical_alignment, "start")
+            joined_cols = "".join(columns_html)
+            container_html = f'<div id="{columns_id}" class="columns" style="--vl-cols: {grid_tmpl}; --vl-gap: {gap}; align-items: {_va};">{joined_cols}</div>'
             _wd = self._get_widget_defaults("columns")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -62,12 +73,13 @@ class LayoutWidgetsMixin:
         
         return column_objects
 
-    def container(self, border=True, cls: str = "", style: str = "", **kwargs):
+    def container(self, border=False, height=None, cls: str = "", style: str = "", **kwargs):
         """
         Create a container for grouping elements
         
         Args:
             border: Whether to show border (card style)
+            height: Container height (int for pixels, str for CSS value). Adds scrollbar when content overflows.
             **kwargs: Additional HTML attributes (e.g., data_post_id="123", style="...")
         
         Example:
@@ -78,10 +90,11 @@ class LayoutWidgetsMixin:
         cid = self._get_next_cid("container")
         
         class ContainerContext:
-            def __init__(self, app, container_id, border, user_cls, user_style, attrs):
+            def __init__(self, app, container_id, border, height, user_cls, user_style, attrs):
                 self.app = app
                 self.container_id = container_id
                 self.border = border
+                self.height = height
                 self.user_cls = user_cls
                 self.user_style = user_style
                 self.attrs = attrs
@@ -104,9 +117,15 @@ class LayoutWidgetsMixin:
                     border_class = "card" if self.border else ""
                     inner_html = "".join(htmls)
                     
+                    # Height support (scrollable container)
+                    height_style = ""
+                    if self.height is not None:
+                        h = f"{self.height}px" if isinstance(self.height, (int, float)) else self.height
+                        height_style = f"height: {h}; overflow-y: auto;"
+                    
                     _wd = self.app._get_widget_defaults("container")
                     _fc = merge_cls(_wd.get("cls", ""), border_class, self.user_cls)
-                    _fs = merge_style(_wd.get("style", ""), self.user_style)
+                    _fs = merge_style(_wd.get("style", ""), height_style, self.user_style)
                     # Pass kwargs to Component
                     return Component("div", id=self.container_id, content=inner_html, class_=_fc or None, style=_fs or None, **self.attrs)
                 
@@ -124,18 +143,25 @@ class LayoutWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
         
-        return ContainerContext(self, cid, border, cls, style, kwargs)
+        return ContainerContext(self, cid, border, height, cls, style, kwargs)
 
-    def expander(self, label, expanded=False, cls: str = "", style: str = ""):
-        """Create an expandable/collapsible section"""
+    def expander(self, label, expanded=False, icon=None, cls: str = "", style: str = ""):
+        """Create an expandable/collapsible section
+        
+        Args:
+            label: Section header text
+            expanded: Whether the section is initially expanded
+            icon: Optional icon (emoji or string) to display before the label
+        """
         cid = self._get_next_cid("expander")
         
         class ExpanderContext:
-            def __init__(self, app, expander_id, label, expanded, user_cls="", user_style=""):
+            def __init__(self, app, expander_id, label, expanded, icon=None, user_cls="", user_style=""):
                 self.app = app
                 self.expander_id = expander_id
                 self.label = label
                 self.expanded = expanded
+                self.icon = icon
                 self.user_cls = user_cls
                 self.user_style = user_style
                 
@@ -156,9 +182,10 @@ class LayoutWidgetsMixin:
                     
                     inner_html = "".join(htmls)
                     open_attr = "open" if self.expanded else ""
+                    icon_html = f'{self.icon} ' if self.icon else ''
                     html = f'''
                     <sl-details {open_attr} style="margin-bottom:1rem;">
-                        <span slot="summary" style="font-weight:500;">{self.label}</span>
+                        <span slot="summary" style="font-weight:500;">{icon_html}{self.label}</span>
                         <div style="padding:0.5rem 0;">{inner_html}</div>
                     </sl-details>
                     '''
@@ -181,7 +208,7 @@ class LayoutWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
         
-        return ExpanderContext(self, cid, label, expanded, cls, style)
+        return ExpanderContext(self, cid, label, expanded, icon, cls, style)
 
     def tabs(self, labels: List[str], cls: str = "", style: str = ""):
         """Create tabbed interface"""
@@ -265,43 +292,116 @@ class LayoutWidgetsMixin:
     def empty(self):
         """Create an empty container that can be updated later"""
         cid = self._get_next_cid("empty")
-        
-        class EmptyContainer:
-            def __init__(self, app, container_id):
-                self.app = app
-                self.container_id = container_id
-                self._content_builder = None
-                
-                # Register initial empty builder
-                def builder():
-                    if self._content_builder:
-                        return self._content_builder()
-                    return Component("div", id=container_id, content="")
-                
-                app._register_component(container_id, builder)
-            
-            def write(self, content):
-                """Update the empty container with new content"""
-                def new_builder():
-                    return Component("div", id=self.container_id, content=str(content))
-                self._content_builder = new_builder
-            
-            def __getattr__(self, name):
-                # Proxy to app for method calls
-                return getattr(self.app, name)
-        
-        return EmptyContainer(self, cid)
+        _app = self
 
-    def dialog(self, title):
-        """Create a modal dialog (decorator)"""
+        # Register the empty placeholder builder.
+        # Renders dynamic (session) fragment children when present,
+        # falls back to static (initial-render) children otherwise.
+        def builder():
+            from ..state import get_session_store
+            from ..context import rendering_ctx
+            store = get_session_store()
+
+            token = rendering_ctx.set(cid)
+            htmls = []
+            dyn = store['fragment_components'].get(cid)
+            if dyn is not None:
+                for child_cid, b in dyn:
+                    try:
+                        htmls.append(b().render())
+                    except Exception:
+                        pass
+            else:
+                for child_cid, b in _app.static_fragment_components.get(cid, []):
+                    try:
+                        htmls.append(b().render())
+                    except Exception:
+                        pass
+            rendering_ctx.reset(token)
+            return Component("div", id=cid, content="".join(htmls))
+
+        _app._register_component(cid, builder)
+
+        class EmptyContainer:
+            """Proxy object for the empty placeholder widget."""
+
+            @property
+            def container_id(self_):
+                return cid
+
+            def container(self_):
+                """Context manager — write widget calls inside the placeholder."""
+                class _PlaceholderCtx:
+                    def __enter__(ctx_self):
+                        from ..state import get_session_store
+                        from ..context import fragment_ctx
+                        store = get_session_store()
+                        # Clear previous dynamic children so they don't accumulate
+                        store['fragment_components'][cid] = []
+                        ctx_self._token = fragment_ctx.set(cid)
+                        return ctx_self
+
+                    def __exit__(ctx_self, *_):
+                        from ..context import fragment_ctx, session_ctx
+                        from ..state import get_session_store
+                        fragment_ctx.reset(ctx_self._token)
+                        # Mark placeholder dirty so the WS update is sent
+                        if session_ctx.get():
+                            store = get_session_store()
+                            store.setdefault('forced_dirty', set()).add(cid)
+
+                return _PlaceholderCtx()
+
+            def empty(self_):
+                """Clear the placeholder content."""
+                from ..state import get_session_store
+                from ..context import session_ctx
+                store = get_session_store()
+                store['fragment_components'][cid] = []
+                if session_ctx.get():
+                    store.setdefault('forced_dirty', set()).add(cid)
+
+            def write(self_, content):
+                """Replace placeholder content with a plain string."""
+                from ..state import get_session_store
+                from ..context import session_ctx
+                write_cid = f"{cid}_write"
+                def _write_builder():
+                    return Component(None, id=write_cid, content=str(content))
+                store = get_session_store()
+                store['fragment_components'][cid] = [(write_cid, _write_builder)]
+                if session_ctx.get():
+                    store.setdefault('forced_dirty', set()).add(cid)
+
+            def __getattr__(self_, name):
+                return getattr(_app, name)
+
+        return EmptyContainer()
+
+    def dialog(self, title, width="small"):
+        """Create a modal dialog (decorator)
+        
+        Args:
+            title: Dialog title
+            width: Dialog width - "small", "medium", "large", or CSS value
+        """
+        _width_map = {"small": "400px", "medium": "600px", "large": "800px"}
+        dialog_width = _width_map.get(width, width)
+        
         def decorator(func):
             dialog_id = f"dialog_{func.__name__}"
+            modal_id = f"{dialog_id}_modal"
             
             # Create a function to open the dialog
             def open_dialog(*args, **kwargs):
+                from ..state import get_session_store
+                store = get_session_store()
+                # Clear previous children so re-opening doesn't accumulate
+                store['fragment_components'][dialog_id] = []
+
                 # Set fragment context for dialog content
                 token = fragment_ctx.set(dialog_id)
-                
+
                 # Execute the dialog content function
                 func(*args, **kwargs)
                 
@@ -317,18 +417,55 @@ class LayoutWidgetsMixin:
                     
                     inner_html = "".join(htmls)
                     html = f'''
-                    <sl-dialog id="{dialog_id}_modal" label="{title}" open>
+                    <sl-dialog id="{modal_id}" label="{title}" open style="--width: {dialog_width};">
                         <div style="padding:1rem;">{inner_html}</div>
-                        <sl-button slot="footer" variant="primary" onclick="document.getElementById('{dialog_id}_modal').hide()">Close</sl-button>
+                        <!--<sl-button slot="footer" variant="primary" onclick="document.getElementById('{modal_id}').hide()">Close</sl-button>-->
                     </sl-dialog>
                     <script>
-                        document.getElementById('{dialog_id}_modal').show();
+                        document.getElementById('{modal_id}').show();
+                        // Listen for native close event (e.g. backdrop click, escape key, etc.)
+                        document.getElementById('{modal_id}').addEventListener('sl-after-hide', (e) => {{
+                            if (e.target.id === '{modal_id}') {{
+                                window.sendAction('{dialog_id}', 'closed');
+                            }}
+                        }});
                     </script>
                     '''
                     return Component("div", id=dialog_id, content=html)
                 
                 fragment_ctx.reset(token)
-                self._register_component(dialog_id, builder)
+                
+                from ..context import session_ctx
+                store = get_session_store()
+                sid = session_ctx.get()
+                
+                # Register action immediately so we can close from UI
+                if sid is None:
+                    self.static_actions[dialog_id] = close_dialog
+                else:
+                    store.setdefault('actions', {})[dialog_id] = close_dialog
+
+                # Check if it's already registered to avoid duplicates
+                is_registered = dialog_id in store.get('builders', {}) or dialog_id in self.static_builders
+                
+                if not is_registered:
+                    self._register_component(dialog_id, builder)
+                else:
+                    # Update existing builder
+                    if sid is None:
+                        self.static_builders[dialog_id] = builder
+                    else:
+                        store['builders'][dialog_id] = builder
+                        
+                # Force dirty to update it immediately
+                if sid is not None:
+                    store.setdefault('forced_dirty', set()).add(dialog_id)
+
+            def close_dialog(*args, **kwargs):
+                self._enqueue_eval(f"if (document.getElementById('{modal_id}')) document.getElementById('{modal_id}').hide();")
+
+            open_dialog.open = open_dialog
+            open_dialog.close = close_dialog
             
             return open_dialog
         return decorator
@@ -400,6 +537,79 @@ class LayoutWidgetsMixin:
                 return getattr(self.app, name)
         
         return ListContainerContext(self, cid, gap, style_props)
+
+    def popover(self, label, use_container_width=False, disabled=False, help=None, cls: str = "", style: str = ""):
+        """Create a popover container triggered by a button click.
+        
+        Args:
+            label: Button label text
+            use_container_width: If True, button takes full container width
+            disabled: If True, button is disabled
+            help: Optional help tooltip text
+            cls: Additional CSS classes
+            style: Additional inline styles
+        
+        Example:
+            with app.popover("Settings"):
+                app.text("Popover content")
+                app.slider("Volume", 0, 100, 50)
+        """
+        cid = self._get_next_cid("popover")
+        
+        class PopoverContext:
+            def __init__(self, app, popover_id, label, use_container_width, disabled, help_text, user_cls, user_style):
+                self.app = app
+                self.popover_id = popover_id
+                self.label = label
+                self.use_container_width = use_container_width
+                self.disabled = disabled
+                self.help_text = help_text
+                self.user_cls = user_cls
+                self.user_style = user_style
+                
+            def __enter__(self):
+                def builder():
+                    from ..state import get_session_store
+                    store = get_session_store()
+                    
+                    htmls = []
+                    for child_cid, b in self.app.static_fragment_components.get(self.popover_id, []):
+                        htmls.append(b().render())
+                    for child_cid, b in store['fragment_components'].get(self.popover_id, []):
+                        htmls.append(b().render())
+                    
+                    inner_html = "".join(htmls)
+                    
+                    disabled_attr = 'disabled' if self.disabled else ''
+                    width_style = 'style="width:100%;"' if self.use_container_width else ''
+                    help_attr = f'title="{self.help_text}"' if self.help_text else ''
+                    
+                    html = f'''
+                    <sl-dropdown id="{self.popover_id}" {disabled_attr}>
+                        <sl-button slot="trigger" caret {disabled_attr} {width_style} {help_attr}>
+                            {self.label}
+                        </sl-button>
+                        <div style="padding: 1rem; background: var(--sl-panel-background-color, var(--sl-bg-card)); border-radius: var(--sl-border-radius-medium); min-width: 200px; max-width: 400px; box-shadow: var(--sl-shadow-large);">
+                            {inner_html}
+                        </div>
+                    </sl-dropdown>
+                    '''
+                    _wd = self.app._get_widget_defaults("popover")
+                    _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
+                    _fs = merge_style(_wd.get("style", ""), self.user_style)
+                    return Component("div", id=f"{self.popover_id}_wrap", content=html, class_=_fc or None, style=_fs or None)
+                
+                self.app._register_component(self.popover_id, builder)
+                self.token = fragment_ctx.set(self.popover_id)
+                return self
+                
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                fragment_ctx.reset(self.token)
+            
+            def __getattr__(self, name):
+                return getattr(self.app, name)
+        
+        return PopoverContext(self, cid, label, use_container_width, disabled, help, cls, style)
 
 
 class ColumnObject:

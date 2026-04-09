@@ -208,8 +208,13 @@ class TextWidgetsMixin:
         '''
         return styled_html
 
-    def heading(self, *args, level: int = 1, divider: bool = False, cls: str = "", style: str = ""):
-        """Display heading (h1-h6)"""
+    def heading(self, *args, level: int = 1, divider: bool = False, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
+        """Display heading (h1-h6)
+
+        Args:
+            anchor: Optional anchor ID for deep-linking (e.g. '#my-section')
+            help: Tooltip text shown next to the heading
+        """
         from ..state import State, ComputedState
         import html as html_lib
         
@@ -233,7 +238,9 @@ class TextWidgetsMixin:
             escaped_content = html_lib.escape(str(content))
             
             grad = "gradient-text" if level == 1 else ""
-            html_output = f'<h{level} class="{grad}">{escaped_content}</h{level}>'
+            anchor_attr = f' id="{html_lib.escape(anchor, quote=True)}"' if anchor else ''
+            help_html = f' <sl-tooltip content="{html_lib.escape(str(help), quote=True)}"><sl-icon name="question-circle" style="font-size:0.7em;color:var(--sl-text-muted);vertical-align:middle;cursor:help;"></sl-icon></sl-tooltip>' if help else ''
+            html_output = f'<h{level}{anchor_attr} class="{grad}">{escaped_content}{help_html}</h{level}>'
             if divider: html_output += '<sl-divider class="divider"></sl-divider>'
             _wd = self._get_widget_defaults("heading")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -241,17 +248,17 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def title(self, *args, cls: str = "", style: str = ""):
+    def title(self, *args, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
         """Display title (h1 with gradient)"""
-        self.heading(*args, level=1, divider=False, cls=cls, style=style)
-    
-    def header(self, *args, divider: bool = True, cls: str = "", style: str = ""):
+        self.heading(*args, level=1, divider=False, anchor=anchor, help=help, cls=cls, style=style)
+
+    def header(self, *args, divider: bool = True, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
         """Display header (h2)"""
-        self.heading(*args, level=2, divider=divider, cls=cls, style=style)
-    
-    def subheader(self, *args, divider: bool = False, cls: str = "", style: str = ""):
+        self.heading(*args, level=2, divider=divider, anchor=anchor, help=help, cls=cls, style=style)
+
+    def subheader(self, *args, divider: bool = False, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
         """Display subheader (h3)"""
-        self.heading(*args, level=3, divider=divider, cls=cls, style=style)
+        self.heading(*args, level=3, divider=divider, anchor=anchor, help=help, cls=cls, style=style)
 
     def text(self, *args, size: str = "medium", muted: bool = False, cls: str = "", style: str = ""):
         """Display text paragraph
@@ -286,14 +293,24 @@ class TextWidgetsMixin:
             return Component("p", id=cid, content=safe_val, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
     
-    def caption(self, *args, cls: str = "", style: str = ""):
-        """Display caption text (small, muted)"""
-        self.text(*args, size="small", muted=True, cls=cls, style=style)
+    def caption(self, *args, unsafe_allow_html=False, help: str = None, cls: str = "", style: str = ""):
+        """Display caption text (small, muted)
 
-    def markdown(self, *args, cls: str = "", style: str = "", **props):
+        Args:
+            unsafe_allow_html: If True, allow raw HTML in content
+            help: Tooltip text
+        """
+        if unsafe_allow_html:
+            self.html(*args, cls=f"text-small text-muted {cls}", style=style)
+        else:
+            self.text(*args, size="small", muted=True, cls=cls, style=style)
+
+    def markdown(self, *args, unsafe_allow_html=False, help: str = None, cls: str = "", style: str = "", **props):
         """Display markdown-formatted text
-        
-        Supports multiple arguments which will be joined by spaces.
+
+        Args:
+            unsafe_allow_html: If True, allow raw HTML tags to pass through (not escaped)
+            help: Tooltip text
         """
         cid = self._get_next_cid("markdown")
         def builder():
@@ -310,81 +327,86 @@ class TextWidgetsMixin:
                     parts.append(str(arg))
             
             content = " ".join(parts)
+
+            if unsafe_allow_html:
+                html = content
+            else:
+                # Enhanced markdown conversion - line-by-line processing
+                import re
+                lines = content.split('\n')
+                result = []
+                i = 0
+            
+                while i < len(lines):
+                    line = lines[i]
+                    stripped = line.strip()
                 
-            # Enhanced markdown conversion - line-by-line processing
-            import re
-            lines = content.split('\n')
-            result = []
-            i = 0
+                    # Headers
+                    if stripped.startswith('### '):
+                        result.append(f'<h3>{stripped[4:]}</h3>')
+                        i += 1
+                    elif stripped.startswith('## '):
+                        result.append(f'<h2>{stripped[3:]}</h2>')
+                        i += 1
+                    elif stripped.startswith('# '):
+                        result.append(f'<h1>{stripped[2:]}</h1>')
+                        i += 1
+                    # Unordered lists
+                    elif stripped.startswith(('- ', '* ')):
+                        list_items = []
+                        while i < len(lines):
+                            curr = lines[i].strip()
+                            if curr.startswith(('- ', '* ')):
+                                list_items.append(f'<li>{curr[2:]}</li>')
+                                i += 1
+                            elif not curr:  # Empty line
+                                i += 1
+                                break
+                            else:
+                                break
+                        result.append('<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ul>')
+                    # Ordered lists
+                    elif re.match(r'^\d+\.\s', stripped):
+                        list_items = []
+                        while i < len(lines):
+                            curr = lines[i].strip()
+                            if re.match(r'^\d+\.\s', curr):
+                                clean_item = re.sub(r'^\d+\.\s', '', curr)
+                                list_items.append(f'<li>{clean_item}</li>')
+                                i += 1
+                            elif not curr:  # Empty line
+                                i += 1
+                                break
+                            else:
+                                break
+                        result.append('<ol style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ol>')
+                    # Empty line
+                    elif not stripped:
+                        result.append('<br>')
+                        i += 1
+                    # Regular text — single newline produces <br> (GFM-style)
+                    else:
+                        result.append(f'{line}<br>')
+                        i += 1
             
-            while i < len(lines):
-                line = lines[i]
-                stripped = line.strip()
-                
-                # Headers
-                if stripped.startswith('### '):
-                    result.append(f'<h3>{stripped[4:]}</h3>')
-                    i += 1
-                elif stripped.startswith('## '):
-                    result.append(f'<h2>{stripped[3:]}</h2>')
-                    i += 1
-                elif stripped.startswith('# '):
-                    result.append(f'<h1>{stripped[2:]}</h1>')
-                    i += 1
-                # Unordered lists
-                elif stripped.startswith(('- ', '* ')):
-                    list_items = []
-                    while i < len(lines):
-                        curr = lines[i].strip()
-                        if curr.startswith(('- ', '* ')):
-                            list_items.append(f'<li>{curr[2:]}</li>')
-                            i += 1
-                        elif not curr:  # Empty line
-                            i += 1
-                            break
-                        else:
-                            break
-                    result.append('<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ul>')
-                # Ordered lists
-                elif re.match(r'^\d+\.\s', stripped):
-                    list_items = []
-                    while i < len(lines):
-                        curr = lines[i].strip()
-                        if re.match(r'^\d+\.\s', curr):
-                            clean_item = re.sub(r'^\d+\.\s', '', curr)
-                            list_items.append(f'<li>{clean_item}</li>')
-                            i += 1
-                        elif not curr:  # Empty line
-                            i += 1
-                            break
-                        else:
-                            break
-                    result.append('<ol style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ol>')
-                # Empty line
-                elif not stripped:
-                    result.append('<br>')
-                    i += 1
-                # Regular text — single newline produces <br> (GFM-style)
-                else:
-                    result.append(f'{line}<br>')
-                    i += 1
+                html = '\n'.join(result)
             
-            html = '\n'.join(result)
-            
-            # Inline elements (bold, italic, code, links)
-            # Bold **text** (before italic to avoid conflicts)
-            html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-            # Italic *text* (avoid matching list markers)
-            html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
-            # Code `text`
-            html = re.sub(r'`(.+?)`', r'<code style="background:var(--sl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
-            # Links [text](url)
-            html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--sl-primary);">\1</a>', html)
+                # Inline elements (bold, italic, code, links)
+                # Bold **text** (before italic to avoid conflicts)
+                html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+                # Italic *text* (avoid matching list markers)
+                html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
+                # Code `text`
+                html = re.sub(r'`(.+?)`', r'<code style="background:var(--sl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
+                # Links [text](url)
+                html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--sl-primary);">\1</a>', html)
             
             rendering_ctx.reset(token)
             _wd = self._get_widget_defaults("markdown")
             _fc = merge_cls(_wd.get("cls", ""), "markdown", cls)
             _fs = merge_style(_wd.get("style", ""), style)
+            if help:
+                html += f' <sl-tooltip content="{help}"><sl-icon name="question-circle" style="font-size:0.85em;vertical-align:middle;cursor:help;"></sl-icon></sl-tooltip>'
             return Component("div", id=cid, content=html, class_=_fc, style=_fs or None, **props)
         self._register_component(cid, builder)
     
@@ -422,10 +444,11 @@ class TextWidgetsMixin:
     def code(self, code: Union[str, Callable], language: Optional[str] = None,
              showcase: bool = False, title: Optional[str] = None,
              copy_button: bool = True, line_numbers: bool = False,
+             wrap_lines: bool = False,
              theme: str = "dark",
              cls: str = "", style: str = "", **props):
         """Display code block with syntax highlighting
-        
+
         Args:
             code: Code string or callable returning code string
             language: Language for syntax highlighting (e.g. "python", "javascript")
@@ -433,6 +456,7 @@ class TextWidgetsMixin:
             title: Title text for the title bar (shown in showcase mode)
             copy_button: If True, show a copy-to-clipboard button (default: True)
             line_numbers: If True, show line numbers
+            wrap_lines: If True, wrap long lines instead of horizontal scrolling
             theme: Color theme - "dark" (default) or "light"
             cls: Additional CSS classes
             style: Additional inline CSS
@@ -595,9 +619,11 @@ class TextWidgetsMixin:
                         padding-left: {code_padding_left}; padding-right: 3.5rem;
                         overflow-x: auto; font-size: 0.875rem; line-height: 1.7;
                         background: {bg_color}; border-radius: {pre_radius};
+                        {'white-space: pre-wrap; word-wrap: break-word;' if wrap_lines else ''}
                     "><code class="hljs {lang_class}" style="
                         font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
                         background: transparent; padding: 0;
+                        {'white-space: pre-wrap;' if wrap_lines else ''}
                     ">{escaped_code}</code></pre>
                 </div>
             </div>
@@ -649,5 +675,52 @@ class TextWidgetsMixin:
         cid = self._get_next_cid("space")
         def builder():
             return Component(None, id=cid, content=f'<div style="height:{size}"></div>')
+        self._register_component(cid, builder)
+
+    def latex(self, body, cls: str = "", style: str = ""):
+        """Display mathematical expression using LaTeX notation (rendered via KaTeX)
+        
+        Args:
+            body: LaTeX formula string (e.g. r'\\frac{a}{b}')
+        """
+        from ..state import State, ComputedState
+        import json as _json
+
+        cid = self._get_next_cid("latex")
+        def builder():
+            token = rendering_ctx.set(cid)
+            if isinstance(body, (State, ComputedState)):
+                val = str(body.value)
+            elif callable(body):
+                val = str(body())
+            else:
+                val = str(body)
+            rendering_ctx.reset(token)
+
+            formula_js = _json.dumps(val)
+            _wd = self._get_widget_defaults("latex")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style("padding:0.5rem 0; text-align:center; font-size:1.1rem;", _wd.get("style", ""), style)
+
+            html = f'''<div id="{cid}" class="{_fc}" style="{_fs}"></div>
+            <script>
+            (function() {{
+                if (!document.getElementById('_vl_katex_css')) {{
+                    var lnk = document.createElement('link');
+                    lnk.id = '_vl_katex_css'; lnk.rel = 'stylesheet';
+                    lnk.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+                    document.head.appendChild(lnk);
+                }}
+                window._vlLoadLib('katex', function() {{
+                    var el = document.getElementById('{cid}');
+                    if (el) {{
+                        try {{
+                            katex.render({formula_js}, el, {{throwOnError: false, displayMode: true}});
+                        }} catch(e) {{ el.textContent = {formula_js}; }}
+                    }}
+                }});
+            }})();
+            </script>'''
+            return Component(None, id=cid, content=html)
         self._register_component(cid, builder)
 

@@ -12,7 +12,9 @@ class DataWidgetsMixin:
     """Data display widgets (dataframe, table, data_editor, metric, json)"""
     
     def dataframe(self, df: Union['pd.DataFrame', Callable, State], height=400, 
-                  column_defs=None, grid_options=None, on_cell_clicked=None, cls: str = "", style: str = "", **props):
+                  column_defs=None, grid_options=None, on_cell_clicked=None,
+                  use_container_width=True, hide_index=False, column_order=None,
+                  cls: str = "", style: str = "", **props):
         """Display interactive dataframe with AG Grid"""
         cid = self._get_next_cid("df")
         
@@ -37,6 +39,15 @@ class DataWidgetsMixin:
 
             data = current_df.to_dict('records')
             
+            # Apply column_order if specified
+            if column_order:
+                ordered = [c for c in column_order if c in current_df.columns]
+                current_df = current_df[ordered]
+
+            # Optionally hide index
+            if hide_index and current_df.index.name:
+                current_df = current_df.reset_index(drop=True)
+
             # Use custom column_defs or generate defaults
             if column_defs:
                 cols = column_defs
@@ -145,7 +156,9 @@ class DataWidgetsMixin:
             return Component("div", id=cid, content=styled_html, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None, cls: str = "", style: str = "", **props):
+    def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None,
+                    disabled=False, hide_index=False, column_order=None, use_container_width=True,
+                    cls: str = "", style: str = "", **props):
         """Interactive data editor (simplified version)"""
         import pandas as pd
         cid = self._get_next_cid("data_editor")
@@ -166,7 +179,12 @@ class DataWidgetsMixin:
             data = s.value
             rendering_ctx.reset(token)
             
-            cols = [{"field": c, "sortable": True, "filter": True, "editable": True} for c in df.columns]
+            # Apply column_order and hide_index
+            _cols_list = list(df.columns)
+            if column_order:
+                _cols_list = [c for c in column_order if c in _cols_list]
+            editable = not disabled
+            cols = [{"field": c, "sortable": True, "filter": True, "editable": editable} for c in _cols_list]
             add_row_btn = '' if num_rows == "fixed" else f'''
             <sl-button size="small" style="margin-top:0.5rem;" onclick="addDataRow_{cid}()">
                 <sl-icon slot="prefix" name="plus-circle"></sl-icon>
@@ -231,7 +249,9 @@ class DataWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal", cls: str = "", style: str = ""):
+    def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal",
+                help: str = None, label_visibility: str = "visible", border: bool = True,
+                cls: str = "", style: str = ""):
         """Display metric value with Signal support"""
         import html as html_lib
         
@@ -250,6 +270,19 @@ class DataWidgetsMixin:
             escaped_label = html_lib.escape(str(label))
             escaped_val = html_lib.escape(str(curr_val))
 
+            # Help tooltip
+            help_html = ""
+            if help:
+                import html as _h
+                help_html = f' <sl-tooltip content="{_h.escape(help)}"><sl-icon name="question-circle" style="font-size:0.75em;vertical-align:middle;cursor:help;"></sl-icon></sl-tooltip>'
+
+            # Label visibility
+            label_style = ""
+            if label_visibility == "hidden":
+                label_style = "visibility:hidden;"
+            elif label_visibility == "collapsed":
+                label_style = "display:none;"
+
             delta_html = ""
             if curr_delta:
                 escaped_delta = html_lib.escape(str(curr_delta))
@@ -258,10 +291,12 @@ class DataWidgetsMixin:
                 icon = "arrow-up" if delta_color == "positive" else "arrow-down" if delta_color == "negative" else ""
                 icon_html = f'<sl-icon name="{icon}" style="font-size: 0.8em; margin-right: 2px;"></sl-icon>' if icon else ""
                 delta_html = f'<div style="color: {color}; font-size: 0.9rem; margin-top: 0.25rem; font-weight: 500;">{icon_html}{escaped_delta}</div>'
-            
+
+            border_style = "border:1px solid var(--sl-border);border-radius:0.5rem;" if border else ""
+
             html_output = f'''
-            <div class="card" style="padding: 1.25rem;">
-                <div style="font-size: 0.875rem; color: var(--sl-text-muted); margin-bottom: 0.5rem; font-weight: 500;">{escaped_label}</div>
+            <div class="card" style="padding: 1.25rem;{border_style}">
+                <div style="font-size: 0.875rem; color: var(--sl-text-muted); margin-bottom: 0.5rem; font-weight: 500;{label_style}">{escaped_label}{help_html}</div>
                 <div style="font-size: 1.75rem; font-weight: 700; color: var(--sl-text);">{escaped_val}</div>
                 {delta_html}
             </div>

@@ -10,37 +10,67 @@ from ..style_utils import merge_cls, merge_style
 class FormWidgetsMixin:
     """Form-related widgets (form, form_submit_button, button, download_button, link_button, page_link)"""
     
-    def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None, variant="primary", cls: str = "", style: str = "", **props):
-        """Display button"""
+    def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None,
+               variant="primary", type="primary",
+               disabled=False, use_container_width=False, icon=None,
+               cls: str = "", style: str = "", **props):
+        """Display button
+
+        Args:
+            type: Streamlit button type - "primary", "secondary", "tertiary" (maps to Shoelace variant)
+            disabled: If True, button is grayed out
+            use_container_width: If True, button spans the full container width
+            icon: Icon name (Shoelace icon, e.g. "gear", "plus-circle", or emoji)
+        """
+        # Streamlit compat: map type to variant
+        _type_map = {"primary": "primary", "secondary": "default", "tertiary": "text"}
+        _variant = _type_map.get(type, variant) if type != "primary" or variant == "primary" else variant
+        if type != "primary": _variant = _type_map.get(type, "primary")
+
         cid = self._get_next_cid("btn")
         def builder():
             token = rendering_ctx.set(cid)
             bt = text() if callable(text) else text
             rendering_ctx.reset(token)
             attrs = self.engine.click_attrs(cid)
+            icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon and not any(ord(c) > 127 for c in str(icon)) else ''
+            icon_emoji = f'{icon} ' if icon and any(ord(c) > 127 for c in str(icon)) else ''
+            disabled_attr = 'disabled' if disabled else ''
             _wd = self._get_widget_defaults("button")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            inner = Component("sl-button", id=cid, content=bt, variant=variant, **attrs, **props)
-            if _fc or _fs:
-                # Center button in wrapper (buttons are inline elements, must be explicitly centered)
+            inner = Component("sl-button", id=cid, content=f"{icon_html}{icon_emoji}{bt}",
+                              variant=_variant, **attrs, **props)
+            # Inject disabled attribute manually since Component may not handle it
+            inner_html = inner.render()
+            if disabled:
+                inner_html = inner_html.replace(f'id="{cid}"', f'id="{cid}" disabled', 1)
+            # Container width
+            if use_container_width:
                 wrap_style = merge_style("display:flex; justify-content:center;", _fs)
-                return Component("div", id=f"{cid}_wrap", content=inner.render(), class_=_fc or None, style=wrap_style)
-            return inner
+                inner_html = inner_html.replace(f'id="{cid}"', f'id="{cid}" style="width:100%;"', 1)
+                return Component("div", id=f"{cid}_wrap", content=inner_html, class_=_fc or None, style=wrap_style)
+            if _fc or _fs:
+                wrap_style = merge_style("display:flex; justify-content:center;", _fs)
+                return Component("div", id=f"{cid}_wrap", content=inner_html, class_=_fc or None, style=wrap_style)
+            return Component(None, id=f"{cid}_wrap", content=inner_html)
         self._register_component(cid, builder, action=on_click)
 
-    def download_button(self, label, data, file_name, mime="text/plain", on_click=None, cls: str = "", style: str = "", **props):
+    def download_button(self, label, data, file_name, mime="text/plain", on_click=None,
+                         type="primary", disabled=False, use_container_width=False, icon=None,
+                         cls: str = "", style: str = "", **props):
         """Download button (Streamlit-compatible interface)
-        
+
         Args:
             label: Button label
             data: Data to download (str, bytes, or file-like)
             file_name: Name for the downloaded file
             mime: MIME type of the file
             on_click: Optional callback when button is clicked (called AFTER download)
-        
-        Returns:
-            None
+            type: Button type - "primary" or "secondary"
+            disabled: If True, button is grayed out
+            use_container_width: If True, button spans full width
+            icon: Icon name or emoji
         """
         cid = self._get_next_cid("download_btn")
         
@@ -183,34 +213,49 @@ class FormWidgetsMixin:
         
         self._register_component(cid, builder, action=on_click)
 
-    def link_button(self, label, url, cls: str = "", style: str = "", **props):
-        """Display link button"""
+    def link_button(self, label, url, disabled=False, use_container_width=False, icon=None,
+                     cls: str = "", style: str = "", **props):
+        """Display link button
+
+        Args:
+            disabled: If True, button is grayed out
+            use_container_width: If True, button spans full width
+            icon: Icon name or emoji
+        """
         cid = self._get_next_cid("link_btn")
-        
+
         def builder():
+            icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon and not any(ord(c) > 127 for c in str(icon)) else ''
+            icon_emoji = f'{icon} ' if icon and any(ord(c) > 127 for c in str(icon)) else ''
+            if not icon:
+                icon_html = '<sl-icon slot="prefix" name="box-arrow-up-right"></sl-icon>'
+            disabled_attr = 'disabled' if disabled else ''
+            width_attr = 'style="width:100%;"' if use_container_width else ''
             html = f'''
-            <sl-button variant="primary" href="{url}" target="_blank">
-                <sl-icon slot="prefix" name="box-arrow-up-right"></sl-icon>
-                {label}
+            <sl-button variant="primary" href="{url}" target="_blank" {disabled_attr} {width_attr}>
+                {icon_html}{icon_emoji}{label}
             </sl-button>
             '''
             _wd = self._get_widget_defaults("link_button")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style("display:flex; justify-content:center;", _wd.get("style", ""), style)
             return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
-        
+
         self._register_component(cid, builder)
 
-    def page_link(self, page, label, icon=None, cls: str = "", style: str = "", **props):
-        """Display page navigation link"""
+    def page_link(self, page, label, icon=None, disabled=False, cls: str = "", style: str = "", **props):
+        """Display page navigation link
+
+        Args:
+            disabled: If True, link is grayed out and not clickable
+        """
         cid = self._get_next_cid("page_link")
         
         def builder():
             icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon else ""
-            # In a real implementation, this would trigger page navigation
-            # For now, just render as a styled link
+            disabled_style = "pointer-events:none;opacity:0.5;" if disabled else ""
             html = f'''
-            <a href="{page}" style="display:inline-flex;align-items:center;gap:0.5rem;color:var(--sl-primary);text-decoration:none;padding:0.5rem 1rem;border-radius:0.25rem;transition:background 0.2s;">
+            <a href="{page}" style="display:inline-flex;align-items:center;gap:0.5rem;color:var(--sl-primary);text-decoration:none;padding:0.5rem 1rem;border-radius:0.25rem;transition:background 0.2s;{disabled_style}">
                 {icon_html}
                 {label}
             </a>
@@ -239,15 +284,23 @@ class FormWidgetsMixin:
                 return Component("div", id=cid, content=html, style="display:none;")
             self._register_component(cid, builder)
 
-    def form(self, key=None, clear_on_submit=False):
-        """Create a form container"""
+    def form(self, key=None, clear_on_submit=False, border=True, enter_to_submit=True):
+        """Create a form container
+
+        Args:
+            clear_on_submit: If True, clear form inputs after submission
+            border: If True, show border around form (default: True)
+            enter_to_submit: If True, pressing Enter submits the form (default: True)
+        """
         form_id = f"form_{key}" if key else self._get_next_cid("form")
         
         class FormContext:
-            def __init__(self, app, form_id, clear_on_submit):
+            def __init__(self, app, form_id, clear_on_submit, border, enter_to_submit):
                 self.app = app
                 self.form_id = form_id
                 self.clear_on_submit = clear_on_submit
+                self.border = border
+                self.enter_to_submit = enter_to_submit
                 self.submitted = False
                 self.form_data = {}
                 
@@ -272,8 +325,21 @@ class FormWidgetsMixin:
                         htmls.append(b().render())
                     
                     inner_html = "".join(htmls)
+                    border_style = "border:1px solid var(--sl-border);" if self.border else ""
+                    if self.enter_to_submit:
+                        # Trigger the submit button's onclick (WebSocket action) on Enter,
+                        # but skip textareas where Enter should insert a newline.
+                        enter_handler = (
+                            'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey'
+                            '&&event.target.tagName!==\'TEXTAREA\'){'
+                            'event.preventDefault();'
+                            'var btn=this.querySelector(\'sl-button[type=submit]\');'
+                            'if(btn)btn.click();}"'
+                        )
+                    else:
+                        enter_handler = 'onkeydown="if(event.key===\'Enter\')event.preventDefault()"'
                     html = f'''
-                    <form id="{self.form_id}_element" style="display:flex;flex-direction:column;gap:1rem;padding:1rem;border:1px solid var(--sl-border);border-radius:0.5rem;background:var(--sl-bg-card);">
+                    <form id="{self.form_id}_element" {enter_handler} onsubmit="return false;" style="display:flex;flex-direction:column;gap:1rem;padding:1rem;{border_style}border-radius:0.5rem;background:var(--sl-bg-card);">
                         {inner_html}
                     </form>
                     '''
@@ -284,10 +350,19 @@ class FormWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
         
-        return FormContext(self, form_id, clear_on_submit)
+        return FormContext(self, form_id, clear_on_submit, border, enter_to_submit)
 
-    def form_submit_button(self, label="Submit", on_click=None, cls: str = "", style: str = "", **props):
-        """Form submit button"""
+    def form_submit_button(self, label="Submit", on_click=None,
+                            type="primary", disabled=False, use_container_width=False, icon=None,
+                            cls: str = "", style: str = "", **props):
+        """Form submit button
+
+        Args:
+            type: Button type - "primary" or "secondary"
+            disabled: If True, button is grayed out
+            use_container_width: If True, button spans full width
+            icon: Icon name or emoji
+        """
         cid = self._get_next_cid("form_submit")
         
         def action():
@@ -297,9 +372,20 @@ class FormWidgetsMixin:
         
         def builder():
             attrs = self.engine.click_attrs(cid)
+            attrs_str = " ".join(f'{k}="{v}"' for k, v in attrs.items())
+            _variant = "default" if type == "secondary" else "primary"
+            icon_html = ''
+            if icon and not any(ord(c) > 127 for c in str(icon)):
+                icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>'
+            elif icon:
+                icon_html = f'{icon} '
+            else:
+                icon_html = '<sl-icon slot="prefix" name="check-circle"></sl-icon>'
+            disabled_attr = 'disabled' if disabled else ''
+            width_attr = 'style="width:100%;"' if use_container_width else ''
             html = f'''
-            <sl-button type="submit" variant="primary" **{attrs}>
-                <sl-icon slot="prefix" name="check-circle"></sl-icon>
+            <sl-button type="submit" variant="{_variant}" {disabled_attr} {width_attr} {attrs_str}>
+                {icon_html}
                 {label}
             </sl-button>
             '''

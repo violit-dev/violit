@@ -10,21 +10,21 @@ from ..style_utils import merge_cls, merge_style, resolve_value
 class StatusWidgetsMixin:
     """Status display widgets (success, info, warning, error, toast, progress, spinner, status, balloons, snow, exception)"""
     
-    def success(self, *args, cls: str = "", style: str = ""): 
+    def success(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display success alert"""
-        self.alert(*args, variant="success", icon="check-circle", cls=cls, style=style)
+        self.alert(*args, variant="success", icon=icon or "check-circle", cls=cls, style=style)
     
-    def warning(self, *args, cls: str = "", style: str = ""): 
+    def warning(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display warning alert"""
-        self.alert(*args, variant="warning", icon="exclamation-triangle", cls=cls, style=style)
+        self.alert(*args, variant="warning", icon=icon or "exclamation-triangle", cls=cls, style=style)
     
-    def error(self, *args, cls: str = "", style: str = ""): 
+    def error(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display error alert"""
-        self.alert(*args, variant="danger", icon="x-circle", cls=cls, style=style)
+        self.alert(*args, variant="danger", icon=icon or "x-circle", cls=cls, style=style)
     
-    def info(self, *args, cls: str = "", style: str = ""): 
+    def info(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display info alert"""
-        self.alert(*args, variant="primary", icon="info-circle", cls=cls, style=style)
+        self.alert(*args, variant="primary", icon=icon or "info-circle", cls=cls, style=style)
     
     def alert(self, *args, variant="primary", icon=None, cls: str = "", style: str = ""):
         """Display alert message.

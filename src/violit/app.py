@@ -25,11 +25,11 @@ import os
 import subprocess
 from pathlib import Path
 
-from .context import session_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, initial_render_ctx
+from .context import session_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
-from .state import State, get_session_store
+from .state import State, get_session_store, STATIC_STORE
 from .broadcast import Broadcaster
 from .background import BackgroundTask
 import asyncio
@@ -463,14 +463,52 @@ class App(
         store = get_session_store()
         parent_ctx = rendering_ctx.get()
         
+        # [PHANTOM WIDGET FIX] 
+        # If we are in a WebSocket action (sid is NOT None) AND NOT currently 
+        # re-running a block/page (rendering_ctx is empty), we should 
+        # check if this component already exists to prevent duplication.
+        sid = session_ctx.get()
+        is_action = action_ctx.get(False)
+        
+        # Try to find an existing CID for this prefix and current count 
+        # to see if it's already in the builder registry.
+        is_reactive_parent = parent_ctx and any(parent_ctx.startswith(p) for p in ('if_', 'for_', 'reactivity_', 'page_renderer'))
+        temp_cid = f"{parent_ctx}_{prefix}_{store['component_count']}" if is_reactive_parent else f"{prefix}_{store['component_count']}"
+        
+        # In an action (e.g. on_click), if we are NOT in a render context,
+        # we check for an existing component to prevent duplication.
+        if is_action and rendering_ctx.get() is None:
+            # We are in an action. If the component already exists, 
+            # return its ID without incrementing count.
+            if temp_cid in store['builders'] or temp_cid in self.static_builders:
+                return temp_cid
+            
+            # [SIDELINE REDIRECTION]
+            # When an action creates a widget (e.g. app.success() in an event handler),
+            # it technically should NOT have a matching stable ID if it wasn't rendered
+            # during the standard build. To keep the UI stable, we append a suffix
+            # that marks it as an "orphaned/action-spawned" widget.
+            # This allows it to increment the counter locally for that action session
+            # without colliding with the next render's static IDs.
+            cid = f"action_{prefix}_{store['component_count']}"
+            store['component_count'] += 1
+            return cid
+
         # Check if we're inside a reactive block that needs namespacing
-        if parent_ctx and any(parent_ctx.startswith(p) for p in ('if_', 'for_', 'reactivity_')):
+        if is_reactive_parent:
             # Namespace the ID under the reactive block
             cid = f"{parent_ctx}_{prefix}_{store['component_count']}"
         else:
             cid = f"{prefix}_{store['component_count']}"
         
-        store['component_count'] += 1
+        # [REACTIVE DRAG FIX]
+        # Only increment count if we are NOT in an action.
+        # This keeps IDs stable during rapid value changes (like dragging a slider).
+        # We do NOT increment here even if rendering_ctx is active, because 
+        # sub-renders (If/For) should rely on their own internal ID management
+        # or reuse existing IDs from the store.
+        if not is_action:
+            store['component_count'] += 1
         return cid
 
     def _register_component(self, cid: str, builder: Callable, action: Optional[Callable] = None):
@@ -530,10 +568,39 @@ class App(
                 # Dynamic Root Registration
                 if action: store['actions'][cid] = action
                 
-                if l_ctx == "sidebar":
-                    store['sidebar_order'].append(cid)
+                # [PHANTOM WIDGET FIX]
+                # If we are inside a WebSocket action (sid is NOT None) but NOT in a render context,
+                # we should NOT append to store['order']. This prevents widgets created
+                # in event handlers from appearing at the bottom of the page.
+                # BUT: during initial page load, sid is NOT None (it's set by middleware),
+                # but rendering_ctx is None. We MUST allow registration during initial load.
+                from .context import initial_render_ctx
+                is_initial = initial_render_ctx.get(False)
+                
+                # Check if it's already in the order to prevent duplicates during partial updates
+                current_order = store['sidebar_order'] if l_ctx == "sidebar" else store['order']
+                is_action = action_ctx.get(False)
+                
+                if rendering_ctx.get() is None and is_action:
+                    # Not in render context and in an action -> this is an orphaned widget 
+                    # created in an action (e.g. app.success() in on_click).
+                    # We should mark it as forced dirty so _get_dirty_rendered() picks it up,
+                    # but we do NOT append it to the session order, which prevents it 
+                    # from appearing at the bottom of the page in future renders.
+                    if 'forced_dirty' not in store: store['forced_dirty'] = set()
+                    store['forced_dirty'].add(cid)
+                    
+                    # [DUPLICATE PREVENTION] Ensure it is NOT in any order
+                    if cid in current_order:
+                        current_order.remove(cid)
+                elif cid in current_order:
+                    # Already registered in this session's root order
+                    pass
                 else:
-                    store['order'].append(cid)
+                    if l_ctx == "sidebar":
+                        store['sidebar_order'].append(cid)
+                    else:
+                        store['order'].append(cid)
 
     def simple_card(self, content_fn: Union[Callable, str, State]):
         """Display content in a simple card
@@ -655,8 +722,16 @@ class App(
                 store = get_session_store()
                 store['fragment_components'][fid] = []
                 
+                # [ID SYNC FIX] Reset component_count for this specific sub-render
+                # This ensures widgets created inside a builder get the SAME IDs as before.
+                prev_count = store['component_count']
+
                 # Execute the user's function
-                func()
+                try:
+                    func()
+                finally:
+                    # Restore global count after sub-render
+                    store['component_count'] = prev_count
                 
                 # Render children
                 htmls = []
@@ -753,6 +828,12 @@ class App(
         def if_builder():
             # Set rendering context for dependency tracking
             token = rendering_ctx.set(cid)
+            store = get_session_store()
+            
+            # [ID SYNC FIX] Reset component_count for this specific sub-render
+            # This ensures widgets created inside a builder get the SAME IDs as before.
+            prev_count = store['component_count']
+
             try:
                 # Evaluate condition dynamically
                 current_cond = condition
@@ -763,7 +844,6 @@ class App(
                 
                 if current_cond:
                     if actual_then:
-                        store = get_session_store()
                         prev_order = store['order'].copy()
                         store['order'] = []
                         
@@ -780,7 +860,6 @@ class App(
                         return Component("div", id=cid, content=content, class_="if-block if-then")
                 else:
                     if actual_else:
-                        store = get_session_store()
                         prev_order = store['order'].copy()
                         store['order'] = []
                         
@@ -798,6 +877,8 @@ class App(
                 
                 return Component("div", id=cid, content="", class_="if-block if-empty")
             finally:
+                # Restore global count after sub-render
+                store['component_count'] = prev_count
                 rendering_ctx.reset(token)
         
         self._register_component(cid, if_builder)
@@ -828,9 +909,13 @@ class App(
         
         def for_builder():
             token = rendering_ctx.set(cid)
+            store = get_session_store()
+            
+            # [ID SYNC FIX] Reset component_count for this specific sub-render
+            # This ensures widgets created inside a builder get the SAME IDs as before.
+            prev_count = store['component_count']
+
             try:
-                store = get_session_store()
-                
                 # Evaluate items dynamically
                 current_items = items
                 if hasattr(items, 'value'): # State object
@@ -889,6 +974,8 @@ class App(
                 
                 return Component("div", id=cid, content="", class_="for-block")
             finally:
+                # Restore global count after sub-render
+                store['component_count'] = prev_count
                 rendering_ctx.reset(token)
         
         self._register_component(cid, for_builder)
@@ -953,6 +1040,16 @@ class App(
                 # 1. Dependencies that are no longer read get removed.
                 # 2. The upcoming builder() call re-registers only current deps.
                 tracker.unregister_component(cid)
+                
+                # [FIX PHANTOM WIDGETS] Use a token to ensure widgets created 
+                # inside a DIRTY re-render are correctly registered.
+                # This ensures they are kids of the dirty component, not root level phantoms.
+                token = rendering_ctx.set(cid)
+                
+                # [ID SYNC FIX] Reset component_count for this specific sub-render
+                # This ensures widgets created inside a builder get the SAME IDs as before.
+                prev_count = store['component_count']
+                
                 try:
                     res.append(builder())
                 except Exception as e:
@@ -968,6 +1065,10 @@ class App(
                             f'⚠ Render error in <code>{cid}</code>: {e}</span>'
                         )
                     ))
+                finally:
+                    rendering_ctx.reset(token)
+                    # Restore global count after sub-render
+                    store['component_count'] = prev_count
             else:
                 # Component is permanently gone (e.g. navigation page switch,
                 # If-block condition flip).  Clean it from the tracker so it
@@ -1367,6 +1468,13 @@ class App(
                             # Clear previous dynamic order for this page render
                             previous_order = store['order'].copy()
                             previous_fragments = {k: v.copy() for k, v in store['fragment_components'].items()}
+                            
+                            # [ID NAVIGATION SYNC]
+                            # When switching pages or re-rendering a page, we must 
+                            # ensure the component_count starts AFTER the static layout 
+                            # (sidebar/top nav) to keep IDs stable for interactive widgets.
+                            store['component_count'] = STATIC_STORE.get('component_count', 0)
+                            
                             store['order'] = []
                             store['fragment_components'] = {}  # Clear fragments to prevent duplicates
                             
@@ -1489,6 +1597,17 @@ class App(
 
         @self.fastapi.get("/")
         async def index(request: Request):
+            # [RESET SESSION STATE] 
+            # When the user refreshes the page via GET /, we clear their session builders/order
+            # to prevent duplicate registrations and "Phantom Widgets" from previous runs.
+            # This is essential for maintaining a clean page on every reload.
+            store = get_session_store()
+            store['builders'] = {}
+            store['order'] = []
+            store['sidebar_order'] = []
+            store['fragment_components'] = {}
+            store['component_count'] = STATIC_STORE.get('component_count', 0)
+            
             # Note: _theme_state, _selection_state, _animation_state and their updaters
             # are already initialized in __init__, no need to re-initialize here
             
@@ -1544,7 +1663,8 @@ class App(
         var _libs = {
             'Plotly':  'https://cdn.plot.ly/plotly-2.27.0.min.js',
             'agGrid':  'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js',
-            'hljs':    'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js'
+            'hljs':    'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js',
+            'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js'
         };
         var _q = {};  // callback queues per lib
         var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
@@ -1612,7 +1732,8 @@ class App(
         var _libs = {
             'Plotly':  '/static/vendor/plotly/plotly-2.27.0.min.js',
             'agGrid':  '/static/vendor/ag-grid/ag-grid-community.min.js',
-            'hljs':    '/static/vendor/highlightjs/highlight.min.js'
+            'hljs':    '/static/vendor/highlightjs/highlight.min.js',
+            'katex':   '/static/vendor/katex/katex.min.js'
         };
         var _q = {};  // callback queues per lib
         var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
@@ -1715,7 +1836,13 @@ class App(
                     return HTMLResponse("")
                 
                 store['eval_queue'] = []
-                act(v) if v is not None else act()
+                
+                # [PHANTOM WIDGET FIX] Mark current context as action
+                act_token = action_ctx.set(True)
+                try:
+                    act(v) if v is not None else act()
+                finally:
+                    action_ctx.reset(act_token)
                 
                 dirty = self._get_dirty_rendered()
                 
@@ -1796,6 +1923,9 @@ class App(
             # Session ID: get from cookie (all tabs share same session)
             sid = ws.cookies.get("ss_sid") or str(uuid.uuid4())
             
+            # [WS SYNC] Ensure store exists for this session
+            store = get_session_store()
+            
             self.debug_print(f"[WEBSOCKET] Session: {sid[:8]}...")
 
             # Capture uvicorn's event loop once — used by background tasks
@@ -1811,85 +1941,97 @@ class App(
             # Message processing function
             async def process_message(data):
                 msg_type = data.get('type')
-                
-                # ── Interval tick handler ──────────────────────────
-                if msg_type == 'tick':
-                    interval_id = data.get('id')
-                    info = self._interval_callbacks.get(interval_id)
-                    if info and info['state'] == 'running':
-                        condition = info.get('condition')
-                        if condition is None or condition():
-                            store = get_session_store()
-                            store['eval_queue'] = []
-                            info['callback']()
-                            for code in store.get('eval_queue', []):
-                                await self.ws_engine.push_eval(sid, code)
-                            store['eval_queue'] = []
-                            dirty = self._get_dirty_rendered()
-                            if dirty:
-                                await self.ws_engine.push_updates(sid, dirty)
-                    return
-                # ── End interval tick handler ──────────────────────
-                
-                if msg_type != 'click':
+                if msg_type != 'click' and msg_type != 'tick':
                     return
                 
-                # Debug WebSocket data
-                self.debug_print(f"[WEBSOCKET ACTION] CID: {data.get('id')}")
-                self.debug_print(f"  Native mode: {self.native_token is not None}")
-                self.debug_print(f"  CSRF enabled: {self.csrf_enabled}")
-                self.debug_print(f"  Native token in payload: {data.get('_native_token')[:20] if data.get('_native_token') else None}...")
-                
-                # Native mode verification (high priority)
-                if self.native_token is not None:
-                    native_token = data.get('_native_token')
-                    if native_token != self.native_token:
-                        self.debug_print(f"  [X] Native token mismatch!")
-                        await ws.send_json({"type": "error", "message": "Invalid native token"})
+                # [WS CONTEXT FIX]
+                # Ensure session context is active for the current WebSocket message.
+                msg_token = session_ctx.set(sid)
+                try:
+                    # ── Interval tick handler ──────────────────────────
+                    if msg_type == 'tick':
+                        interval_id = data.get('id')
+                        info = self._interval_callbacks.get(interval_id)
+                        if info and info['state'] == 'running':
+                            condition = info.get('condition')
+                            if condition is None or condition():
+                                store = get_session_store()
+                                store['eval_queue'] = []
+                                info['callback']()
+                                for code in store.get('eval_queue', []):
+                                    await self.ws_engine.push_eval(sid, code)
+                                store['eval_queue'] = []
+                                dirty = self._get_dirty_rendered()
+                                if dirty:
+                                    await self.ws_engine.push_updates(sid, dirty)
                         return
-                    else:
-                        self.debug_print(f"  [OK] Native token valid - Skipping CSRF check")
-                else:
-                    # CSRF verification for WebSocket (non-native only)
-                    if self.csrf_enabled:
-                        csrf_token = data.get('_csrf_token')
-                        if not csrf_token or not self._verify_csrf_token(sid, csrf_token):
-                            self.debug_print(f"  [X] CSRF token invalid")
-                            await ws.send_json({"type": "error", "message": "Invalid CSRF token"})
+                    # ── End interval tick handler ──────────────────────
+
+                    # Debug WebSocket data
+                    self.debug_print(f"[WEBSOCKET ACTION] CID: {data.get('id')}")
+                    self.debug_print(f"  Native mode: {self.native_token is not None}")
+                    self.debug_print(f"  CSRF enabled: {self.csrf_enabled}")
+                    self.debug_print(f"  Native token in payload: {data.get('_native_token')[:20] if data.get('_native_token') else None}...")
+                    
+                    # Native mode verification (high priority)
+                    if self.native_token is not None:
+                        native_token = data.get('_native_token')
+                        if native_token != self.native_token:
+                            self.debug_print(f"  [X] Native token mismatch!")
+                            await ws.send_json({"type": "error", "message": "Invalid native token"})
                             return
                         else:
-                            self.debug_print(f"  [OK] CSRF token valid")
-                
-                cid, v = data.get('id'), data.get('value')
-                store = get_session_store()
-                act = store['actions'].get(cid) or self.static_actions.get(cid)
-                
-                self.debug_print(f"  Action found: {act is not None}")
-                
-                # Detect if this is a navigation action (nav menu click)
-                is_navigation = cid.startswith('nav_menu')
-                
-                if act:
-                    store['eval_queue'] = []
-                    self.debug_print(f"  Executing action for CID: {cid} (navigation={is_navigation})...")
-                    act(v) if v is not None else act()
-                    self.debug_print(f"  Action executed")
-                    
-                    for code in store.get('eval_queue', []):
-                        await self.ws_engine.push_eval(sid, code)
-                    store['eval_queue'] = []
-                    
-                    dirty = self._get_dirty_rendered()
-                    self.debug_print(f"  Dirty components: {len(dirty)} ({[c.id for c in dirty]})")
-                    
-                    # Send all dirty components via WebSocket
-                    # Pass is_navigation flag to enable/disable smooth transitions
-                    if dirty:
-                        self.debug_print(f"  Sending {len(dirty)} updates via WebSocket (navigation={is_navigation})...")
-                        await self.ws_engine.push_updates(sid, dirty, is_navigation=is_navigation)
-                        self.debug_print(f"  [OK] Updates sent successfully")
+                            self.debug_print(f"  [OK] Native token valid - Skipping CSRF check")
                     else:
-                        self.debug_print(f"  [!] No dirty components found - nothing to update")
+                        # CSRF verification for WebSocket (non-native only)
+                        if self.csrf_enabled:
+                            csrf_token = data.get('_csrf_token')
+                            if not csrf_token or not self._verify_csrf_token(sid, csrf_token):
+                                self.debug_print(f"  [X] CSRF token invalid")
+                                await ws.send_json({"type": "error", "message": "Invalid CSRF token"})
+                                return
+                            else:
+                                self.debug_print(f"  [OK] CSRF token valid")
+                    
+                    cid, v = data.get('id'), data.get('value')
+                    store = get_session_store()
+                    act = store['actions'].get(cid) or self.static_actions.get(cid)
+                    
+                    self.debug_print(f"  Action found: {act is not None}")
+                    
+                    # Detect if this is a navigation action (nav menu click)
+                    is_navigation = cid.startswith('nav_menu')
+                    
+                    if act:
+                        store['eval_queue'] = []
+                        self.debug_print(f"  Executing action for CID: {cid} (navigation={is_navigation})...")
+                        
+                        # [PHANTOM WIDGET FIX] Mark current context as action
+                        act_token = action_ctx.set(True)
+                        try:
+                            act(v) if v is not None else act()
+                        finally:
+                            action_ctx.reset(act_token)
+                        
+                        self.debug_print(f"  Action executed")
+                        
+                        for code in store.get('eval_queue', []):
+                            await self.ws_engine.push_eval(sid, code)
+                        store['eval_queue'] = []
+                        
+                        dirty = self._get_dirty_rendered()
+                        self.debug_print(f"  Dirty components: {len(dirty)} ({[c.id for c in dirty]})")
+                        
+                        # Send all dirty components via WebSocket
+                        # Pass is_navigation flag to enable/disable smooth transitions
+                        if dirty:
+                            self.debug_print(f"  Sending {len(dirty)} updates via WebSocket (navigation={is_navigation})...")
+                            await self.ws_engine.push_updates(sid, dirty, is_navigation=is_navigation)
+                            self.debug_print(f"  [OK] Updates sent successfully")
+                        else:
+                            self.debug_print(f"  [!] No dirty components found - nothing to update")
+                finally:
+                    session_ctx.reset(msg_token)
             
             try:
                 # Message processing loop
@@ -2910,7 +3052,7 @@ HTML_TEMPLATE = """
                                  if (isSelfOrChild || isShadowChild) {
                                      // Check if it's actually an input that needs protection
                                      const tag = document.activeElement.tagName.toLowerCase();
-                                     const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('sl-input') || tag.startsWith('sl-textarea');
+                                     const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('sl-input') || tag.startsWith('sl-textarea') || tag.startsWith('sl-range');
                                      
                                      // If it's an input, block update. If it's a button (nav menu), ALLOW update.
                                      if (isInput) {
@@ -3011,6 +3153,11 @@ HTML_TEMPLATE = """
                                         script.remove();
                                     });
                                 }
+                            } else {
+                                // If the element does not exist, it might be a new element that belongs inside a re-rendered parent container.
+                                // It will automatically be created when its parent container replaces its innerHTML.
+                                // We shouldn't blindly append it to the document body or .vl-content, which causes phantom widgets.
+                                debugLog("[WebSocket] Element not found for update, skipping appending to end: " + item.id);
                             }
                         });
                     };
@@ -3172,12 +3319,12 @@ HTML_TEMPLATE = """
                 const b = document.createElement('div');
                 b.className = 'balloon';
                 b.textContent = emojis[Math.floor(Math.random() * emojis.length)];
-                b.style.left = Math.random() * 100 + 'vw';
-                const startY = 10;
+                b.style.left = (Math.random() * 100) + 'vw';
+                const startY = 100 + Math.random() * 20; // Start at 100vh-120vh (bottom)
                 b.style.setProperty('--start-y', startY + 'vh');
-                const duration = 3 + Math.random() * 3;
+                const duration = 4 + Math.random() * 3;
                 b.style.setProperty('--duration', duration + 's');
-                b.style.animationDelay = Math.random() * 0.2 + 's';
+                b.style.animationDelay = (Math.random() * 0.5) + 's';
                 document.body.appendChild(b);
                 setTimeout(() => b.remove(), (duration + 1) * 1000);
             }
