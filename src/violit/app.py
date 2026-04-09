@@ -1259,20 +1259,27 @@ class App(
         # Inject minimal JS to create the client-side interval.
         # _vlCreateInterval is defined in the HTML template's script block.
         autostart_js = 'true' if autostart else 'false'
-        self.html(f"""
-        <script>
-        (function() {{
-            function _init() {{
-                if (typeof window._vlCreateInterval === 'function') {{
-                    window._vlCreateInterval('{interval_id}', {ms}, {autostart_js});
-                }} else {{
-                    setTimeout(_init, 100);
-                }}
-            }}
-            _init();
-        }})();
-        </script>
-        """)
+        js_code = (
+            f"(function(){{"
+            f"function _init(){{"
+            f"if(typeof window._vlCreateInterval==='function'){{"
+            f"window._vlCreateInterval('{interval_id}',{ms},{autostart_js});"
+            f"}}else{{setTimeout(_init,100);}}}}"
+            f"_init();}})();"
+        )
+
+        # [FIX] When called inside a button click handler (action_ctx=True),
+        # self.html() creates a new DOM element that doesn't exist on the client,
+        # so the script is silently dropped. Instead, use eval_queue to send
+        # the JS directly to the client as an 'eval' message.
+        if action_ctx.get(False):
+            store = get_session_store()
+            if store is not None:
+                if 'eval_queue' not in store:
+                    store['eval_queue'] = []
+                store['eval_queue'].append(js_code)
+        else:
+            self.html(f"<script>{js_code}</script>")
 
         return IntervalHandle(interval_id, self)
 
