@@ -1458,7 +1458,11 @@ class App(
                 cid = self.app._get_next_cid("page_renderer")
                 
                 def page_builder():
-                    # Set context ONLY for reading navigation state
+                    # Set context ONLY for reading navigation state.
+                    # When page_builder is called from _get_dirty_rendered(), the outer render
+                    # path may already have rendering_ctx=cid. In non-reactive mode we must
+                    # still execute the page body with rendering_ctx cleared, otherwise child
+                    # widgets get namespaced as page_renderer_X_btn_Y after navigation.
                     token = rendering_ctx.set(cid)
                     
                      # Store Current Page Renderer CID for Reactivity Blocks
@@ -1489,14 +1493,15 @@ class App(
                                 # Start executing page function
                                 # If reactivity_mode is False, reset context (default, non-reactive page script)
                                 # If reactivity_mode is True, KEEP context (page script registers dependencies on page_renderer)
+                                page_body_token = None
                                 if not self.reactivity_mode:
-                                    rendering_ctx.reset(token) 
+                                    page_body_token = rendering_ctx.set(None)
                                 
                                 p.entry_point()
                                 
                                 # Re-enable rendering_ctx if it was reset
-                                if not self.reactivity_mode:
-                                    token = rendering_ctx.set(cid)
+                                if not self.reactivity_mode and page_body_token is not None:
+                                    rendering_ctx.reset(page_body_token)
                                 
                                 htmls = []
                                 for page_cid in store['order']:
