@@ -3166,8 +3166,24 @@ HTML_TEMPLATE = """
                             } else {
                                 // If the element does not exist, it might be a new element that belongs inside a re-rendered parent container.
                                 // It will automatically be created when its parent container replaces its innerHTML.
-                                // We shouldn't blindly append it to the document body or .vl-content, which causes phantom widgets.
-                                debugLog("[WebSocket] Element not found for update, skipping appending to end: " + item.id);
+                                // But if we are in Lite mode or handled via generic layout, we might need to append it if it's top-level or absolute (like dialogs)
+                                if (item.id.includes('dialog')) {
+                                    debugLog("[WebSocket] Element not found for dialog, appending to body: " + item.id);
+                                    const container = document.createElement('div');
+                                    container.id = item.id;
+                                    container.innerHTML = item.html;
+                                    document.body.appendChild(container);
+
+                                    // Trigger scripts for the newly appended dialog
+                                    container.querySelectorAll('script').forEach(s => {
+                                        const script = document.createElement('script');
+                                        script.textContent = s.textContent;
+                                        document.body.appendChild(script);
+                                        script.remove();
+                                    });
+                                } else {
+                                    debugLog("[WebSocket] Element not found for update, skipping appending to end: " + item.id);
+                                }
                             }
                         });
                     };
