@@ -34,6 +34,8 @@ from .broadcast import Broadcaster
 from .background import BackgroundTask
 import asyncio
 
+REACTIVE_PARENT_PREFIXES = ('if_', 'for_', 'reactivity_', 'page_renderer')
+
 # Import all widget mixins
 from .widgets import (
     TextWidgetsMixin,
@@ -263,28 +265,48 @@ class App(
         self.show_splash = not bool(os.environ.get("VIOLIT_NOSPLASH", False))
         
         self._splash_html = f"""
-        <div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--sl-bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);">
+        <div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--sl-bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1);">
             <sl-spinner style="font-size: 3rem; --indicator-color: var(--sl-primary); --track-color: var(--sl-border); margin-bottom: 1.25rem;"></sl-spinner>
             <div style="font-size:1.25rem;font-weight:600;color:var(--sl-text);letter-spacing:-0.02em;" class="gradient-text">Loading...</div>
         </div>
         <script>
         (function() {{
             const splash = document.getElementById('splash');
-            let loaded = false;
+            let domReady = document.readyState !== 'loading';
             let wsReady = ("{self.mode}" !== "ws");
+            let hidden = false;
+            let hasServerRenderedContent = false;
+
+            const detectInitialContent = () => {{
+                const app = document.getElementById('app');
+                const sidebar = document.getElementById('sidebar');
+                const appHasContent = !!(app && (app.children.length > 0 || app.textContent.trim().length > 0));
+                const sidebarHasContent = !!(sidebar && sidebar.style.display !== 'none' && (sidebar.children.length > 0 || sidebar.textContent.trim().length > 0));
+                hasServerRenderedContent = appHasContent || sidebarHasContent;
+            }};
             
             const hideSplash = () => {{
-                if (loaded && wsReady && splash) {{
+                if (hidden || !splash) return;
+                if (domReady && (wsReady || hasServerRenderedContent)) {{
+                    hidden = true;
                     splash.style.opacity = '0';
                     splash.style.pointerEvents = 'none';
-                    setTimeout(() => splash.remove(), 600);
+                    setTimeout(() => splash.remove(), 220);
                 }}
             }};
 
-            window.addEventListener('load', () => {{ 
-                loaded = true; 
-                hideSplash(); 
-            }});
+            const markDomReady = () => {{
+                domReady = true;
+                detectInitialContent();
+                requestAnimationFrame(hideSplash);
+            }};
+
+            if (domReady) {{
+                detectInitialContent();
+                requestAnimationFrame(hideSplash);
+            }} else {{
+                document.addEventListener('DOMContentLoaded', markDomReady, {{ once: true }});
+            }}
             
             if ("{self.mode}" === "ws") {{
                 const checkWS = setInterval(() => {{
@@ -296,12 +318,12 @@ class App(
                 }}, 30);
             }}
             
-            // Fail-safe: Maximum 3 seconds
+            // Fail-safe: Maximum 1.5 seconds
             setTimeout(() => {{ 
-                loaded = true; 
+                domReady = true; 
                 wsReady = true; 
                 hideSplash(); 
-            }}, 3000);
+            }}, 1500);
         }})();
         </script>
         """ if self.show_splash else ""
@@ -462,22 +484,22 @@ class App(
         """
         store = get_session_store()
         parent_ctx = rendering_ctx.get()
-        
-        # [PHANTOM WIDGET FIX] 
-        # If we are in a WebSocket action (sid is NOT None) AND NOT currently 
-        # re-running a block/page (rendering_ctx is empty), we should 
-        # check if this component already exists to prevent duplication.
-        sid = session_ctx.get()
+        count = store['component_count']
+        is_reactive_parent = bool(parent_ctx and parent_ctx.startswith(REACTIVE_PARENT_PREFIXES))
         is_action = action_ctx.get(False)
-        
-        # Try to find an existing CID for this prefix and current count 
-        # to see if it's already in the builder registry.
-        is_reactive_parent = parent_ctx and any(parent_ctx.startswith(p) for p in ('if_', 'for_', 'reactivity_', 'page_renderer'))
-        temp_cid = f"{parent_ctx}_{prefix}_{store['component_count']}" if is_reactive_parent else f"{prefix}_{store['component_count']}"
+
+        # Fast path for initial page render: the page is being built from scratch,
+        # so phantom-widget prevention and action-specific ID rules are unnecessary.
+        if initial_render_ctx.get(False) and not is_action:
+            cid = f"{parent_ctx}_{prefix}_{count}" if is_reactive_parent else f"{prefix}_{count}"
+            store['component_count'] = count + 1
+            return cid
+
+        temp_cid = f"{parent_ctx}_{prefix}_{count}" if is_reactive_parent else f"{prefix}_{count}"
         
         # In an action (e.g. on_click), if we are NOT in a render context,
         # we check for an existing component to prevent duplication.
-        if is_action and rendering_ctx.get() is None:
+        if is_action and parent_ctx is None:
             # We are in an action. If the component already exists, 
             # return its ID without incrementing count.
             if temp_cid in store['builders'] or temp_cid in self.static_builders:
@@ -490,16 +512,16 @@ class App(
             # that marks it as an "orphaned/action-spawned" widget.
             # This allows it to increment the counter locally for that action session
             # without colliding with the next render's static IDs.
-            cid = f"action_{prefix}_{store['component_count']}"
-            store['component_count'] += 1
+            cid = f"action_{prefix}_{count}"
+            store['component_count'] = count + 1
             return cid
 
         # Check if we're inside a reactive block that needs namespacing
         if is_reactive_parent:
             # Namespace the ID under the reactive block
-            cid = f"{parent_ctx}_{prefix}_{store['component_count']}"
+            cid = f"{parent_ctx}_{prefix}_{count}"
         else:
-            cid = f"{prefix}_{store['component_count']}"
+            cid = f"{prefix}_{count}"
         
         # [REACTIVE DRAG FIX]
         # Only increment count if we are NOT in an action.
@@ -508,7 +530,7 @@ class App(
         # sub-renders (If/For) should rely on their own internal ID management
         # or reuse existing IDs from the store.
         if not is_action:
-            store['component_count'] += 1
+            store['component_count'] = count + 1
         return cid
 
     def _register_component(self, cid: str, builder: Callable, action: Optional[Callable] = None):
@@ -567,19 +589,15 @@ class App(
             else:
                 # Dynamic Root Registration
                 if action: store['actions'][cid] = action
-                
-                # [PHANTOM WIDGET FIX]
-                # If we are inside a WebSocket action (sid is NOT None) but NOT in a render context,
-                # we should NOT append to store['order']. This prevents widgets created
-                # in event handlers from appearing at the bottom of the page.
-                # BUT: during initial page load, sid is NOT None (it's set by middleware),
-                # but rendering_ctx is None. We MUST allow registration during initial load.
-                from .context import initial_render_ctx
-                is_initial = initial_render_ctx.get(False)
-                
-                # Check if it's already in the order to prevent duplicates during partial updates
                 current_order = store['sidebar_order'] if l_ctx == "sidebar" else store['order']
+                is_initial = initial_render_ctx.get(False)
                 is_action = action_ctx.get(False)
+
+                # Fast path for initial page render: the session order has just been reset,
+                # so duplicate/orphan checks are unnecessary.
+                if is_initial and not is_action:
+                    current_order.append(cid)
+                    return
                 
                 if rendering_ctx.get() is None and is_action:
                     # Not in render context and in an action -> this is an orphaned widget 
@@ -1614,11 +1632,21 @@ class App(
             # to prevent duplicate registrations and "Phantom Widgets" from previous runs.
             # This is essential for maintaining a clean page on every reload.
             store = get_session_store()
-            store['builders'] = {}
-            store['order'] = []
-            store['sidebar_order'] = []
-            store['fragment_components'] = {}
-            store['component_count'] = STATIC_STORE.get('component_count', 0)
+            builders = store.get('builders')
+            if builders:
+                builders.clear()
+            order = store.get('order')
+            if order:
+                order.clear()
+            sidebar_order = store.get('sidebar_order')
+            if sidebar_order:
+                sidebar_order.clear()
+            fragment_components = store.get('fragment_components')
+            if fragment_components:
+                fragment_components.clear()
+            base_component_count = STATIC_STORE.get('component_count', 0)
+            if store.get('component_count') != base_component_count:
+                store['component_count'] = base_component_count
             
             # Note: _theme_state, _selection_state, _animation_state and their updaters
             # are already initialized in __init__, no need to re-initialize here
@@ -1662,7 +1690,8 @@ class App(
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/dark.css" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace-autoloader.js"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet"></noscript>
     <script src="https://cdn.jsdelivr.net/npm/@master/css-runtime@2.0.0-rc.67/dist/global.min.js" defer></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" />
     <style>
@@ -1670,13 +1699,13 @@ class App(
         .violit-code-dark pre code.hljs { background: transparent !important; }
     </style>
     <script>
-    // Lazy library loader with background preload
+        // On-demand library loader used by widgets that need heavy vendor scripts
     (function() {
         var _libs = {
             'Plotly':  'https://cdn.plot.ly/plotly-2.27.0.min.js',
             'agGrid':  'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js',
-            'hljs':    'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js',
-            'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js'
+                'hljs':    'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js',
+                'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js'
         };
         var _q = {};  // callback queues per lib
         var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
@@ -1696,29 +1725,6 @@ class App(
             };
             document.head.appendChild(s);
         };
-        // Background preload: load heavy libs during idle time after first paint
-        var _preload = function() {
-            Object.keys(_libs).forEach(function(name) {
-                if (!_s[name]) {
-                    var link = document.createElement('link');
-                    link.rel = 'preload';
-                    link.as = 'script';
-                    link.href = _libs[name];
-                    document.head.appendChild(link);
-                }
-            });
-            // Actually load after a short delay to not compete with initial render
-            setTimeout(function() {
-                Object.keys(_libs).forEach(function(name) {
-                    if (!_s[name]) window._vlLoadLib(name, function() {});
-                });
-            }, 200);
-        };
-        if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(_preload);
-        } else {
-            window.addEventListener('load', function() { setTimeout(_preload, 100); });
-        }
     })();
     </script>
                 """
@@ -1739,7 +1745,7 @@ class App(
         .violit-code-dark pre code.hljs { background: transparent !important; }
     </style>
     <script>
-    // Lazy library loader with background preload
+    // On-demand library loader used by widgets that need heavy vendor scripts
     (function() {
         var _libs = {
             'Plotly':  '/static/vendor/plotly/plotly-2.27.0.min.js',
@@ -1765,29 +1771,6 @@ class App(
             };
             document.head.appendChild(s);
         };
-        // Background preload: load heavy libs during idle time after first paint
-        var _preload = function() {
-            Object.keys(_libs).forEach(function(name) {
-                if (!_s[name]) {
-                    var link = document.createElement('link');
-                    link.rel = 'preload';
-                    link.as = 'script';
-                    link.href = _libs[name];
-                    document.head.appendChild(link);
-                }
-            });
-            // Actually load after a short delay to not compete with initial render
-            setTimeout(function() {
-                Object.keys(_libs).forEach(function(name) {
-                    if (!_s[name]) window._vlLoadLib(name, function() {});
-                });
-            }, 200);
-        };
-        if (typeof requestIdleCallback !== 'undefined') {
-            requestIdleCallback(_preload);
-        } else {
-            window.addEventListener('load', function() { setTimeout(_preload, 100); });
-        }
     })();
     </script>
     <!-- Fonts: Inter (local vendor woff2) -->
@@ -2517,7 +2500,7 @@ HTML_TEMPLATE = """
              --sl-color-primary-600: color-mix(in srgb, var(--sl-primary), black 10%);
              caret-color: transparent;
         }
-        body { margin: 0; background: var(--sl-bg); color: var(--sl-text); font-family: 'Inter', sans-serif; min-height: 100vh; transition: background 0.3s, color 0.3s; }
+        body { margin: 0; background: var(--sl-bg); color: var(--sl-text); font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; transition: background 0.3s, color 0.3s; }
         
         /* Soft Animation Mode - Only for sidebar; page transitions are applied by JS on navigation only */
         body.anim-soft #sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, opacity 0.3s ease; }
@@ -2770,6 +2753,21 @@ HTML_TEMPLATE = """
         }
     </style>
     %USER_CSS%
+</head>
+<body>
+    %SPLASH%
+    <div id="root">
+        <div id="sidebar" style="%SIDEBAR_STYLE%">
+            %SIDEBAR_CONTENT%
+        </div>
+        <div id="main" class="%MAIN_CLASS%">
+            <div id="header">
+                 <sl-icon-button name="list" style="font-size: 1.5rem; color: var(--sl-text);" onclick="toggleSidebar()"></sl-icon-button>
+            </div>
+            <div id="app">%CONTENT%</div>
+        </div>
+    </div>
+    <div id="toast-injector" style="display:none;"></div>
     <script>
         const mode = "%MODE%";
         
@@ -3446,21 +3444,6 @@ HTML_TEMPLATE = """
             }
         }
     </script>
-</head>
-<body>
-    %SPLASH%
-    <div id="root">
-        <div id="sidebar" style="%SIDEBAR_STYLE%">
-            %SIDEBAR_CONTENT%
-        </div>
-        <div id="main" class="%MAIN_CLASS%">
-            <div id="header">
-                 <sl-icon-button name="list" style="font-size: 1.5rem; color: var(--sl-text);" onclick="toggleSidebar()"></sl-icon-button>
-            </div>
-            <div id="app">%CONTENT%</div>
-        </div>
-    </div>
-    <div id="toast-injector" style="display:none;"></div>
 </body>
 </html>
 """
