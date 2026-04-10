@@ -2,6 +2,8 @@
   <img src="https://github.com/user-attachments/assets/f6a56e37-37a5-437c-ae16-13bff7029797" alt="Violit Logo" width="100%">
 </p>
 
+🎉 **Featured on OpenSourceProjects.dev** : ["Stop Overcomplicating Your Data Dashboards"](https://www.opensourceprojects.dev/post/634ad562-83d4-4a7b-8a74-b61e47ad68aa)
+
 
 # 💜 Violit
 
