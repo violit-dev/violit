@@ -265,15 +265,28 @@ class App(
         self.show_splash = not bool(os.environ.get("VIOLIT_NOSPLASH", False))
         
         self._splash_html = f"""
-        <div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--sl-bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1);">
-            <sl-spinner style="font-size: 3rem; --indicator-color: var(--sl-primary); --track-color: var(--sl-border); margin-bottom: 1.25rem;"></sl-spinner>
-            <div style="font-size:1.25rem;font-weight:600;color:var(--sl-text);letter-spacing:-0.02em;" class="gradient-text">Loading...</div>
+        <style>
+            @keyframes vl-splash-rotate {{
+                to {{ transform: rotate(360deg); }}
+            }}
+        </style>
+        <div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--sl-bg, #ffffff);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1);">
+            <div style="width:3.4rem;height:3.4rem;display:grid;place-items:center;flex:0 0 3.4rem;margin-bottom:0.95rem;">
+                <svg aria-hidden="true" viewBox="0 0 64 64" width="52" height="52" style="display:block;animation:vl-splash-rotate 0.95s linear infinite;overflow:visible;">
+                    <circle cx="32" cy="32" r="22" fill="none" stroke="color-mix(in srgb, var(--sl-primary, #7c3aed), white 84%)" stroke-width="2.5" opacity="0.38"></circle>
+                    <circle cx="32" cy="32" r="22" fill="none" stroke="var(--sl-primary, #7c3aed)" stroke-width="3" stroke-linecap="round" stroke-dasharray="58 80"></circle>
+                </svg>
+            </div>
+            <div style="min-height:1.5rem;line-height:1.5rem;font-size:1.2rem;font-weight:700;color:var(--sl-primary, #7c3aed);letter-spacing:-0.02em;text-align:center;white-space:nowrap;font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">Loading...</div>
         </div>
         <script>
         (function() {{
             const splash = document.getElementById('splash');
+            const splashMountedAt = performance.now();
+            const minVisibleMs = 350;
             let domReady = document.readyState !== 'loading';
             let wsReady = ("{self.mode}" !== "ws");
+            let resourcesReady = false;
             let hidden = false;
             let hasServerRenderedContent = false;
 
@@ -284,15 +297,97 @@ class App(
                 const sidebarHasContent = !!(sidebar && sidebar.style.display !== 'none' && (sidebar.children.length > 0 || sidebar.textContent.trim().length > 0));
                 hasServerRenderedContent = appHasContent || sidebarHasContent;
             }};
+
+            const waitForCriticalStyles = () => new Promise((resolve) => {{
+                const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).filter((link) => !link.disabled);
+                if (!links.length) {{
+                    resolve();
+                    return;
+                }}
+
+                let pending = 0;
+                const markDone = () => {{
+                    pending -= 1;
+                    if (pending <= 0) resolve();
+                }};
+
+                links.forEach((link) => {{
+                    let loaded = false;
+                    try {{
+                        loaded = !!link.sheet;
+                    }} catch (err) {{
+                        loaded = false;
+                    }}
+
+                    if (loaded) return;
+
+                    pending += 1;
+                    const finish = () => {{
+                        link.removeEventListener('load', finish);
+                        link.removeEventListener('error', finish);
+                        markDone();
+                    }};
+
+                    link.addEventListener('load', finish, {{ once: true }});
+                    link.addEventListener('error', finish, {{ once: true }});
+                }});
+
+                if (!pending) resolve();
+            }});
+
+            const waitForShoelaceComponents = () => {{
+                const tags = [...new Set(
+                    Array.from(document.querySelectorAll('*'))
+                        .map((el) => el.tagName.toLowerCase())
+                        .filter((tag) => tag.startsWith('sl-') && !customElements.get(tag))
+                )];
+
+                if (!tags.length) return Promise.resolve();
+                return Promise.all(tags.map((tag) => customElements.whenDefined(tag)));
+            }};
+
+            const markResourcesReady = () => {{
+                Promise.all([waitForCriticalStyles(), waitForShoelaceComponents()]).then(() => {{
+                    resourcesReady = true;
+                    requestAnimationFrame(() => requestAnimationFrame(hideSplash));
+                }});
+            }};
+
+            const revealRoot = () => {{
+                const root = document.getElementById('root');
+                if (!root) return;
+                root.style.visibility = 'visible';
+                requestAnimationFrame(() => {{
+                    root.style.opacity = '1';
+                }});
+            }};
+
+            const unlockViewport = () => {{
+                document.documentElement.classList.remove('vl-splash-active');
+                document.body.classList.remove('vl-splash-active');
+            }};
+
+            const finishSplash = () => {{
+                unlockViewport();
+                if (splash && splash.isConnected) splash.remove();
+            }};
             
             const hideSplash = () => {{
                 if (hidden || !splash) return;
-                if (domReady && (wsReady || hasServerRenderedContent)) {{
-                    hidden = true;
-                    splash.style.opacity = '0';
-                    splash.style.pointerEvents = 'none';
-                    setTimeout(() => splash.remove(), 220);
+                if (!(domReady && resourcesReady && (wsReady || hasServerRenderedContent))) return;
+
+                const elapsed = performance.now() - splashMountedAt;
+                if (elapsed < minVisibleMs) {{
+                    setTimeout(hideSplash, minVisibleMs - elapsed);
+                    return;
                 }}
+
+                hidden = true;
+                revealRoot();
+                splash.style.opacity = '0';
+                splash.style.pointerEvents = 'none';
+                splash.addEventListener('transitionend', finishSplash, {{ once: true }});
+                setTimeout(finishSplash, 420);
             }};
 
             const markDomReady = () => {{
@@ -307,6 +402,7 @@ class App(
             }} else {{
                 document.addEventListener('DOMContentLoaded', markDomReady, {{ once: true }});
             }}
+            markResourcesReady();
             
             if ("{self.mode}" === "ws") {{
                 const checkWS = setInterval(() => {{
@@ -321,9 +417,10 @@ class App(
             // Fail-safe: Maximum 1.5 seconds
             setTimeout(() => {{ 
                 domReady = true; 
+                resourcesReady = true;
                 wsReady = true; 
                 hideSplash(); 
-            }}, 1500);
+            }}, 2500);
         }})();
         </script>
         """ if self.show_splash else ""
@@ -1799,7 +1896,10 @@ class App(
             if self._user_css:
                 user_css = "<style id=\"violit-user-css\">\n" + "\n".join(self._user_css) + "\n</style>"
             
-            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%THEME_CLASS%", t.theme_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css)
+            root_style = "visibility:hidden;opacity:0;transition:opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1);" if self.show_splash else ""
+            html_class = f"{t.theme_class} {'vl-splash-active' if self.show_splash else ''}".strip()
+            body_class = "vl-splash-active" if self.show_splash else ""
+            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%HTML_CLASS%", html_class).replace("%BODY_CLASS%", body_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css).replace("%ROOT_STYLE%", root_style)
             return HTMLResponse(html)
 
         @self.fastapi.post("/action/{cid}")
@@ -2470,9 +2570,9 @@ class App(
             uvicorn.run(self.fastapi, host="0.0.0.0", port=args.port)
 
 
-HTML_TEMPLATE = """
+HTML_TEMPLATE = r"""
 <!DOCTYPE html>
-<html class="%THEME_CLASS%">
+<html class="%HTML_CLASS%">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2500,7 +2600,15 @@ HTML_TEMPLATE = """
              --sl-color-primary-600: color-mix(in srgb, var(--sl-primary), black 10%);
              caret-color: transparent;
         }
-        body { margin: 0; background: var(--sl-bg); color: var(--sl-text); font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; transition: background 0.3s, color 0.3s; }
+        html {
+            overflow-y: scroll;
+            scrollbar-gutter: stable;
+        }
+        html.vl-splash-active, body.vl-splash-active {
+            overflow: hidden !important;
+            overscroll-behavior: none;
+        }
+        body { margin: 0; background: var(--sl-bg); color: var(--sl-text); font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; overflow-x: hidden; transition: background 0.3s, color 0.3s; }
         
         /* Soft Animation Mode - Only for sidebar; page transitions are applied by JS on navigation only */
         body.anim-soft #sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, opacity 0.3s ease; }
@@ -2754,9 +2862,9 @@ HTML_TEMPLATE = """
     </style>
     %USER_CSS%
 </head>
-<body>
+<body class="%BODY_CLASS%">
     %SPLASH%
-    <div id="root">
+    <div id="root" style="%ROOT_STYLE%">
         <div id="sidebar" style="%SIDEBAR_STYLE%">
             %SIDEBAR_CONTENT%
         </div>
