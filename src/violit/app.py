@@ -2706,8 +2706,8 @@ HTML_TEMPLATE = r"""
         .column-item {
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            height: 100%;
+            justify-content: flex-start;
+            min-width: 0;
         }
         .column { flex: 1; display: flex; flex-direction: column; gap: 0.75rem; }
         

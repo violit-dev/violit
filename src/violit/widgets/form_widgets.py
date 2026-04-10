@@ -39,21 +39,17 @@ class FormWidgetsMixin:
             _wd = self._get_widget_defaults("button")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
+            host_style = _fs
+            if use_container_width:
+                host_style = merge_style(host_style, "width:100%;")
             inner = Component("sl-button", id=cid, content=f"{icon_html}{icon_emoji}{bt}",
+                              class_=_fc or None, style=host_style or None,
                               variant=_variant, **attrs, **props)
             # Inject disabled attribute manually since Component may not handle it
             inner_html = inner.render()
             if disabled:
                 inner_html = inner_html.replace(f'id="{cid}"', f'id="{cid}" disabled', 1)
-            # Container width
-            if use_container_width:
-                wrap_style = merge_style("display:flex; justify-content:center;", _fs)
-                inner_html = inner_html.replace(f'id="{cid}"', f'id="{cid}" style="width:100%;"', 1)
-                return Component("div", id=f"{cid}_wrap", content=inner_html, class_=_fc or None, style=wrap_style)
-            if _fc or _fs:
-                wrap_style = merge_style("display:flex; justify-content:center;", _fs)
-                return Component("div", id=f"{cid}_wrap", content=inner_html, class_=_fc or None, style=wrap_style)
-            return Component(None, id=f"{cid}_wrap", content=inner_html)
+            return Component(None, id=cid, content=inner_html)
         self._register_component(cid, builder, action=on_click)
 
     def download_button(self, label, data, file_name, mime="text/plain", on_click=None,
