@@ -185,11 +185,14 @@ class ChartWidgetsMixin:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
+        from matplotlib import font_manager
+        from matplotlib.text import Text
         import io
         import base64
         import sys
 
         # Set Korean font defaults for Matplotlib
+        selected_font = None
         try:
             from matplotlib import rc
             if sys.platform == 'win32':
@@ -203,11 +206,11 @@ class ChartWidgetsMixin:
                 fonts = ['NanumGothic', 'DejaVu Sans']
             
             # Find first available font
-            from matplotlib import font_manager
             available_fonts = [f.name for f in font_manager.fontManager.ttflist]
             for font in fonts:
                 if font in available_fonts:
                     rc('font', family=font)
+                    selected_font = font
                     break
             
             # Fix minus sign display issue
@@ -219,6 +222,14 @@ class ChartWidgetsMixin:
         
         def builder():
             current_fig = fig if fig is not None else plt.gcf()
+
+            if selected_font:
+                try:
+                    font_props = font_manager.FontProperties(family=selected_font)
+                    for text_artist in current_fig.findobj(match=lambda artist: isinstance(artist, Text)):
+                        text_artist.set_fontproperties(font_props)
+                except Exception:
+                    pass
             
             buf = io.BytesIO()
             current_fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
