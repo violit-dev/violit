@@ -2179,6 +2179,81 @@ class App(
                 frame = frame.f_back
         finally:
             del frame
+
+        def _run_subprocess_reload(script_path):
+            """Fallback reloader for apps not exposed as a module-level App variable."""
+            watch_dir = os.path.dirname(os.path.abspath(script_path)) if script_path else os.getcwd()
+            self.debug_print(f"[HOT RELOAD] Falling back to subprocess reload watcher for {watch_dir}")
+            print(f"INFO:     Violit web app running on http://localhost:{args.port} (hot reload)")
+            print(f"INFO:     (listening on all interfaces: 0.0.0.0:{args.port})")
+
+            is_unix = sys.platform != 'win32'
+            popen_kwargs = {}
+            if is_unix:
+                popen_kwargs['start_new_session'] = True
+
+            child = None
+
+            def _terminate_process(proc):
+                try:
+                    if is_unix:
+                        import signal
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    else:
+                        proc.terminate()
+                except (ProcessLookupError, OSError):
+                    pass
+
+            def _kill_process(proc):
+                try:
+                    if is_unix:
+                        import signal
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    else:
+                        proc.kill()
+                except (ProcessLookupError, OSError):
+                    pass
+
+            try:
+                while True:
+                    env = os.environ.copy()
+                    env["VIOLIT_WORKER"] = "1"
+
+                    self.debug_print("[HOT RELOAD] Starting child server process...", flush=True)
+                    child = subprocess.Popen([sys.executable] + sys.argv, env=env, **popen_kwargs)
+                    time.sleep(0.3)
+
+                    watcher = FileWatcher(watch_dir=watch_dir, debug_mode=self.debug_mode)
+                    intentional_restart = False
+
+                    while child.poll() is None:
+                        if watcher.check():
+                            self.debug_print("\n[HOT RELOAD] File change detected. Restarting server...", flush=True)
+                            intentional_restart = True
+                            _terminate_process(child)
+                            try:
+                                child.wait(timeout=2)
+                            except subprocess.TimeoutExpired:
+                                _kill_process(child)
+                                child.wait()
+                            break
+                        time.sleep(0.5)
+
+                    if intentional_restart:
+                        time.sleep(0.3)
+                        continue
+
+                    self.debug_print("[HOT RELOAD] Child server exited. Waiting for file changes...", flush=True)
+                    while not watcher.check():
+                        time.sleep(0.5)
+            except KeyboardInterrupt:
+                if child and child.poll() is None:
+                    _terminate_process(child)
+                    try:
+                        child.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        _kill_process(child)
+                raise
             
         if app_var_name and module_string:
             uvicorn_target = f"{module_string}:{app_var_name}.fastapi"
@@ -2219,9 +2294,9 @@ class App(
                 self.debug_print(f"[HOT RELOAD] Failed to start uvicorn: {e}")
                 sys.exit(1)
         else:
-            self.debug_print("[HOT RELOAD ERROR] Could not dynamically resolve App instance name.")
-            self.debug_print("Make sure your App instance is stored in a global variable in the main module.")
-            sys.exit(1)
+            self.debug_print("[HOT RELOAD] Could not dynamically resolve a module-level App instance.")
+            self.debug_print("[HOT RELOAD] Falling back to subprocess-based reloader.")
+            _run_subprocess_reload(file_path or sys.argv[0])
 
     def _run_native_reload(self, args):
         """Run with hot reload in desktop mode"""
