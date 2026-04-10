@@ -283,7 +283,7 @@ class App(
         (function() {{
             const splash = document.getElementById('splash');
             const splashMountedAt = performance.now();
-            const minVisibleMs = 350;
+            const minVisibleMs = 220;
             let domReady = document.readyState !== 'loading';
             let wsReady = ("{self.mode}" !== "ws");
             let resourcesReady = false;
@@ -299,7 +299,7 @@ class App(
             }};
 
             const waitForCriticalStyles = () => new Promise((resolve) => {{
-                const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).filter((link) => !link.disabled);
+                const links = Array.from(document.querySelectorAll('link[data-vl-critical="true"]')).filter((link) => !link.disabled);
                 if (!links.length) {{
                     resolve();
                     return;
@@ -383,11 +383,11 @@ class App(
                 }}
 
                 hidden = true;
-                revealRoot();
                 splash.style.opacity = '0';
                 splash.style.pointerEvents = 'none';
+                setTimeout(revealRoot, 90);
                 splash.addEventListener('transitionend', finishSplash, {{ once: true }});
-                setTimeout(finishSplash, 420);
+                setTimeout(finishSplash, 460);
             }};
 
             const markDomReady = () => {{
@@ -1781,16 +1781,20 @@ class App(
             debug_script = f'<script>window._debug_mode = {str(self.debug_mode).lower()};</script>'
             
             # Vendor Resources Selection
+            active_theme_name = "dark" if t.mode == "dark" else "light"
+            inactive_theme_name = "light" if active_theme_name == "dark" else "dark"
             if self.use_cdn:
                 vendor_resources = """
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/dark.css" />
+    <link rel="stylesheet" data-vl-critical="true" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/__ACTIVE_THEME__.css" />
+    <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/__INACTIVE_THEME__.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/__INACTIVE_THEME__.css" /></noscript>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace-autoloader.js"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet"></noscript>
     <script src="https://cdn.jsdelivr.net/npm/@master/css-runtime@2.0.0-rc.67/dist/global.min.js" defer></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" />
+    <link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" /></noscript>
     <style>
         .violit-code-light pre code.hljs { background: transparent !important; }
         .violit-code-dark pre code.hljs { background: transparent !important; }
@@ -1824,19 +1828,21 @@ class App(
         };
     })();
     </script>
-                """
+                """.replace("__ACTIVE_THEME__", active_theme_name).replace("__INACTIVE_THEME__", inactive_theme_name)
             else:
                 # Local/Offline Mode
                 # Note: Shoelace autoloader might need full assets for some components.
                 # Basic components should work with the downloaded files.
                 # Added 'defer' to non-critical heavy scripts to unblock rendering (LCP/FCP improvement)
                 vendor_resources = """
-    <link rel="stylesheet" href="/static/vendor/shoelace/themes/light.css" />
-    <link rel="stylesheet" href="/static/vendor/shoelace/themes/dark.css" />
+    <link rel="stylesheet" data-vl-critical="true" href="/static/vendor/shoelace/themes/__ACTIVE_THEME__.css" />
+    <link rel="preload" as="style" href="/static/vendor/shoelace/themes/__INACTIVE_THEME__.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/static/vendor/shoelace/themes/__INACTIVE_THEME__.css" /></noscript>
     <script type="module" src="/static/vendor/shoelace/shoelace-autoloader.js"></script>
     <script src="/static/vendor/htmx/htmx.min.js" defer></script>
     <script src="/static/vendor/master-css/master-css-runtime.js" defer></script>
-    <link rel="stylesheet" href="/static/vendor/highlightjs/atom-one-dark.min.css" />
+    <link rel="preload" as="style" href="/static/vendor/highlightjs/atom-one-dark.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/static/vendor/highlightjs/atom-one-dark.min.css" /></noscript>
     <style>
         .violit-code-light pre code.hljs { background: transparent !important; }
         .violit-code-dark pre code.hljs { background: transparent !important; }
@@ -1889,7 +1895,7 @@ class App(
             unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
         }
     </style>
-                """
+                """.replace("__ACTIVE_THEME__", active_theme_name).replace("__INACTIVE_THEME__", inactive_theme_name)
 
             # Build user CSS from add_css() calls
             user_css = ""
