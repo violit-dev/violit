@@ -166,7 +166,7 @@ class InputWidgetsMixin:
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
 
             # 5. Position labels precisely using relative/absolute positioning
-            # A standard Shoelace slider thumb is typically 15px-16px.
+            # A standard Web Awesome slider thumb is typically 15px-16px.
             # It travels from ~8px from the left to ~8px from the right.
             ticks_html = []
             if max_idx > 0:
@@ -239,7 +239,7 @@ class InputWidgetsMixin:
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
                 listener_script = ""
             else:
-                # WS mode: use addEventListener for Shoelace custom events
+                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
                 listener_script = f'''
                 <script>
@@ -306,7 +306,7 @@ class InputWidgetsMixin:
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" name="value"'
                 listener_script = ""
             else:
-                # WS mode: use addEventListener for Shoelace custom events
+                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
                 listener_script = f'''
                 <script>
@@ -326,7 +326,7 @@ class InputWidgetsMixin:
             escaped_cv = html_lib.escape(str(cv), quote=True)
             disabled_attr = 'disabled' if disabled else ''
             help_attr = f'hint="{html_lib.escape(str(help), quote=True)}"' if help else ''
-            # Horizontal layout via fieldset attribute (Shoelace) + CSS override
+            # Horizontal layout via fieldset attribute (Web Awesome) + CSS override
             horiz_style = ' style="display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;"' if horizontal else ''
             html = f'<wa-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div{horiz_style}>{opts_html}</div></wa-radio-group>{listener_script}'
             
@@ -342,7 +342,7 @@ class InputWidgetsMixin:
     def _select_encode(v):
         """Encode a string for safe use as select option value attribute.
         
-        Shoelace wa-select treats the value attribute as a space-separated
+        Web Awesome wa-select treats the value attribute as a space-separated
         token list (like HTML class). Spaces in values break selection/matching.
         We percent-encode spaces (and %) to produce a single safe token.
         """
@@ -542,7 +542,7 @@ class InputWidgetsMixin:
             _wd = self._get_widget_defaults("multiselect")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            # wa-select: cls/style applied via wrapper since this is a Shoelace component
+            # wa-select: cls/style applied via wrapper since this is a Web Awesome component
             # label escaping handled by Component.render(); opts_html is raw so manually escaped above
             _ms_extra = {}
             if placeholder: _ms_extra['placeholder'] = placeholder
@@ -634,7 +634,7 @@ class InputWidgetsMixin:
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
                 listener_script = ""
             else:
-                # WS mode: use addEventListener for Shoelace custom events
+                # WS mode: use addEventListener for Web Awesome custom events
                 attrs = {}
                 listener_script = f'''
                 <script>
@@ -954,7 +954,7 @@ class InputWidgetsMixin:
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
                 listener_script = ""
             else:
-                # WS mode: use addEventListener for Shoelace custom events
+                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
                 listener_script = f'''
                 <script>
@@ -1161,7 +1161,7 @@ class InputWidgetsMixin:
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="{input_event}" hx-swap="none" name="value"'
                 listener_script = ""
             else:
-                # WS mode: use addEventListener for Shoelace custom events
+                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
                 listener_script = f'''
                 <script>

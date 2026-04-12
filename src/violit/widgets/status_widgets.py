@@ -102,7 +102,7 @@ class StatusWidgetsMixin:
             body: Content text (supports State/ComputedState for reactive updates)
             title: Optional bold title shown above the body
             variant: "tip" | "info" | "warning" | "danger" | "success" | "note"
-            icon: Custom Shoelace icon name (auto-selected by variant if None)
+            icon: Custom Web Awesome icon name (auto-selected by variant if None)
             allow_html: If True, body/title are rendered as raw HTML (like app.html).
                         If False (default), content is escaped for XSS safety.
             cls: Additional CSS classes

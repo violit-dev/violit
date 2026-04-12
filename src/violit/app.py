@@ -546,7 +546,7 @@ class App(
     def add_css(self, css: str):
         """Add custom CSS rules to the page.
         
-        Use this to define custom classes, ::part() selectors for Shoelace,
+        Use this to define custom classes, ::part() selectors for Web Awesome components,
         or any CSS that needs to be globally available.
         
         Args:
