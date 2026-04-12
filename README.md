@@ -19,7 +19,7 @@ Build applications that react at the speed of light with the most elegant syntax
 <img src="https://img.shields.io/badge/Python-3.10+-blue.svg?style=flat-square" alt="Python 3.10+">
 <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="MIT License">
 <img src="https://img.shields.io/badge/Framework-FastAPI-009688.svg?style=flat-square" alt="FastAPI">
-<img src="https://img.shields.io/badge/UI-Shoelace-7C4DFF.svg?style=flat-square" alt="Shoelace">
+<img src="https://img.shields.io/badge/UI-Web%20Awesome-0F766E.svg?style=flat-square" alt="Web Awesome">
 </p>
 
 ---
@@ -289,7 +289,7 @@ For a detailed compatibility list and information on unsupported widgets, please
 ## 🛠️ Tech Stack
 
 *   **Backend**: FastAPI (Async Python)
-*   **Frontend**: Web Components (Shoelace), Plotly.js, AG-Grid
+*   **Frontend**: Web Components (Web Awesome), Plotly.js, AG-Grid
 *   **Protocol**: WebSocket & HTTP/HTMX Hybrid
 *   **State**: Signal-based Reactivity
 
