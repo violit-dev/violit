@@ -12,19 +12,19 @@ class StatusWidgetsMixin:
     
     def success(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display success alert"""
-        self.alert(*args, variant="success", icon=icon or "check-circle", cls=cls, style=style)
+        self.alert(*args, variant="success", icon=icon or "circle-check", cls=cls, style=style)
     
     def warning(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display warning alert"""
-        self.alert(*args, variant="warning", icon=icon or "exclamation-triangle", cls=cls, style=style)
+        self.alert(*args, variant="warning", icon=icon or "triangle-exclamation", cls=cls, style=style)
     
     def error(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display error alert"""
-        self.alert(*args, variant="danger", icon=icon or "x-circle", cls=cls, style=style)
+        self.alert(*args, variant="danger", icon=icon or "circle-xmark", cls=cls, style=style)
     
     def info(self, *args, icon: str = None, cls: str = "", style: str = ""): 
         """Display info alert"""
-        self.alert(*args, variant="primary", icon=icon or "info-circle", cls=cls, style=style)
+        self.alert(*args, variant="primary", icon=icon or "circle-info", cls=cls, style=style)
     
     def alert(self, *args, variant="primary", icon=None, cls: str = "", style: str = ""):
         """Display alert message.
@@ -68,27 +68,27 @@ class StatusWidgetsMixin:
             "title_color": "#92400e", "text_color": "#78350f",
         },
         "info": {
-            "icon": "info-circle",
+            "icon": "circle-info",
             "bg": "#eff6ff", "border": "#bfdbfe", "accent": "#3b82f6",
             "title_color": "#1e40af", "text_color": "#1e3a5f",
         },
         "warning": {
-            "icon": "exclamation-triangle",
+            "icon": "triangle-exclamation",
             "bg": "#fef2f2", "border": "#fecaca", "accent": "#ef4444",
             "title_color": "#991b1b", "text_color": "#7f1d1d",
         },
         "danger": {
-            "icon": "exclamation-octagon",
+            "icon": "octagon-exclamation",
             "bg": "#fef2f2", "border": "#fecaca", "accent": "#dc2626",
             "title_color": "#991b1b", "text_color": "#7f1d1d",
         },
         "success": {
-            "icon": "check-circle",
+            "icon": "circle-check",
             "bg": "#f0fdf4", "border": "#bbf7d0", "accent": "#22c55e",
             "title_color": "#166534", "text_color": "#14532d",
         },
         "note": {
-            "icon": "journal-text",
+            "icon": "note-sticky",
             "bg": "#f8fafc", "border": "#e2e8f0", "accent": "#64748b",
             "title_color": "#334155", "text_color": "#475569",
         },
@@ -186,7 +186,7 @@ class StatusWidgetsMixin:
         """Shortcut for callout(variant='note')"""
         self.callout(body, title=title, variant="note", **kwargs)
 
-    def toast(self, *args, icon="info-circle", variant="primary"):
+    def toast(self, *args, icon="circle-info", variant="primary"):
         """Display toast notification (Signal support via evaluation)"""
         import json
         from ..state import State, ComputedState
@@ -251,7 +251,7 @@ class StatusWidgetsMixin:
             
             html_output = f'''
             <wa-callout variant="danger" appearance="filled-outlined" style="margin-bottom:1rem;">
-                <wa-icon slot="icon" name="exclamation-circle"></wa-icon>
+                <wa-icon slot="icon" name="circle-exclamation"></wa-icon>
                 <strong>{escaped_name}:</strong> {escaped_msg}
                 <pre style="margin-top:0.5rem;padding:0.5rem;background:rgba(0,0,0,0.1);border-radius:0.25rem;overflow-x:auto;font-size:0.85rem;">{escaped_tb}</pre>
             </wa-callout>
@@ -424,7 +424,7 @@ class StatusWidgetsMixin:
                         icon = '<wa-spinner style="font-size:1rem;"></wa-spinner>'
                         border_color = "var(--vl-primary)"
                     elif self.state == "complete":
-                        icon = '<wa-icon name="check-circle" style="color:#10b981;font-size:1rem;"></wa-icon>'
+                        icon = '<wa-icon name="circle-check" style="color:#10b981;font-size:1rem;"></wa-icon>'
                         border_color = "#10b981"
                     elif self.state == "error":
                         icon = '<wa-icon name="circle-xmark" style="color:#ef4444;font-size:1rem;"></wa-icon>'

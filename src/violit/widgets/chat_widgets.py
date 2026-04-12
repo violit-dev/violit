@@ -55,7 +55,7 @@ class ChatWidgetsMixin:
                             avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:20px;">{self.avatar}</div>'
                     else:
                         if self.name == "user":
-                            avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#7C4DFF;color:white;display:flex;align-items:center;justify-content:center;"><wa-icon name="person-fill"></wa-icon></div>'
+                            avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#7C4DFF;color:white;display:flex;align-items:center;justify-content:center;"><wa-icon name="user"></wa-icon></div>'
                             bg_color = "rgba(124, 77, 255, 0.05)"
                         elif self.name == "assistant":
                             avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#FF5252;color:white;display:flex;align-items:center;justify-content:center;"><wa-icon name="robot"></wa-icon></div>'

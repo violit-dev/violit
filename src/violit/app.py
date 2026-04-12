@@ -1802,8 +1802,38 @@ class App(
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/styles/themes/default.css" /></noscript>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js"></script>
     <script type="module">
-        import { setIconPath } from 'https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js';
-        setIconPath('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons');
+        import { getIconLibrary, registerIconLibrary, setDefaultIconFamily } from 'https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js';
+
+        const legacyViolitIconAliases = Object.freeze({
+            'person-fill': 'user',
+            'check-circle': 'circle-check',
+            'x-circle': 'circle-xmark',
+            'info-circle': 'circle-info',
+            'exclamation-triangle': 'triangle-exclamation',
+            'exclamation-circle': 'circle-exclamation',
+            'exclamation-octagon': 'octagon-exclamation',
+            'plus-circle': 'circle-plus',
+            'circle-fill': 'circle',
+            'journal-text': 'note-sticky',
+            'check2': 'check'
+        });
+
+        const defaultLibrary = getIconLibrary('default');
+        if (defaultLibrary) {
+            registerIconLibrary('default', {
+                resolver: (name, family, variant, autoWidth) => {
+                    const normalized = legacyViolitIconAliases[name] || name;
+                    return defaultLibrary.resolver(normalized, family, variant, autoWidth);
+                },
+                mutator: defaultLibrary.mutator,
+                spriteSheet: defaultLibrary.spriteSheet
+            });
+        }
+
+        setDefaultIconFamily('classic');
+        window.__vlNormalizeIconName = function(name) {
+            return legacyViolitIconAliases[name] || name || 'circle-question';
+        };
     </script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -1854,8 +1884,38 @@ class App(
     <noscript><link rel="stylesheet" href="/static/vendor/webawesome/styles/themes/default.css" /></noscript>
     <script type="module" src="/static/vendor/webawesome/webawesome.loader.js"></script>
     <script type="module">
-        import { setIconPath } from '/static/vendor/webawesome/webawesome.loader.js';
-        setIconPath('/static/vendor/bootstrap-icons/icons');
+        import { getIconLibrary, registerIconLibrary, setDefaultIconFamily } from '/static/vendor/webawesome/webawesome.loader.js';
+
+        const legacyViolitIconAliases = Object.freeze({
+            'person-fill': 'user',
+            'check-circle': 'circle-check',
+            'x-circle': 'circle-xmark',
+            'info-circle': 'circle-info',
+            'exclamation-triangle': 'triangle-exclamation',
+            'exclamation-circle': 'circle-exclamation',
+            'exclamation-octagon': 'octagon-exclamation',
+            'plus-circle': 'circle-plus',
+            'circle-fill': 'circle',
+            'journal-text': 'note-sticky',
+            'check2': 'check'
+        });
+
+        const defaultLibrary = getIconLibrary('default');
+        if (defaultLibrary) {
+            registerIconLibrary('default', {
+                resolver: (name, family, variant, autoWidth) => {
+                    const normalized = legacyViolitIconAliases[name] || name;
+                    return defaultLibrary.resolver(normalized, family, variant, autoWidth);
+                },
+                mutator: defaultLibrary.mutator,
+                spriteSheet: defaultLibrary.spriteSheet
+            });
+        }
+
+        setDefaultIconFamily('classic');
+        window.__vlNormalizeIconName = function(name) {
+            return legacyViolitIconAliases[name] || name || 'circle-question';
+        };
     </script>
     <script src="/static/vendor/htmx/htmx.min.js" defer></script>
     <script src="/static/vendor/master-css/master-css-runtime.js" defer></script>
@@ -3544,12 +3604,31 @@ HTML_TEMPLATE = r"""
             }
         });
 
-        function createToast(message, variant = 'primary', icon = 'info-circle') {
+        function createToast(message, variant = 'primary', icon = 'circle-info') {
             const variantColors = { primary: '#0ea5e9', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' };
             const toast = document.createElement('div');
             // Use CSS variables directly so theme changes are reflected automatically
             toast.style.cssText = `position: fixed; top: 20px; right: 20px; z-index: 10000; min-width: 300px; background: var(--wa-color-surface-raised, var(--vl-bg-card)); color: var(--vl-text); border: 1px solid var(--vl-border); border-left: 4px solid ${variantColors[variant]}; border-radius: 4px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); display: flex; align-items: center; gap: 12px; opacity: 0; transform: translateX(400px); transition: all 0.3s;`;
-            toast.innerHTML = `<div style="flex: 1; font-size: 14px;">${message}</div><button onclick="this.parentElement.remove()" style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--vl-text-muted); font-size: 20px;">&times;</button>`;
+            const normalizedIcon = window.__vlNormalizeIconName ? window.__vlNormalizeIconName(icon) : icon;
+            const iconEl = document.createElement('wa-icon');
+            iconEl.setAttribute('name', normalizedIcon || 'circle-info');
+            iconEl.style.fontSize = '1rem';
+            iconEl.style.color = variantColors[variant] || 'var(--vl-text-muted)';
+
+            const messageEl = document.createElement('div');
+            messageEl.style.flex = '1';
+            messageEl.style.fontSize = '14px';
+            messageEl.textContent = message;
+
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.textContent = '\u00D7';
+            closeButton.onclick = function() { toast.remove(); };
+            closeButton.style.cssText = 'background: none; border: none; cursor: pointer; padding: 4px; color: var(--vl-text-muted); font-size: 20px;';
+
+            toast.appendChild(iconEl);
+            toast.appendChild(messageEl);
+            toast.appendChild(closeButton);
             document.body.appendChild(toast);
             requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
             setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(400px)'; setTimeout(() => toast.remove(), 300); }, 3300);

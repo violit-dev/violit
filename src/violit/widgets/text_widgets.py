@@ -539,7 +539,7 @@ class TextWidgetsMixin:
                     navigator.clipboard.writeText(pre.textContent).then(() => {{
                         const icon = btn.querySelector('wa-icon');
                         const span = btn.querySelector('span');
-                        if (icon) icon.setAttribute('name', 'check2');
+                        if (icon) icon.setAttribute('name', 'check');
                         if (span) span.textContent = 'Copied!';
                         setTimeout(() => {{
                             if (icon) icon.setAttribute('name', 'clipboard');

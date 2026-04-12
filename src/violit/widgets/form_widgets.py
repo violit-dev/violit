@@ -30,10 +30,10 @@ class FormWidgetsMixin:
         """Display button
 
         Args:
-            type: Streamlit button type - "primary", "secondary", "tertiary" (maps to Shoelace variant)
+            type: Streamlit button type - "primary", "secondary", "tertiary" (maps to Web Awesome variant)
             disabled: If True, button is grayed out
             use_container_width: If True, button spans the full container width
-            icon: Icon name (Shoelace icon, e.g. "gear", "plus-circle", or emoji)
+            icon: Icon name (Font Awesome/Web Awesome icon, e.g. "gear", "circle-plus", or emoji)
         """
         # Streamlit compat: map type to variant
         _type_map = {"primary": "primary", "secondary": "default", "tertiary": "text"}
@@ -141,7 +141,7 @@ class FormWidgetsMixin:
                             from ..state import get_session_store
                             store = get_session_store()
                             if 'toasts' not in store: store['toasts'] = []
-                            store['toasts'].append({"message": f"Saved to {os.path.basename(save_location)}", "variant": "success", "icon": "check-circle"})
+                            store['toasts'].append({"message": f"Saved to {os.path.basename(save_location)}", "variant": "success", "icon": "circle-check"})
 
                     except Exception as e:
                         print(f"[Native] Save failed: {e}")
@@ -391,7 +391,7 @@ class FormWidgetsMixin:
             elif icon:
                 icon_html = f'{icon} '
             else:
-                icon_html = '<wa-icon slot="start" name="check-circle"></wa-icon>'
+                icon_html = '<wa-icon slot="start" name="circle-check"></wa-icon>'
             disabled_attr = 'disabled' if disabled else ''
             width_attr = 'style="width:100%;"' if use_container_width else ''
             variant, appearance = self._wa_button_theme(type)
@@ -446,12 +446,12 @@ class FormWidgetsMixin:
             
             # Show toast if message provided
             if toast_message:
-                self.toast(toast_message, variant="success", icon="check-circle")
+                self.toast(toast_message, variant="success", icon="circle-check")
             
             return True
             
         except Exception as e:
-            self.toast(f"Failed to save file: {str(e)}", variant="danger", icon="x-circle")
+            self.toast(f"Failed to save file: {str(e)}", variant="danger", icon="circle-xmark")
             return False
     
     def download_file(self, data, file_name, mime="application/octet-stream", toast_message=None):

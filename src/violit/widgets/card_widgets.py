@@ -203,7 +203,7 @@ class CardWidgetsMixin:
         import html
         escaped_content = html.escape(str(content))
         
-        header = '<div><wa-badge variant="danger" attention="pulse"><wa-icon name="circle-fill" style="font-size: 0.5rem;"></wa-icon> LIVE</wa-badge></div>'
+        header = '<div><wa-badge variant="danger" attention="pulse"><wa-icon name="circle" style="font-size: 0.5rem;"></wa-icon> LIVE</wa-badge></div>'
         footer = None
         if timestamp:
             footer = f'<div style="text-align: right; font-size: 0.85rem; color: var(--wa-color-text-quiet, var(--vl-text-muted));"><wa-icon name="clock"></wa-icon> {timestamp}</div>'
@@ -276,7 +276,7 @@ class CardWidgetsMixin:
                 'content_style': 'font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap;',
                 'badge_variant': 'danger',
                 'badge_pulse': True,
-                'badge_icon': 'circle-fill'
+                'badge_icon': 'circle'
             },
             'admin': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
@@ -287,12 +287,12 @@ class CardWidgetsMixin:
             'info': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
                 'badge_variant': 'primary',
-                'badge_icon': 'info-circle'
+                'badge_icon': 'circle-info'
             },
             'warning': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
                 'badge_variant': 'warning',
-                'badge_icon': 'exclamation-triangle'
+                'badge_icon': 'triangle-exclamation'
             },
             'default': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
@@ -402,7 +402,7 @@ class CardWidgetsMixin:
                 'content_style': 'font-size: 1.1rem; line-height: 1.6; white-space: pre-wrap;',
                 'badge_variant': 'danger',
                 'badge_pulse': True,
-                'badge_icon': 'circle-fill'
+                'badge_icon': 'circle'
             },
             'admin': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
@@ -413,12 +413,12 @@ class CardWidgetsMixin:
             'info': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
                 'badge_variant': 'primary',
-                'badge_icon': 'info-circle'
+                'badge_icon': 'circle-info'
             },
             'warning': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
                 'badge_variant': 'warning',
-                'badge_icon': 'exclamation-triangle'
+                'badge_icon': 'triangle-exclamation'
             },
             'default': {
                 'content_style': 'white-space: pre-wrap; line-height: 1.5;',
@@ -486,7 +486,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><wa-badge variant="brand"><wa-icon name="info-circle"></wa-icon> {title}</wa-badge></div>'
+            header = f'<div><wa-badge variant="brand"><wa-icon name="circle-info"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
@@ -508,7 +508,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><wa-badge variant="success"><wa-icon name="check-circle"></wa-icon> {title}</wa-badge></div>'
+            header = f'<div><wa-badge variant="success"><wa-icon name="circle-check"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
@@ -530,7 +530,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><wa-badge variant="warning"><wa-icon name="exclamation-triangle"></wa-icon> {title}</wa-badge></div>'
+            header = f'<div><wa-badge variant="warning"><wa-icon name="triangle-exclamation"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
@@ -552,7 +552,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><wa-badge variant="danger"><wa-icon name="x-circle"></wa-icon> {title}</wa-badge></div>'
+            header = f'<div><wa-badge variant="danger"><wa-icon name="circle-xmark"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',

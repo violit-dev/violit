@@ -187,7 +187,7 @@ class DataWidgetsMixin:
             cols = [{"field": c, "sortable": True, "filter": True, "editable": editable} for c in _cols_list]
             add_row_btn = '' if num_rows == "fixed" else f'''
             <wa-button size="small" appearance="outlined" with-start style="margin-top:0.5rem;" onclick="addDataRow_{cid}()">
-                <wa-icon slot="start" name="plus-circle"></wa-icon>
+                <wa-icon slot="start" name="circle-plus"></wa-icon>
                 Add Row
             </wa-button>
             '''
