@@ -971,21 +971,21 @@ class Theme:
                     box-shadow: none !important;
                 }
                 
-                /* Active (selected page): purple background + white text */
-                #sidebar wa-button[variant="primary"]::part(base) {
+                /* Active state follows the explicit nav selection marker, not a button variant. */
+                #sidebar wa-button[data-nav-active="true"]::part(base) {
                     background: #6D28D9 !important;
                     color: #FFFFFF !important;
                     box-shadow: 0 1px 3px rgba(109, 40, 217, 0.12), 0 1px 2px rgba(109, 40, 217, 0.08) !important;
                 }
                 
-                #sidebar wa-button[variant="primary"]::part(base):hover {
+                #sidebar wa-button[data-nav-active="true"]::part(base):hover {
                     background: #6D28D9 !important;
                     box-shadow: 0 2px 4px -1px rgba(109, 40, 217, 0.2),
                                 0 4px 5px 0 rgba(109, 40, 217, 0.14),
                                 0 1px 10px 0 rgba(109, 40, 217, 0.12) !important;
                 }
                 
-                #sidebar wa-button[variant="primary"]::part(base):active {
+                #sidebar wa-button[data-nav-active="true"]::part(base):active {
                     background: #5B21B6 !important;
                     box-shadow: 0 1px 2px rgba(109, 40, 217, 0.1) !important;
                     transform: scale(0.97);

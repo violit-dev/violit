@@ -394,7 +394,7 @@ class FormWidgetsMixin:
                 icon_html = '<wa-icon slot="start" name="check-circle"></wa-icon>'
             disabled_attr = 'disabled' if disabled else ''
             width_attr = 'style="width:100%;"' if use_container_width else ''
-            variant, appearance = _wa_button_theme(type)
+            variant, appearance = self._wa_button_theme(type)
             html = f'''
             <wa-button type="submit" variant="{variant}" appearance="{appearance}" with-start {disabled_attr} {width_attr} {attrs_str}>
                 {icon_html}
