@@ -1,0 +1,4344 @@
+type BaseProps = {
+  /** Content added between the opening and closing tags of the element */
+  children?: JSX.Element;
+  /** Used for declaratively styling one or more elements using CSS (Cascading Stylesheets) */
+  class?: string;
+  /** Takes an object where the key is the class name(s) and the value is a boolean expression. When true, the class is applied, and when false, it is removed. */
+  classList?: Record<string, boolean | undefined>;
+  /** Specifies the text direction of the element. */
+  dir?: "ltr" | "rtl";
+  /** Contains a space-separated list of the part names of the element that should be exposed on the host element. */
+  exportparts?: string;
+  /** Specifies whether the element should be hidden. */
+  hidden?: boolean | string;
+  /** A unique identifier for the element. */
+  id?: string;
+  /** Sets the HTML or XML markup contained within the element. */
+  innerHTML?: string;
+  /** Specifies the language of the element. */
+  lang?: string;
+  /** Contains a space-separated list of the part names of the element. Part names allows CSS to select and style specific elements in a shadow tree via the ::part pseudo-element. */
+  part?: string;
+  /** Use the ref attribute with a variable to assign a DOM element to the variable once the element is rendered. */
+  ref?: unknown | ((e: unknown) => void);
+  /** Adds a reference for a custom element slot */
+  slot?: string;
+  /** Prop for setting inline styles */
+  style?: JSX.CSSProperties;
+  /** Overrides the default Tab button behavior. Avoid using values other than -1 and 0. */
+  tabIndex?: number;
+  /** Sets the text content of the element */
+  textContent?: string;
+  /** Specifies the tooltip text for the element. */
+  title?: string;
+  /** Passing 'no' excludes the element content from being translated. */
+  translate?: "yes" | "no";
+};
+
+type BaseEvents = {};
+
+type WaIconProps = {
+  /** The name of the icon to draw. Available names depend on the icon library being used. */
+  name?: string | undefined;
+  /** The family of icons to choose from. For Font Awesome Free, valid options include `classic` and `brands`. For
+Font Awesome Pro subscribers, valid options include, `classic`, `sharp`, `duotone`, `sharp-duotone`, and `brands`.
+A valid kit code must be present to show pro icons via CDN. You can set `<html data-fa-kit-code="...">` to provide
+one. */
+  family?: string;
+  /** The name of the icon's variant. For Font Awesome, valid options include `thin`, `light`, `regular`, and `solid` for
+the `classic` and `sharp` families. Some variants require a Font Awesome Pro subscription. Custom icon libraries
+may or may not use this property. */
+  variant?: string;
+  /** Sets the width of the icon to match the cropped SVG viewBox. This operates like the Font `fa-width-auto` class. */
+  "auto-width"?: boolean;
+  /** Swaps the opacity of duotone icons. */
+  "swap-opacity"?: boolean;
+  /** An external URL of an SVG file. Be sure you trust the content you are including, as it will be executed as code and
+can result in XSS attacks. */
+  src?: string | undefined;
+  /** An alternate description to use for assistive devices. If omitted, the icon will be considered presentational and
+ignored by assistive devices. */
+  label?: string;
+  /** The name of a registered custom icon library. */
+  library?: string;
+  /** Sets the rotation degree of the icon */
+  rotate?: number;
+  /** Sets the flip direction of the icon along the 'x' (horizontal), 'y' (vertical), or 'both' axes. */
+  flip?: "x" | "y" | "both" | undefined;
+  /** Sets the animation for the icon */
+  animation?: IconAnimation | undefined;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the icon has loaded. When using `spriteSheet: true` this will not emit. */
+  "on:wa-load"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the icon fails to load due to an error. When using `spriteSheet: true` this will not emit. */
+  "on:wa-error"?: (e: CustomEvent<never>) => void;
+};
+
+type WaCheckboxProps = {
+  /**  */
+  title?: string;
+  /** The name of the checkbox, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** The value of the checkbox, submitted as a name/value pair with form data. */
+  value?: string | null;
+  /** The checkbox's size. */
+  size?: "small" | "medium" | "large";
+  /** Disables the checkbox. */
+  disabled?: boolean;
+  /** Draws the checkbox in an indeterminate state. This is usually applied to checkboxes that represents a "select
+all/none" behavior when associated checkboxes have a mix of checked and unchecked states. */
+  indeterminate?: boolean;
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  checked?: boolean;
+  /** Makes the checkbox a required field. */
+  required?: boolean;
+  /** The checkbox's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:_checked"?: boolean | null;
+  /** Draws the checkbox in a checked state. */
+  "bind:checked"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the checked state changes. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the checkbox loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the checkbox gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the checkbox receives input. */
+  "on:input"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaSpinnerProps = {
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaTreeItemProps = {
+  /** Expands the tree item. */
+  expanded?: boolean;
+  /** Draws the tree item in a selected state. */
+  selected?: boolean;
+  /** Disables the tree item. */
+  disabled?: boolean;
+  /** Enables lazy loading behavior. */
+  lazy?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:indeterminate"?: boolean;
+  /**  */
+  "bind:isLeaf"?: boolean;
+  /**  */
+  "bind:loading"?: boolean;
+  /**  */
+  "bind:selectable"?: boolean;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:childrenSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:itemElement"?: HTMLDivElement;
+  /**  */
+  "bind:childrenContainer"?: HTMLDivElement;
+  /**  */
+  "bind:expandButtonSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the tree item expands. */
+  "on:wa-expand"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the tree item expands and all animations are complete. */
+  "on:wa-after-expand"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the tree item collapses. */
+  "on:wa-collapse"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the tree item collapses and all animations are complete. */
+  "on:wa-after-collapse"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the tree item's lazy state changes. */
+  "on:wa-lazy-change"?: (e: CustomEvent<never>) => void;
+  /** Emitted when a lazy item is selected. Use this event to asynchronously load data and append items to the tree before expanding. After appending new items, remove the `lazy` attribute to remove the loading state and update the tree. */
+  "on:wa-lazy-load"?: (e: CustomEvent<never>) => void;
+};
+
+type WaCarouselItemProps = {
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaButtonProps = {
+  /**  */
+  title?: string;
+  /** The button's theme variant. Defaults to `neutral` if not within another element with a variant. */
+  variant?: "neutral" | "brand" | "success" | "warning" | "danger";
+  /** The button's visual appearance. */
+  appearance?: "accent" | "filled" | "outlined" | "filled-outlined" | "plain";
+  /** The button's size. */
+  size?: "small" | "medium" | "large";
+  /** Draws the button with a caret. Used to indicate that the button triggers a dropdown menu or similar behavior. */
+  "with-caret"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `start` element so the server-rendered markup
+includes the start slot before the component hydrates on the client. */
+  "with-start"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in an `end` element so the server-rendered markup
+includes the end slot before the component hydrates on the client. */
+  "with-end"?: boolean;
+  /** Disables the button. */
+  disabled?: boolean;
+  /** Draws the button in a loading state. */
+  loading?: boolean;
+  /** Draws a pill-style button with rounded edges. */
+  pill?: boolean;
+  /** The type of button. Note that the default value is `button` instead of `submit`, which is opposite of how native
+`<button>` elements behave. When the type is `submit`, the button will submit the surrounding form. */
+  type?: "button" | "submit" | "reset";
+  /** The name of the button, submitted as a name/value pair with form data, but only when this button is the submitter.
+This attribute is ignored when `href` is present. */
+  name?: string | null;
+  /** The value of the button, submitted as a pair with the button's name as part of the form data, but only when this
+button is the submitter. This attribute is ignored when `href` is present. */
+  value?: string;
+  /** When set, the underlying button will be rendered as an `<a>` with this `href` instead of a `<button>`. */
+  href?: string;
+  /** Tells the browser where to open the link. Only used when `href` is present. */
+  target?: "_blank" | "_parent" | "_self" | "_top";
+  /** When using `href`, this attribute will map to the underlying link's `rel` attribute. */
+  rel?: string | undefined;
+  /** Tells the browser to download the linked file as this filename. Only used when `href` is present. */
+  download?: string | undefined;
+  /** Used to override the form owner's `action` attribute. */
+  formaction?: string;
+  /** Used to override the form owner's `enctype` attribute. */
+  formenctype?: "application/x-www-form-urlencoded" | "multipart/form-data" | "text/plain";
+  /** Used to override the form owner's `method` attribute. */
+  formmethod?: "post" | "get";
+  /** Used to override the form owner's `novalidate` attribute. */
+  formnovalidate?: boolean;
+  /** Used to override the form owner's `target` attribute. */
+  formtarget?: "_self" | "_blank" | "_parent" | "_top" | string;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:button"?: HTMLButtonElement | HTMLLinkElement;
+  /**  */
+  "bind:labelSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:invalid"?: boolean;
+  /**  */
+  "bind:isIconButton"?: boolean;
+  /**  */
+  "bind:required"?: boolean;
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the button loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the button gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaAnimatedImageProps = {
+  /** The path to the image to load. */
+  src?: string;
+  /** A description of the image used by assistive devices. */
+  alt?: string;
+  /** Plays the animation. When this attribute is remove, the animation will pause. */
+  play?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:animatedImage"?: HTMLImageElement;
+  /**  */
+  "bind:frozenFrame"?: string;
+  /**  */
+  "bind:isLoaded"?: boolean;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the image loads successfully. */
+  "on:wa-load"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the image fails to load. */
+  "on:wa-error"?: (e: CustomEvent<never>) => void;
+};
+
+type WaAnimationProps = {
+  /** The name of the built-in animation to use. For custom animations, use the `keyframes` prop. */
+  name?: string;
+  /** Plays the animation. When omitted, the animation will be paused. This attribute will be automatically removed when
+the animation finishes or gets canceled. */
+  play?: boolean;
+  /** The number of milliseconds to delay the start of the animation. */
+  delay?: number;
+  /** Determines the direction of playback as well as the behavior when reaching the end of an iteration.
+[Learn more](https://developer.mozilla.org/en-US/docs/Web/CSS/animation-direction) */
+  direction?: PlaybackDirection;
+  /** The number of milliseconds each iteration of the animation takes to complete. */
+  duration?: number;
+  /** The easing function to use for the animation. This can be a Web Awesome easing function or a custom easing function
+such as `cubic-bezier(0, 1, .76, 1.14)`. */
+  easing?: string;
+  /** The number of milliseconds to delay after the active period of an animation sequence. */
+  "end-delay"?: number;
+  /** Sets how the animation applies styles to its target before and after its execution. */
+  fill?: FillMode;
+  /** The number of iterations to run before the animation completes. Defaults to `Infinity`, which loops. */
+  iterations?: number;
+  /** The offset at which to start the animation, usually between 0 (start) and 1 (end). */
+  "iteration-start"?: number;
+  /** Sets the animation's playback rate. The default is `1`, which plays the animation at a normal speed. Setting this
+to `2`, for example, will double the animation's speed. A negative value can be used to reverse the animation. This
+value can be changed without causing the animation to restart. */
+  "playback-rate"?: number;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: Promise<HTMLSlotElement>;
+  /** The keyframes to use for the animation. If this is set, `name` will be ignored. */
+  "bind:keyframes"?: Keyframe[] | undefined;
+  /** Gets and sets the current animation time. */
+  "bind:currentTime"?: CSSNumberish;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the animation is canceled. */
+  "on:wa-cancel"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the animation finishes. */
+  "on:wa-finish"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the animation starts or restarts. */
+  "on:wa-start"?: (e: CustomEvent<never>) => void;
+};
+
+type WaAvatarProps = {
+  /** The image source to use for the avatar. */
+  image?: string;
+  /** A label to use to describe the avatar to assistive devices. */
+  label?: string;
+  /** Initials to use as a fallback when no image is available (1-2 characters max recommended). */
+  initials?: string;
+  /** Indicates how the browser should load the image. */
+  loading?: "eager" | "lazy";
+  /** The shape of the avatar. */
+  shape?: "circle" | "square" | "rounded";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** The image could not be loaded. This may because of an invalid URL, a temporary network condition, or some unknown cause. */
+  "on:wa-error"?: (e: CustomEvent<never>) => void;
+};
+
+type WaBadgeProps = {
+  /** The badge's theme variant. Defaults to `brand` if not within another element with a variant. */
+  variant?: "brand" | "neutral" | "success" | "warning" | "danger";
+  /** The badge's visual appearance. */
+  appearance?: "accent" | "filled" | "outlined" | "filled-outlined";
+  /** Draws a pill-style badge with rounded edges. */
+  pill?: boolean;
+  /** Adds an animation to draw attention to the badge. */
+  attention?: "none" | "pulse" | "bounce";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaBreadcrumbItemProps = {
+  /** Optional URL to direct the user to when the breadcrumb item is activated. When set, a link will be rendered
+internally. When unset, a button will be rendered instead. */
+  href?: string | undefined;
+  /** Tells the browser where to open the link. Only used when `href` is set. */
+  target?: "_blank" | "_parent" | "_self" | "_top" | undefined;
+  /** The `rel` attribute to use on the link. Only used when `href` is set. */
+  rel?: string;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaBreadcrumbProps = {
+  /** The label to use for the breadcrumb control. This will not be shown on the screen, but it will be announced by
+screen readers and other assistive devices to provide more context for users. */
+  label?: string;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:separatorSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaButtonGroupProps = {
+  /** A label to use for the button group. This won't be displayed on the screen, but it will be announced by assistive
+devices when interacting with the control and is strongly recommended. */
+  label?: string;
+  /** The button group's orientation. */
+  orientation?: "horizontal" | "vertical";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:disableRole"?: boolean;
+  /**  */
+  "bind:hasOutlined"?: boolean;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaCalloutProps = {
+  /** The callout's theme variant. Defaults to `brand` if not within another element with a variant. */
+  variant?: "brand" | "neutral" | "success" | "warning" | "danger";
+  /** The callout's visual appearance. */
+  appearance?: "accent" | "filled" | "outlined" | "plain" | "filled-outlined";
+  /** The callout's size. */
+  size?: "small" | "medium" | "large";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaCardProps = {
+  /** The card's visual appearance. */
+  appearance?: "accent" | "filled" | "outlined" | "filled-outlined" | "plain";
+  /** Only required for SSR. Set to `true` if you're slotting in a `header` element so the server-rendered markup
+includes the header before the component hydrates on the client. */
+  "with-header"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `media` element so the server-rendered markup
+includes the media before the component hydrates on the client. */
+  "with-media"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `footer` element so the server-rendered markup
+includes the footer before the component hydrates on the client. */
+  "with-footer"?: boolean;
+  /** Renders the card's orientation * */
+  orientation?: "horizontal" | "vertical";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaCarouselProps = {
+  /** When set, allows the user to navigate the carousel in the same direction indefinitely. */
+  loop?: boolean;
+  /**  */
+  slides?: number;
+  /**  */
+  currentSlide?: number;
+  /** When set, show the carousel's navigation. */
+  navigation?: boolean;
+  /** When set, show the carousel's pagination indicators. */
+  pagination?: boolean;
+  /** When set, the slides will scroll automatically when the user is not interacting with them. */
+  autoplay?: boolean;
+  /** Specifies the amount of time, in milliseconds, between each automatic scroll. */
+  "autoplay-interval"?: number;
+  /** Specifies how many slides should be shown at a given time. */
+  "slides-per-page"?: number;
+  /** Specifies the number of slides the carousel will advance when scrolling, useful when specifying a `slides-per-page`
+greater than one. It can't be higher than `slides-per-page`. */
+  "slides-per-move"?: number;
+  /** Specifies the orientation in which the carousel will lay out. */
+  orientation?: "horizontal" | "vertical";
+  /** When set, it is possible to scroll through the slides by dragging them with the mouse. */
+  "mouse-dragging"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:scrollContainer"?: HTMLElement;
+  /**  */
+  "bind:paginationContainer"?: HTMLElement;
+  /**  */
+  "bind:activeSlide"?: number;
+  /**  */
+  "bind:scrolling"?: boolean;
+  /**  */
+  "bind:dragging"?: boolean;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the active slide changes. */
+  "on:wa-slide-change"?: (e: CustomEvent<{ index: number; slide: WaCarouselItem }>) => void;
+};
+
+type WaInputProps = {
+  /**  */
+  title?: string;
+  /** The type of input. Works the same as a native `<input>` element, but only a subset of types are supported. Defaults
+to `text`. */
+  type?: "date" | "datetime-local" | "email" | "number" | "password" | "search" | "tel" | "text" | "time" | "url";
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  value?: string | null;
+  /** The input's size. */
+  size?: "small" | "medium" | "large";
+  /** The input's visual appearance. */
+  appearance?: "filled" | "outlined" | "filled-outlined";
+  /** Draws a pill-style input with rounded edges. */
+  pill?: boolean;
+  /** The input's label. If you need to display HTML, use the `label` slot instead. */
+  label?: string;
+  /** The input's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /** Adds a clear button when the input is not empty. */
+  "with-clear"?: boolean;
+  /** Placeholder text to show as a hint when the input is empty. */
+  placeholder?: string;
+  /** Makes the input readonly. */
+  readonly?: boolean;
+  /** Adds a button to toggle the password's visibility. Only applies to password types. */
+  "password-toggle"?: boolean;
+  /** Determines whether or not the password is currently visible. Only applies to password input types. */
+  "password-visible"?: boolean;
+  /** Hides the browser's built-in increment/decrement spin buttons for number inputs. */
+  "without-spin-buttons"?: boolean;
+  /** Makes the input a required field. */
+  required?: boolean;
+  /** A regular expression pattern to validate input against. */
+  pattern?: string;
+  /** The minimum length of input that will be considered valid. */
+  minlength?: number;
+  /** The maximum length of input that will be considered valid. */
+  maxlength?: number;
+  /** The input's minimum value. Only applies to date and number input types. */
+  min?: number | string;
+  /** The input's maximum value. Only applies to date and number input types. */
+  max?: number | string;
+  /** Specifies the granularity that the value must adhere to, or the special value `any` which means no stepping is
+implied, allowing any numeric value. Only applies to date and number input types. */
+  step?: number | "any";
+  /** Controls whether and how text input is automatically capitalized as it is entered by the user. */
+  autocapitalize?: "off" | "none" | "on" | "sentences" | "words" | "characters";
+  /** Indicates whether the browser's autocorrect feature is on or off. When set as an attribute, use `"off"` or `"on"`.
+When set as a property, use `true` or `false`. */
+  autocorrect?: boolean;
+  /** Specifies what permission the browser has to provide assistance in filling out form field values. Refer to
+[this page on MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/autocomplete) for available values. */
+  autocomplete?: string;
+  /** Indicates that the input should receive focus on page load. */
+  autofocus?: boolean;
+  /** Used to customize the label or icon of the Enter key on virtual keyboards. */
+  enterkeyhint?: "enter" | "done" | "go" | "next" | "previous" | "search" | "send";
+  /** Enables spell checking on the input. */
+  spellcheck?: boolean;
+  /** Tells the browser what type of data will be entered by the user, allowing it to display the appropriate virtual
+keyboard on supportive devices. */
+  inputmode?: "none" | "text" | "decimal" | "numeric" | "tel" | "search" | "email" | "url";
+  /** Only required for SSR. Set to `true` if you're slotting in a `label` element so the server-rendered markup
+includes the label before the component hydrates on the client. */
+  "with-label"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /** The name of the input, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** Disables the form control. */
+  disabled?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /** The current value of the input, submitted as a name/value pair with form data. */
+  "bind:value"?: string;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the control receives input. */
+  "on:input"?: (e: CustomEvent<InputEvent>) => void;
+  /** Emitted when an alteration to the control's value is committed by the user. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the control loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the clear button is activated. */
+  "on:wa-clear"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaPopupProps = {
+  /** The element the popup will be anchored to. If the anchor lives outside of the popup, you can provide the anchor
+element `id`, a DOM element reference, or a `VirtualElement`. If the anchor lives inside the popup, use the
+`anchor` slot instead. */
+  anchor?: Element | string | VirtualElement;
+  /** Activates the positioning logic and shows the popup. When this attribute is removed, the positioning logic is torn
+down and the popup will be hidden. */
+  active?: boolean;
+  /** The preferred placement of the popup. Note that the actual placement will vary as configured to keep the
+panel inside of the viewport. */
+  placement?:
+    | "top"
+    | "top-start"
+    | "top-end"
+    | "bottom"
+    | "bottom-start"
+    | "bottom-end"
+    | "right"
+    | "right-start"
+    | "right-end"
+    | "left"
+    | "left-start"
+    | "left-end";
+  /** The bounding box to use for flipping, shifting, and auto-sizing. */
+  boundary?: "viewport" | "scroll";
+  /** The distance in pixels from which to offset the panel away from its anchor. */
+  distance?: number;
+  /** The distance in pixels from which to offset the panel along its anchor. */
+  skidding?: number;
+  /** Attaches an arrow to the popup. The arrow's size and color can be customized using the `--arrow-size` and
+`--arrow-color` custom properties. For additional customizations, you can also target the arrow using
+`::part(arrow)` in your stylesheet. */
+  arrow?: boolean;
+  /** The placement of the arrow. The default is `anchor`, which will align the arrow as close to the center of the
+anchor as possible, considering available space and `arrow-padding`. A value of `start`, `end`, or `center` will
+align the arrow to the start, end, or center of the popover instead. */
+  "arrow-placement"?: "start" | "end" | "center" | "anchor";
+  /** The amount of padding between the arrow and the edges of the popup. If the popup has a border-radius, for example,
+this will prevent it from overflowing the corners. */
+  "arrow-padding"?: number;
+  /** When set, placement of the popup will flip to the opposite site to keep it in view. You can use
+`flipFallbackPlacements` to further configure how the fallback placement is determined. */
+  flip?: boolean;
+  /** If the preferred placement doesn't fit, popup will be tested in these fallback placements until one fits. Must be a
+string of any number of placements separated by a space, e.g. "top bottom left". If no placement fits, the flip
+fallback strategy will be used instead. */
+  "flip-fallback-placements"?: string;
+  /** When neither the preferred placement nor the fallback placements fit, this value will be used to determine whether
+the popup should be positioned using the best available fit based on available space or as it was initially
+preferred. */
+  "flip-fallback-strategy"?: "best-fit" | "initial";
+  /** The flip boundary describes clipping element(s) that overflow will be checked relative to when flipping. By
+default, the boundary includes overflow ancestors that will cause the element to be clipped. If needed, you can
+change the boundary by passing a reference to one or more elements to this property. */
+  flipBoundary?: Element | Element[];
+  /** The amount of padding, in pixels, to exceed before the flip behavior will occur. */
+  "flip-padding"?: number;
+  /** Moves the popup along the axis to keep it in view when clipped. */
+  shift?: boolean;
+  /** The shift boundary describes clipping element(s) that overflow will be checked relative to when shifting. By
+default, the boundary includes overflow ancestors that will cause the element to be clipped. If needed, you can
+change the boundary by passing a reference to one or more elements to this property. */
+  shiftBoundary?: Element | Element[];
+  /** The amount of padding, in pixels, to exceed before the shift behavior will occur. */
+  "shift-padding"?: number;
+  /** When set, this will cause the popup to automatically resize itself to prevent it from overflowing. */
+  "auto-size"?: "horizontal" | "vertical" | "both";
+  /** Syncs the popup's width or height to that of the anchor element. */
+  sync?: "width" | "height" | "both";
+  /** The auto-size boundary describes clipping element(s) that overflow will be checked relative to when resizing. By
+default, the boundary includes overflow ancestors that will cause the element to be clipped. If needed, you can
+change the boundary by passing a reference to one or more elements to this property. */
+  autoSizeBoundary?: Element | Element[];
+  /** The amount of padding, in pixels, to exceed before the auto-size behavior will occur. */
+  "auto-size-padding"?: number;
+  /** When a gap exists between the anchor and the popup element, this option will add a "hover bridge" that fills the
+gap using an invisible element. This makes listening for events such as `mouseenter` and `mouseleave` more sane
+because the pointer never technically leaves the element. The hover bridge will only be drawn when the popover is
+active. */
+  "hover-bridge"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /** A reference to the internal popup container. Useful for animating and styling the popup with JavaScript. */
+  "bind:popup"?: HTMLElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the popup is repositioned. This event can fire a lot, so avoid putting expensive operations in your listener or consider debouncing it. */
+  "on:wa-reposition"?: (e: CustomEvent<never>) => void;
+};
+
+type WaColorPickerProps = {
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  value?: string | null;
+  /** Only required for SSR. Set to `true` if you're slotting in a `label` element so the server-rendered markup
+includes the label before the component hydrates on the client. */
+  "with-label"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /** The color picker's label. This will not be displayed, but it will be announced by assistive devices. If you need to
+display HTML, you can use the `label` slot` instead. */
+  label?: string;
+  /** The color picker's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /** The format to use. If opacity is enabled, these will translate to HEXA, RGBA, HSLA, and HSVA respectively. The color
+picker will accept user input in any format (including CSS color names) and convert it to the desired format. */
+  format?: "hex" | "rgb" | "hsl" | "hsv";
+  /** Determines the size of the color picker's trigger */
+  size?: "small" | "medium" | "large";
+  /** The preferred placement of the color picker's popup. Note that the actual placement will vary as configured to
+keep the panel inside of the viewport. */
+  placement?:
+    | "top"
+    | "top-start"
+    | "top-end"
+    | "bottom"
+    | "bottom-start"
+    | "bottom-end"
+    | "right"
+    | "right-start"
+    | "right-end"
+    | "left"
+    | "left-start"
+    | "left-end";
+  /** Removes the button that lets users toggle between format. */
+  "without-format-toggle"?: boolean;
+  /** The name of the form control, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** Disables the color picker. */
+  disabled?: boolean;
+  /** Indicates whether or not the popup is open. You can toggle this attribute to show and hide the popup, or you
+can use the `show()` and `hide()` methods and this attribute will reflect the popup's open state. */
+  open?: boolean;
+  /** Shows the opacity slider. Enabling this will cause the formatted value to be HEXA, RGBA, or HSLA. */
+  opacity?: boolean;
+  /** By default, values are lowercase. With this attribute, values will be uppercase instead. */
+  uppercase?: boolean;
+  /** One or more predefined color swatches to display as presets in the color picker. Can include any format the color
+picker can parse, including HEX(A), RGB(A), HSL(A), HSV(A), and CSS color names. Each color must be separated by a
+semicolon (`;`). Alternatively, you can pass an array of color values or an array of `{ color, label }` objects to
+this property using JavaScript. When using objects with labels, the label will be used for the swatch's accessible
+name instead of the raw color value. */
+  swatches?: string | string[] | WaColorPickerSwatch[];
+  /** Makes the color picker a required field. */
+  required?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:base"?: HTMLElement;
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:triggerLabel"?: HTMLElement;
+  /**  */
+  "bind:triggerButton"?: HTMLButtonElement;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:popup"?: WaPopup;
+  /**  */
+  "bind:previewButton"?: HTMLButtonElement;
+  /**  */
+  "bind:trigger"?: HTMLButtonElement;
+  /** The current value of the color picker. The value's format will vary based the `format` attribute. To get the value
+in a specific format, use the `getFormattedValue()` method. The value is submitted as a name/value pair with form
+data. */
+  "bind:value"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the color picker's value changes. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the color picker receives input. */
+  "on:input"?: (e: CustomEvent<InputEvent>) => void;
+  /**  */
+  "on:wa-show"?: (e: CustomEvent<CustomEvent>) => void;
+  /**  */
+  "on:wa-after-show"?: (e: CustomEvent<CustomEvent>) => void;
+  /**  */
+  "on:wa-hide"?: (e: CustomEvent<CustomEvent>) => void;
+  /**  */
+  "on:wa-after-hide"?: (e: CustomEvent<CustomEvent>) => void;
+  /** Emitted when the color picker loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the color picker receives focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaComparisonProps = {
+  /** The position of the divider as a percentage. */
+  position?: number;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:handle"?: HTMLElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the position changes. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+};
+
+type WaTooltipProps = {
+  /** The preferred placement of the tooltip. Note that the actual placement may vary as needed to keep the tooltip
+inside of the viewport. */
+  placement?:
+    | "top"
+    | "top-start"
+    | "top-end"
+    | "right"
+    | "right-start"
+    | "right-end"
+    | "bottom"
+    | "bottom-start"
+    | "bottom-end"
+    | "left"
+    | "left-start"
+    | "left-end";
+  /** Disables the tooltip so it won't show when triggered. */
+  disabled?: boolean;
+  /** The distance in pixels from which to offset the tooltip away from its target. */
+  distance?: number;
+  /** Indicates whether or not the tooltip is open. You can use this in lieu of the show/hide methods. */
+  open?: boolean;
+  /** The distance in pixels from which to offset the tooltip along its target. */
+  skidding?: number;
+  /** The amount of time to wait before showing the tooltip when the user mouses in. */
+  "show-delay"?: number;
+  /** The amount of time to wait before hiding the tooltip when the user mouses out. */
+  "hide-delay"?: number;
+  /** Controls how the tooltip is activated. Possible options include `click`, `hover`, `focus`, and `manual`. Multiple
+options can be passed by separating them with a space. When manual is used, the tooltip must be activated
+programmatically. */
+  trigger?: string;
+  /** Removes the arrow from the tooltip. */
+  "without-arrow"?: boolean;
+  /**  */
+  for?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:body"?: HTMLElement;
+  /**  */
+  "bind:popup"?: WaPopup;
+  /**  */
+  "bind:anchor"?: null | Element;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the tooltip begins to show. */
+  "on:wa-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the tooltip has shown and all animations are complete. */
+  "on:wa-after-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the tooltip begins to hide. */
+  "on:wa-hide"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the tooltip has hidden and all animations are complete. */
+  "on:wa-after-hide"?: (e: CustomEvent<never>) => void;
+};
+
+type WaCopyButtonProps = {
+  /** The text value to copy. */
+  value?: string;
+  /** An id that references an element in the same document from which data will be copied. If both this and `value` are
+present, this value will take precedence. By default, the target element's `textContent` will be copied. To copy an
+attribute, append the attribute name wrapped in square brackets, e.g. `from="el[value]"`. To copy a property,
+append a dot and the property name, e.g. `from="el.value"`. */
+  from?: string;
+  /** Disables the copy button. */
+  disabled?: boolean;
+  /** A custom label to show in the tooltip. */
+  "copy-label"?: string;
+  /** A custom label to show in the tooltip after copying. */
+  "success-label"?: string;
+  /** A custom label to show in the tooltip when a copy error occurs. */
+  "error-label"?: string;
+  /** The length of time to show feedback before restoring the default trigger. */
+  "feedback-duration"?: number;
+  /** The preferred placement of the tooltip. */
+  "tooltip-placement"?: "top" | "right" | "bottom" | "left";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:copyIcon"?: HTMLSlotElement;
+  /**  */
+  "bind:successIcon"?: HTMLSlotElement;
+  /**  */
+  "bind:errorIcon"?: HTMLSlotElement;
+  /**  */
+  "bind:tooltip"?: WaTooltip;
+  /**  */
+  "bind:isCopying"?: boolean;
+  /**  */
+  "bind:status"?: "rest" | "success" | "error";
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the data has been copied. */
+  "on:wa-copy"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the data could not be copied. */
+  "on:wa-error"?: (e: CustomEvent<never>) => void;
+};
+
+type WaDetailsProps = {
+  /** Indicates whether or not the details is open. You can toggle this attribute to show and hide the details, or you
+can use the `show()` and `hide()` methods and this attribute will reflect the details' open state. */
+  open?: boolean;
+  /** The summary to show in the header. If you need to display HTML, use the `summary` slot instead. */
+  summary?: string;
+  /** Groups related details elements. When one opens, others with the same name will close. */
+  name?: string;
+  /** Disables the details so it can't be toggled. */
+  disabled?: boolean;
+  /** The element's visual appearance. */
+  appearance?: "filled" | "outlined" | "filled-outlined" | "plain";
+  /** The location of the expand/collapse icon. */
+  "icon-placement"?: "start" | "end";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:details"?: HTMLDetailsElement;
+  /**  */
+  "bind:header"?: HTMLElement;
+  /**  */
+  "bind:body"?: HTMLElement;
+  /**  */
+  "bind:expandIconSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:isAnimating"?: boolean;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the details opens. */
+  "on:wa-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the details opens and all animations are complete. */
+  "on:wa-after-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the details closes. */
+  "on:wa-hide"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the details closes and all animations are complete. */
+  "on:wa-after-hide"?: (e: CustomEvent<never>) => void;
+};
+
+type WaDialogProps = {
+  /** Indicates whether or not the dialog is open. Toggle this attribute to show and hide the dialog. */
+  open?: boolean;
+  /** The dialog's label as displayed in the header. You should always include a relevant label, as it is required for
+proper accessibility. If you need to display HTML, use the `label` slot instead. */
+  label?: string;
+  /** Disables the header. This will also remove the default close button. */
+  "without-header"?: boolean;
+  /** When enabled, the dialog will be closed when the user clicks outside of it. */
+  "light-dismiss"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `footer` element so the server-rendered markup
+includes the footer before the component hydrates on the client. */
+  "with-footer"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:dialog"?: HTMLDialogElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the dialog opens. */
+  "on:wa-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the dialog opens and all animations are complete. */
+  "on:wa-after-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the dialog is requested to close. Calling `event.preventDefault()` will prevent the dialog from closing. You can inspect `event.detail.source` to see which element caused the dialog to close. If the source is the dialog element itself, the user has pressed [[Escape]] or the dialog has been closed programmatically. Avoid using this unless closing the dialog will result in destructive behavior such as data loss. */
+  "on:wa-hide"?: (e: CustomEvent<{ source: Element }>) => void;
+  /** Emitted after the dialog closes and all animations are complete. */
+  "on:wa-after-hide"?: (e: CustomEvent<never>) => void;
+};
+
+type WaDividerProps = {
+  /** Sets the divider's orientation. */
+  orientation?: "horizontal" | "vertical";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaDrawerProps = {
+  /** Indicates whether or not the drawer is open. Toggle this attribute to show and hide the drawer. */
+  open?: boolean;
+  /** The drawer's label as displayed in the header. You should always include a relevant label, as it is required for
+proper accessibility. If you need to display HTML, use the `label` slot instead. */
+  label?: string;
+  /** The direction from which the drawer will open. */
+  placement?: "top" | "end" | "bottom" | "start";
+  /** Disables the header. This will also remove the default close button. */
+  "without-header"?: boolean;
+  /** When enabled, the drawer will be closed when the user clicks outside of it. */
+  "light-dismiss"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `footer` element so the server-rendered markup
+includes the footer before the component hydrates on the client. */
+  "with-footer"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:drawer"?: HTMLDialogElement;
+  /** Exposes the internal modal utility that controls focus trapping. To temporarily disable focus trapping and allow third-party modals spawned from an active Shoelace modal, call `modal.activateExternal()` when the third-party modal opens. Upon closing, call `modal.deactivateExternal()` to restore Shoelace's focus trapping. */
+  "bind:modal"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the drawer opens. */
+  "on:wa-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the drawer opens and all animations are complete. */
+  "on:wa-after-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the drawer is requesting to close. Calling `event.preventDefault()` will prevent the drawer from closing. You can inspect `event.detail.source` to see which element caused the drawer to close. If the source is the drawer element itself, the user has pressed [[Escape]] or the drawer has been closed programmatically. Avoid using this unless closing the drawer will result in destructive behavior such as data loss. */
+  "on:wa-hide"?: (e: CustomEvent<{ source: Element }>) => void;
+  /** Emitted after the drawer closes and all animations are complete. */
+  "on:wa-after-hide"?: (e: CustomEvent<never>) => void;
+};
+
+type WaDropdownItemProps = {
+  /** The type of menu item to render. */
+  variant?: "danger" | "default";
+  /** An optional value for the menu item. This is useful for determining which item was selected when listening to the
+dropdown's `wa-select` event. */
+  value?: string;
+  /** Set to `checkbox` to make the item a checkbox. */
+  type?: "normal" | "checkbox";
+  /** Set to true to check the dropdown item. Only valid when `type` is `checkbox`. */
+  checked?: boolean;
+  /** Disables the dropdown item. */
+  disabled?: boolean;
+  /** Whether the submenu is currently open. */
+  submenuOpen?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:submenuElement"?: HTMLDivElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the dropdown item loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the dropdown item gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+};
+
+type WaDropdownProps = {
+  /** Opens or closes the dropdown. */
+  open?: boolean;
+  /** The dropdown's size. */
+  size?: "small" | "medium" | "large";
+  /** The placement of the dropdown menu in reference to the trigger. The menu will shift to a more optimal location if
+the preferred placement doesn't have enough room. */
+  placement?:
+    | "top"
+    | "top-start"
+    | "top-end"
+    | "bottom"
+    | "bottom-start"
+    | "bottom-end"
+    | "right"
+    | "right-start"
+    | "right-end"
+    | "left"
+    | "left-start"
+    | "left-end";
+  /** The distance of the dropdown menu from its trigger. */
+  distance?: number;
+  /** The offset of the dropdown menu along its trigger. */
+  skidding?: number;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the dropdown is about to show. */
+  "on:wa-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the dropdown has been shown. */
+  "on:wa-after-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the dropdown is about to hide. */
+  "on:wa-hide"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the dropdown has been hidden. */
+  "on:wa-after-hide"?: (e: CustomEvent<never>) => void;
+  /** Emitted when an item in the dropdown is selected. */
+  "on:wa-select"?: (e: CustomEvent<never>) => void;
+};
+
+type WaFormatBytesProps = {
+  /** The number to format in bytes. */
+  value?: number;
+  /** The type of unit to display. */
+  unit?: "byte" | "bit";
+  /** Determines how to display the result, e.g. "100 bytes", "100 b", or "100b". */
+  display?: "long" | "short" | "narrow";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaFormatDateProps = {
+  /** The date/time to format. If not set, the current date and time will be used. When passing a string, it's strongly
+recommended to use the ISO 8601 format to ensure timezones are handled correctly. To convert a date to this format
+in JavaScript, use [`date.toISOString()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString). */
+  date?: Date | string;
+  /** The format for displaying the weekday. */
+  weekday?: "narrow" | "short" | "long";
+  /** The format for displaying the era. */
+  era?: "narrow" | "short" | "long";
+  /** The format for displaying the year. */
+  year?: "numeric" | "2-digit";
+  /** The format for displaying the month. */
+  month?: "numeric" | "2-digit" | "narrow" | "short" | "long";
+  /** The format for displaying the day. */
+  day?: "numeric" | "2-digit";
+  /** The format for displaying the hour. */
+  hour?: "numeric" | "2-digit";
+  /** The format for displaying the minute. */
+  minute?: "numeric" | "2-digit";
+  /** The format for displaying the second. */
+  second?: "numeric" | "2-digit";
+  /** The format for displaying the time. */
+  "time-zone-name"?: "short" | "long";
+  /** The time zone to express the time in. */
+  "time-zone"?: string;
+  /** The format for displaying the hour. */
+  "hour-format"?: "auto" | "12" | "24";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaFormatNumberProps = {
+  /** The number to format. */
+  value?: number;
+  /** The formatting style to use. */
+  type?: "currency" | "decimal" | "percent";
+  /** Turns off grouping separators. */
+  "without-grouping"?: boolean;
+  /** The [ISO 4217](https://en.wikipedia.org/wiki/ISO_4217) currency code to use when formatting. */
+  currency?: string;
+  /** How to display the currency. */
+  "currency-display"?: "symbol" | "narrowSymbol" | "code" | "name";
+  /** The minimum number of integer digits to use. Possible values are 1-21. */
+  "minimum-integer-digits"?: number;
+  /** The minimum number of fraction digits to use. Possible values are 0-100. */
+  "minimum-fraction-digits"?: number;
+  /** The maximum number of fraction digits to use. Possible values are 0-100. */
+  "maximum-fraction-digits"?: number;
+  /** The minimum number of significant digits to use. Possible values are 1-21. */
+  "minimum-significant-digits"?: number;
+  /** The maximum number of significant digits to use,. Possible values are 1-21. */
+  "maximum-significant-digits"?: number;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaIncludeProps = {
+  /** The location of the HTML file to include. Be sure you trust the content you are including as it will be executed as
+code and can result in XSS attacks. */
+  src?: string;
+  /** The fetch mode to use. */
+  mode?: "cors" | "no-cors" | "same-origin";
+  /** Allows included scripts to be executed. Be sure you trust the content you are including as it will be executed as
+code and can result in XSS attacks. */
+  "allow-scripts"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the included file is loaded. */
+  "on:wa-load"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the included file fails to load due to an error. */
+  "on:wa-include-error"?: (e: CustomEvent<{ status: number }>) => void;
+};
+
+type WaIntersectionObserverProps = {
+  /** Element ID to define the viewport boundaries for tracked targets. */
+  root?: string | null;
+  /** Offset space around the root boundary. Accepts values like CSS margin syntax. */
+  "root-margin"?: string;
+  /** One or more space-separated values representing visibility percentages that trigger the observer callback. */
+  threshold?: string;
+  /** CSS class applied to elements during intersection. Automatically removed when elements leave
+the viewport, enabling pure CSS styling based on visibility state. */
+  "intersect-class"?: string;
+  /** If enabled, observation ceases after initial intersection. */
+  once?: boolean;
+  /** Deactivates the intersection observer functionality. */
+  disabled?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Fired when a tracked element begins or ceases intersecting. */
+  "on:wa-intersect"?: (e: CustomEvent<{ entry: IntersectionObserverEntry }>) => void;
+};
+
+type WaMutationObserverProps = {
+  /** Watches for changes to attributes. To watch only specific attributes, separate them by a space, e.g.
+`attr="class id title"`. To watch all attributes, use `*`. */
+  attr?: string;
+  /** Indicates whether or not the attribute's previous value should be recorded when monitoring changes. */
+  "attr-old-value"?: boolean;
+  /** Watches for changes to the character data contained within the node. */
+  "char-data"?: boolean;
+  /** Indicates whether or not the previous value of the node's text should be recorded. */
+  "char-data-old-value"?: boolean;
+  /** Watches for the addition or removal of new child nodes. */
+  "child-list"?: boolean;
+  /** Disables the observer. */
+  disabled?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when a mutation occurs. */
+  "on:wa-mutation"?: (e: CustomEvent<{ mutationList: MutationRecord[] }>) => void;
+};
+
+type WaNumberInputProps = {
+  /**  */
+  title?: string;
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  value?: string | null;
+  /** The input's size. */
+  size?: "small" | "medium" | "large";
+  /** The input's visual appearance. */
+  appearance?: "filled" | "outlined" | "filled-outlined";
+  /** Draws a pill-style input with rounded edges. */
+  pill?: boolean;
+  /** The input's label. If you need to display HTML, use the `label` slot instead. */
+  label?: string;
+  /** The input's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /** Placeholder text to show as a hint when the input is empty. */
+  placeholder?: string;
+  /** Makes the input readonly. */
+  readonly?: boolean;
+  /** Makes the input a required field. */
+  required?: boolean;
+  /** The input's minimum value. */
+  min?: number;
+  /** The input's maximum value. */
+  max?: number;
+  /** Specifies the granularity that the value must adhere to, or the special value `any` which means no stepping is
+implied, allowing any numeric value. */
+  step?: number | "any";
+  /** Hides the increment/decrement stepper buttons. */
+  "without-steppers"?: boolean;
+  /** Specifies what permission the browser has to provide assistance in filling out form field values. Refer to
+[this page on MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/autocomplete) for available values. */
+  autocomplete?: string;
+  /** Indicates that the input should receive focus on page load. */
+  autofocus?: boolean;
+  /** Used to customize the label or icon of the Enter key on virtual keyboards. */
+  enterkeyhint?: "enter" | "done" | "go" | "next" | "previous" | "search" | "send";
+  /** Tells the browser what type of data will be entered by the user, allowing it to display the appropriate virtual
+keyboard on supportive devices. */
+  inputmode?: "numeric" | "decimal";
+  /** Only required for SSR. Set to `true` if you're slotting in a `label` element so the server-rendered markup
+includes the label before the component hydrates on the client. */
+  "with-label"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /** The name of the input, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** Disables the form control. */
+  disabled?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /** The current value of the input, submitted as a name/value pair with form data. */
+  "bind:value"?: string;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the control receives input. */
+  "on:input"?: (e: CustomEvent<InputEvent>) => void;
+  /** Emitted when an alteration to the control's value is committed by the user. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the control loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaTagProps = {
+  /** The tag's theme variant. Defaults to `neutral` if not within another element with a variant. */
+  variant?: "brand" | "neutral" | "success" | "warning" | "danger";
+  /** The tag's visual appearance. */
+  appearance?: "accent" | "filled" | "outlined" | "filled-outlined";
+  /** The tag's size. */
+  size?: "small" | "medium" | "large";
+  /** Draws a pill-style tag with rounded edges. */
+  pill?: boolean;
+  /** Makes the tag removable and shows a remove button. */
+  "with-remove"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the remove button is activated. */
+  "on:wa-remove"?: (e: CustomEvent<never>) => void;
+};
+
+type WaOptionProps = {
+  /** The option's value. When selected, the containing form control will receive this value. The value must be unique
+from other options in the same group. Values may not contain spaces, as spaces are used as delimiters when listing
+multiple values. */
+  value?: string;
+  /** Draws the option in a disabled state, preventing selection. */
+  disabled?: boolean;
+  /** Selects an option initially. */
+  selected?: boolean;
+  /** The option’s plain text label.
+Usually automatically generated, but can be useful to provide manually for cases involving complex content. */
+  label?: string;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:current"?: boolean;
+  /**  */
+  "bind:_label"?: string;
+  /** The default label, generated from the element contents. Will be equal to `label` in most cases. */
+  "bind:defaultLabel"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaSelectProps = {
+  /** The name of the select, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** The select's value. This will be a string for single select or an array for multi-select. */
+  value?: string;
+  /** The select's size. */
+  size?: "small" | "medium" | "large";
+  /** Placeholder text to show as a hint when the select is empty. */
+  placeholder?: string;
+  /** Allows more than one option to be selected. */
+  multiple?: boolean;
+  /** The maximum number of selected options to show when `multiple` is true. After the maximum, "+n" will be shown to
+indicate the number of additional items that are selected. Set to 0 to remove the limit. */
+  "max-options-visible"?: number;
+  /** Disables the select control. */
+  disabled?: boolean;
+  /** Adds a clear button when the select is not empty. */
+  "with-clear"?: boolean;
+  /** Indicates whether or not the select is open. You can toggle this attribute to show and hide the menu, or you can
+use the `show()` and `hide()` methods and this attribute will reflect the select's open state. */
+  open?: boolean;
+  /** The select's visual appearance. */
+  appearance?: "filled" | "outlined" | "filled-outlined";
+  /** Draws a pill-style select with rounded edges. */
+  pill?: boolean;
+  /** The select's label. If you need to display HTML, use the `label` slot instead. */
+  label?: string;
+  /** The preferred placement of the select's menu. Note that the actual placement may vary as needed to keep the listbox
+inside of the viewport. */
+  placement?: "top" | "bottom";
+  /** The select's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /** Only required for SSR. Set to `true` if you're slotting in a `label` element so the server-rendered markup
+includes the label before the component hydrates on the client. */
+  "with-label"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /** The select's required attribute. */
+  required?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:popup"?: WaPopup;
+  /**  */
+  "bind:combobox"?: HTMLSlotElement;
+  /**  */
+  "bind:displayInput"?: HTMLInputElement;
+  /**  */
+  "bind:valueInput"?: HTMLInputElement;
+  /**  */
+  "bind:listbox"?: HTMLSlotElement;
+  /** Where to anchor native constraint validation */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:displayLabel"?: string;
+  /**  */
+  "bind:currentOption"?: WaOption;
+  /**  */
+  "bind:selectedOptions"?: WaOption[];
+  /**  */
+  "bind:defaultValue"?: string;
+  /** A function that customizes the tags to be rendered when multiple=true. The first argument is the option, the second
+is the current tag's index.  The function should return either a Lit TemplateResult or a string containing trusted
+HTML of the symbol to render at the specified value. */
+  "bind:getTag"?: (option: WaOption, index: number) => TemplateResult | string | HTMLElement;
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the control receives input. */
+  "on:input"?: (e: CustomEvent<InputEvent>) => void;
+  /** Emitted when the control's value changes. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the control gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control's value is cleared. */
+  "on:wa-clear"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the select's menu opens. */
+  "on:wa-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the select's menu opens and all animations are complete. */
+  "on:wa-after-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the select's menu closes. */
+  "on:wa-hide"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the select's menu closes and all animations are complete. */
+  "on:wa-after-hide"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaPopoverProps = {
+  /** The preferred placement of the popover. Note that the actual placement may vary as needed to keep the popover
+inside of the viewport. */
+  placement?:
+    | "top"
+    | "top-start"
+    | "top-end"
+    | "right"
+    | "right-start"
+    | "right-end"
+    | "bottom"
+    | "bottom-start"
+    | "bottom-end"
+    | "left"
+    | "left-start"
+    | "left-end";
+  /** Shows or hides the popover. */
+  open?: boolean;
+  /** The distance in pixels from which to offset the popover away from its target. */
+  distance?: number;
+  /** The distance in pixels from which to offset the popover along its target. */
+  skidding?: number;
+  /** The ID of the popover's anchor element. This must be an interactive/focusable element such as a button. */
+  for?: string | null;
+  /** Removes the arrow from the popover. */
+  "without-arrow"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:dialog"?: HTMLDialogElement;
+  /**  */
+  "bind:body"?: HTMLElement;
+  /**  */
+  "bind:popup"?: WaPopup;
+  /**  */
+  "bind:anchor"?: null | Element;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the popover begins to show. Canceling this event will stop the popover from showing. */
+  "on:wa-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the popover has shown and all animations are complete. */
+  "on:wa-after-show"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the popover begins to hide. Canceling this event will stop the popover from hiding. */
+  "on:wa-hide"?: (e: CustomEvent<never>) => void;
+  /** Emitted after the popover has hidden and all animations are complete. */
+  "on:wa-after-hide"?: (e: CustomEvent<never>) => void;
+};
+
+type WaProgressBarProps = {
+  /** The current progress as a percentage, 0 to 100. */
+  value?: number;
+  /** When true, percentage is ignored, the label is hidden, and the progress bar is drawn in an indeterminate state. */
+  indeterminate?: boolean;
+  /** A custom label for assistive devices. */
+  label?: string;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaProgressRingProps = {
+  /** The current progress as a percentage, 0 to 100. */
+  value?: number;
+  /** A custom label for assistive devices. */
+  label?: string;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:indicator"?: SVGCircleElement;
+  /**  */
+  "bind:indicatorOffset"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaQrCodeProps = {
+  /** The QR code's value. */
+  value?: string;
+  /** The label for assistive devices to announce. If unspecified, the value will be used instead. */
+  label?: string;
+  /** The size of the QR code, in pixels. */
+  size?: number;
+  /** @deprecated Use the `color` CSS property instead. - The fill color. This can be any valid CSS color, but not a CSS custom property. */
+  fill?: string;
+  /** @deprecated Use the `background` or `background-color` CSS property on the host element instead. - The background color. This can be any valid CSS color or `transparent`. It cannot be a CSS custom property. */
+  background?: string;
+  /** The edge radius of each module. Must be between 0 and 0.5. */
+  radius?: number;
+  /** The level of error correction to use. [Learn more](https://www.qrcode.com/en/about/error_correction.html) */
+  "error-correction"?: "L" | "M" | "Q" | "H";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:canvas"?: HTMLElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaRadioProps = {
+  /** The radio's value. When selected, the radio group will receive this value. */
+  value?: string;
+  /** The radio's visual appearance. */
+  appearance?: "default" | "button";
+  /** The radio's size. When used inside a radio group, the size will be determined by the radio group's size, which will
+override this attribute. */
+  size?: "small" | "medium" | "large";
+  /** Disables the radio. */
+  disabled?: boolean;
+  /** The name of the input, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:checked"?: boolean;
+  /**  */
+  "bind:required"?: boolean;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the control loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+};
+
+type WaRadioGroupProps = {
+  /** The radio group's label. Required for proper accessibility. If you need to display HTML, use the `label` slot
+instead. */
+  label?: string;
+  /** The radio groups's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /** The name of the radio group, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** Disables the radio group and all child radios. */
+  disabled?: boolean;
+  /** The orientation in which to show radio items. */
+  orientation?: "horizontal" | "vertical";
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  value?: string | null;
+  /** The radio group's size. When present, this size will be applied to all `<wa-radio>` items inside. */
+  size?: "small" | "medium" | "large";
+  /** Ensures a child radio is checked before allowing the containing form to submit. */
+  required?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `label` element so the server-rendered markup
+includes the label before the component hydrates on the client. */
+  "with-label"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /** The current value of the radio group, submitted as a name/value pair with form data. */
+  "bind:value"?: string;
+  /** We use the first available radio as the validationTarget similar to native HTML that shows the validation popup on
+the first radio element. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the radio group receives user input. */
+  "on:input"?: (e: CustomEvent<InputEvent>) => void;
+  /** Emitted when the radio group's selected value changes. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaRatingProps = {
+  /** The name of the rating, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** A label that describes the rating to assistive devices. */
+  label?: string;
+  /** The current rating. */
+  value?: number;
+  /** The default value of the form control. Used to reset the rating to its initial value. */
+  "default-value"?: number;
+  /** The highest rating to show. */
+  max?: number;
+  /** The precision at which the rating will increase and decrease. For example, to allow half-star ratings, set this
+attribute to `0.5`. */
+  precision?: number;
+  /** Makes the rating readonly. */
+  readonly?: boolean;
+  /** Disables the rating. */
+  disabled?: boolean;
+  /** Makes the rating a required field. */
+  required?: boolean;
+  /** A function that customizes the symbol to be rendered. The first and only argument is the rating's current value.
+The function should return a string containing trusted HTML of the symbol to render at the specified value. Works
+well with `<wa-icon>` elements. */
+  getSymbol?: (value: number, isSelected: boolean) => string;
+  /** The component's size. */
+  size?: "small" | "medium" | "large";
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the rating's value changes. */
+  "on:change"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the user hovers over a value. The `phase` property indicates when hovering starts, moves to a new value, or ends. The `value` property tells what the rating's value would be if the user were to commit to the hovered value. */
+  "on:wa-hover"?: (e: CustomEvent<{ phase: "start" | "move" | "end"; value: number }>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaRelativeTimeProps = {
+  /** The date from which to calculate time from. If not set, the current date and time will be used. When passing a
+string, it's strongly recommended to use the ISO 8601 format to ensure timezones are handled correctly. To convert
+a date to this format in JavaScript, use [`date.toISOString()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString). */
+  date?: Date | string;
+  /** The formatting style to use. */
+  format?: "long" | "short" | "narrow";
+  /** When `auto`, values such as "yesterday" and "tomorrow" will be shown when possible. When `always`, values such as
+"1 day ago" and "in 1 day" will be shown. */
+  numeric?: "always" | "auto";
+  /** Keep the displayed value up to date as time passes. */
+  sync?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaScrollerProps = {
+  /** The scroller's orientation. */
+  orientation?: "horizontal" | "vertical";
+  /** Removes the visible scrollbar. */
+  "without-scrollbar"?: boolean;
+  /** Removes the shadows. */
+  "without-shadow"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:content"?: HTMLElement;
+  /**  */
+  "bind:canScroll"?: boolean;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaResizeObserverProps = {
+  /** Disables the observer. */
+  disabled?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the element is resized. */
+  "on:wa-resize"?: (e: CustomEvent<{ entries: ResizeObserverEntry[] }>) => void;
+};
+
+type WaSkeletonProps = {
+  /** Determines which effect the skeleton will use. */
+  effect?: "pulse" | "sheen" | "none";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaSliderProps = {
+  /** The slider's label. If you need to provide HTML in the label, use the `label` slot instead. */
+  label?: string;
+  /** The slider hint. If you need to display HTML, use the hint slot instead. */
+  hint?: string;
+  /** The name of the slider. This will be submitted with the form as a name/value pair. */
+  name?: string | null;
+  /** The minimum value of a range selection. Used only when range attribute is set. */
+  "min-value"?: number;
+  /** The maximum value of a range selection. Used only when range attribute is set. */
+  "max-value"?: number;
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  value?: number;
+  /** Converts the slider to a range slider with two thumbs. */
+  range?: boolean;
+  /** Disables the slider. */
+  disabled?: boolean;
+  /** Makes the slider a read-only field. */
+  readonly?: boolean;
+  /** The orientation of the slider. */
+  orientation?: "horizontal" | "vertical";
+  /** The slider's size. */
+  size?: "small" | "medium" | "large";
+  /** The starting value from which to draw the slider's fill, which is based on its current value. */
+  "indicator-offset"?: number;
+  /** The minimum value allowed. */
+  min?: number;
+  /** The maximum value allowed. */
+  max?: number;
+  /** The granularity the value must adhere to when incrementing and decrementing. */
+  step?: number;
+  /** Tells the browser to focus the slider when the page loads or a dialog is shown. */
+  autofocus?: boolean;
+  /** The distance of the tooltip from the slider's thumb. */
+  "tooltip-distance"?: number;
+  /** The placement of the tooltip in reference to the slider's thumb. */
+  "tooltip-placement"?: "top" | "right" | "bottom" | "left";
+  /** Draws markers at each step along the slider. */
+  "with-markers"?: boolean;
+  /** Draws a tooltip above the thumb when the control has focus or is dragged. */
+  "with-tooltip"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `label` element so the server-rendered markup
+includes the label before the component hydrates on the client. */
+  "with-label"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /** Override validation target to point to the focusable element */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:slider"?: HTMLElement;
+  /**  */
+  "bind:thumb"?: HTMLElement;
+  /**  */
+  "bind:thumbMin"?: HTMLElement;
+  /**  */
+  "bind:thumbMax"?: HTMLElement;
+  /**  */
+  "bind:track"?: HTMLElement;
+  /**  */
+  "bind:tooltip"?: WaTooltip;
+  /** The current value of the slider, submitted as a name/value pair with form data. */
+  "bind:value"?: number;
+  /** Get if this is a range slider */
+  "bind:isRange"?: boolean;
+  /** A custom formatting function to apply to the value. This will be shown in the tooltip and announced by screen
+readers. Must be set with JavaScript. Property only. */
+  "bind:valueFormatter"?: (value: number) => string;
+  /**  */
+  "bind:required"?: boolean;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when an alteration to the control's value is committed by the user. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the control loses focus. */
+  "on:blur"?: (e: CustomEvent<FocusEvent>) => void;
+  /** Emitted when the control gains focus. */
+  "on:focus"?: (e: CustomEvent<FocusEvent>) => void;
+  /** Emitted when the control receives input. */
+  "on:input"?: (e: CustomEvent<InputEvent>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaSwitchProps = {
+  /**  */
+  title?: string;
+  /** The name of the switch, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** The value of the switch, submitted as a name/value pair with form data. */
+  value?: string | null;
+  /** The switch's size. */
+  size?: "small" | "medium" | "large";
+  /** Disables the switch. */
+  disabled?: boolean;
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  checked?: boolean;
+  /** Makes the switch a required field. */
+  required?: boolean;
+  /** The switch's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:_checked"?: boolean | null;
+  /** Draws the checkbox in a checked state. */
+  "bind:checked"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the control's checked state changes. */
+  "on:change"?: (e: CustomEvent<Event>) => void;
+  /** Emitted when the control receives input. */
+  "on:input"?: (e: CustomEvent<InputEvent>) => void;
+  /** Emitted when the control loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaTabProps = {
+  /** The name of the tab panel this tab is associated with. The panel must be located in the same tab group. */
+  panel?: string;
+  /** Disables the tab and prevents selection. */
+  disabled?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:tab"?: HTMLElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaSplitPanelProps = {
+  /** The current position of the divider from the primary panel's edge as a percentage 0-100. Defaults to 50% of the
+container's initial size. */
+  position?: number;
+  /** The current position of the divider from the primary panel's edge in pixels. */
+  "position-in-pixels"?: number;
+  /** Sets the split panel's orientation. */
+  orientation?: "horizontal" | "vertical";
+  /** Disables resizing. Note that the position may still change as a result of resizing the host element. */
+  disabled?: boolean;
+  /** If no primary panel is designated, both panels will resize proportionally when the host element is resized. If a
+primary panel is designated, it will maintain its size and the other panel will grow or shrink as needed when the
+host element is resized. */
+  primary?: "start" | "end" | undefined;
+  /** One or more space-separated values at which the divider should snap. Values can be in pixels or percentages, e.g.
+`"100px 50%"`. */
+  snap?: string | undefined;
+  /** How close the divider must be to a snap point until snapping occurs. */
+  "snap-threshold"?: number;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:divider"?: HTMLElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the divider's position changes. */
+  "on:wa-reposition"?: (e: CustomEvent<never>) => void;
+};
+
+type WaTabPanelProps = {
+  /** The tab panel's name. */
+  name?: string;
+  /** When true, the tab panel will be shown. */
+  active?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaTabGroupProps = {
+  /** Sets the active tab. */
+  active?: string;
+  /** The placement of the tabs. */
+  placement?: "top" | "bottom" | "start" | "end";
+  /** When set to auto, navigating tabs with the arrow keys will instantly show the corresponding tab panel. When set to
+manual, the tab will receive focus but will not show until the user presses spacebar or enter. */
+  activation?: "auto" | "manual";
+  /** Disables the scroll arrows that appear when tabs overflow. */
+  "without-scroll-controls"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:tabGroup"?: HTMLElement;
+  /** Default slot for `<wa-tab-panel>` children (inside the `body` part container). */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:nav"?: HTMLElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when a tab is shown. */
+  "on:wa-tab-show"?: (e: CustomEvent<{ name: String }>) => void;
+  /** Emitted when a tab is hidden. */
+  "on:wa-tab-hide"?: (e: CustomEvent<{ name: String }>) => void;
+};
+
+type WaTextareaProps = {
+  /**  */
+  title?: string;
+  /** The name of the textarea, submitted as a name/value pair with form data. */
+  name?: string | null;
+  /** The default value of the form control. Primarily used for resetting the form control. */
+  value?: string;
+  /** The textarea's size. */
+  size?: "small" | "medium" | "large";
+  /** The textarea's visual appearance. */
+  appearance?: "filled" | "outlined" | "filled-outlined";
+  /** The textarea's label. If you need to display HTML, use the `label` slot instead. */
+  label?: string;
+  /** The textarea's hint. If you need to display HTML, use the `hint` slot instead. */
+  hint?: string;
+  /** Placeholder text to show as a hint when the input is empty. */
+  placeholder?: string;
+  /** The number of rows to display by default. */
+  rows?: number;
+  /** Controls how the textarea can be resized. */
+  resize?: "none" | "vertical" | "horizontal" | "both" | "auto";
+  /** Disables the textarea. */
+  disabled?: boolean;
+  /** Makes the textarea readonly. */
+  readonly?: boolean;
+  /** Makes the textarea a required field. */
+  required?: boolean;
+  /** The minimum length of input that will be considered valid. */
+  minlength?: number;
+  /** The maximum length of input that will be considered valid. */
+  maxlength?: number;
+  /** Controls whether and how text input is automatically capitalized as it is entered by the user. */
+  autocapitalize?: "off" | "none" | "on" | "sentences" | "words" | "characters";
+  /** Indicates whether the browser's autocorrect feature is on or off. When set as an attribute, use `"off"` or `"on"`.
+When set as a property, use `true` or `false`. */
+  autocorrect?: boolean;
+  /** Specifies what permission the browser has to provide assistance in filling out form field values. Refer to
+[this page on MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/autocomplete) for available values. */
+  autocomplete?: string;
+  /** Indicates that the input should receive focus on page load. */
+  autofocus?: boolean;
+  /** Used to customize the label or icon of the Enter key on virtual keyboards. */
+  enterkeyhint?: "enter" | "done" | "go" | "next" | "previous" | "search" | "send";
+  /** Enables spell checking on the textarea. */
+  spellcheck?: boolean;
+  /** Tells the browser what type of data will be entered by the user, allowing it to display the appropriate virtual
+keyboard on supportive devices. */
+  inputmode?: "none" | "text" | "decimal" | "numeric" | "tel" | "search" | "email" | "url";
+  /** Only required for SSR. Set to `true` if you're slotting in a `label` element so the server-rendered markup
+includes the label before the component hydrates on the client. */
+  "with-label"?: boolean;
+  /** Only required for SSR. Set to `true` if you're slotting in a `hint` element so the server-rendered markup
+includes the hint before the component hydrates on the client. */
+  "with-hint"?: boolean;
+  /** Shows a character count below the textarea. When `maxlength` is set, shows remaining characters instead. */
+  "with-count"?: boolean;
+  /**  */
+  "custom-error"?: string | null;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:assumeInteractionOn"?: string[];
+  /**  */
+  "bind:input"?: (HTMLElement & { value: unknown }) | HTMLInputElement | HTMLTextAreaElement | undefined;
+  /**  */
+  "bind:base"?: HTMLDivElement;
+  /**  */
+  "bind:sizeAdjuster"?: HTMLTextAreaElement;
+  /** The current value of the input, submitted as a name/value pair with form data. */
+  "bind:value"?: string;
+  /**  */
+  "bind:valueHasChanged"?: boolean;
+  /**  */
+  "bind:hasInteracted"?: boolean;
+  /**  */
+  "bind:states"?: CustomStateSet;
+  /**  */
+  "bind:emitInvalid"?: string;
+  /**  */
+  "bind:labels"?: string;
+  /** By default, form controls are associated with the nearest containing `<form>` element. This attribute allows you
+to place the form control outside of a form and associate it with the form that has this `id`. The form must be in
+the same document or shadow root for this to work. */
+  "bind:form"?: HTMLFormElement | null;
+  /**  */
+  "bind:validity"?: string;
+  /**  */
+  "bind:willValidate"?: string;
+  /**  */
+  "bind:validationMessage"?: string;
+  /** Override this to change where constraint validation popups are anchored. */
+  "bind:validationTarget"?: undefined | HTMLElement;
+  /**  */
+  "bind:allValidators"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the control loses focus. */
+  "on:blur"?: (e: CustomEvent<never>) => void;
+  /** Emitted when an alteration to the control's value is committed by the user. */
+  "on:change"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control gains focus. */
+  "on:focus"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the control receives input. */
+  "on:input"?: (e: CustomEvent<never>) => void;
+  /** Emitted when the form control has been checked for validity and its constraints aren't satisfied. */
+  "on:wa-invalid"?: (e: CustomEvent<never>) => void;
+};
+
+type WaTreeProps = {
+  /** The selection behavior of the tree. Single selection allows only one node to be selected at a time. Multiple
+displays checkboxes and allows more than one node to be selected. Leaf allows only leaf nodes to be selected. */
+  selection?: "single" | "multiple" | "leaf";
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:defaultSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:expandedIconSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:collapsedIconSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when a tree item is selected or deselected. */
+  "on:wa-selection-change"?: (e: CustomEvent<{ selection: WaTreeItem[] }>) => void;
+};
+
+type WaZoomableFrameProps = {
+  /** The URL of the content to display. */
+  src?: string;
+  /** Inline HTML to display. */
+  srcdoc?: string;
+  /** Allows fullscreen mode. */
+  allowfullscreen?: boolean;
+  /** Controls iframe loading behavior. */
+  loading?: "eager" | "lazy";
+  /** Controls referrer information. */
+  referrerpolicy?: string;
+  /** Security restrictions for the iframe. */
+  sandbox?: string;
+  /** The current zoom of the frame, e.g. 0 = 0% and 1 = 100%. */
+  zoom?: number;
+  /** The zoom levels to step through when using zoom controls. This does not restrict programmatic changes to the zoom. */
+  "zoom-levels"?: string;
+  /** Removes the zoom controls. */
+  "without-controls"?: boolean;
+  /** Disables interaction when present. */
+  "without-interaction"?: boolean;
+  /** Enables automatic theme syncing (light/dark mode and theme selector classes) from the host document to the iframe. */
+  "with-theme-sync"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:iframe"?: HTMLIFrameElement;
+  /** Returns the internal iframe's `window` object. (Readonly property) */
+  "bind:contentWindow"?: Window | null;
+  /** Returns the internal iframe's `document` object. (Readonly property) */
+  "bind:contentDocument"?: Document | null;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+  /** Emitted when the internal iframe when it finishes loading. */
+  "on:load"?: (e: CustomEvent<Event>) => void;
+  /** Emitted from the internal iframe when it fails to load. */
+  "on:error"?: (e: CustomEvent<Event>) => void;
+};
+
+type WaMarkdownProps = {
+  /** The tab stop width used when converting leading tabs to spaces during whitespace normalization. */
+  "tab-size"?: number;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /** A reference to the shared Marked instance for convenience. Equivalent to `WaMarkdown.getMarked()`. */
+  "bind:marked"?: Marked;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+type WaPageProps = {
+  /** The view is a reflection of the "mobileBreakpoint", when the page is larger than the `mobile-breakpoint` (768px by
+default), it is considered to be a "desktop" view. The view is merely a way to distinguish when to show/hide the
+navigation. You can use additional media queries to make other adjustments to content as necessary.
+The default is "desktop" because the "mobile navigation drawer" isn't accessible via SSR due to drawer requiring JS. */
+  view?: "mobile" | "desktop";
+  /** Whether or not the navigation drawer is open. Note, the navigation drawer is only "open" on mobile views. */
+  "nav-open"?: boolean;
+  /** At what page width to hide the "navigation" slot and collapse into a hamburger button.
+Accepts both numbers (interpreted as px) and CSS lengths (e.g. `50em`), which are resolved based on the root element. */
+  "mobile-breakpoint"?: string;
+  /** Where to place the navigation when in the mobile viewport. */
+  "navigation-placement"?: "start" | "end";
+  /** Determines whether or not to hide the default hamburger button.
+This will automatically flip to "true" if you add an element with `data-toggle-nav` anywhere in the element light DOM.
+Generally this will be set for you and you don't need to do anything, unless you're using SSR, in which case you should set this manually for initial page loads. */
+  "disable-navigation-toggle"?: boolean;
+  /**  */
+  dir?: string;
+  /**  */
+  lang?: string;
+  /**  */
+  "did-ssr"?: string;
+  /**  */
+  "bind:header"?: HTMLElement;
+  /**  */
+  "bind:menu"?: HTMLElement;
+  /**  */
+  "bind:main"?: HTMLElement;
+  /**  */
+  "bind:aside"?: HTMLElement;
+  /**  */
+  "bind:subheader"?: HTMLElement;
+  /**  */
+  "bind:footer"?: HTMLElement;
+  /**  */
+  "bind:banner"?: HTMLElement;
+  /**  */
+  "bind:navigationDrawer"?: WaDrawer;
+  /**  */
+  "bind:navigationToggleSlot"?: HTMLSlotElement;
+  /**  */
+  "bind:pageResizeObserver"?: string;
+  /**  */
+  "bind:updateAsideAndMenuHeights"?: string;
+  /**  */
+  "bind:initialReflectedProperties"?: Map<string, unknown>;
+  /**  */
+  "bind:internals"?: ElementInternals;
+};
+
+export type CustomElements = {
+  /**
+   * Icons are symbols that can be used to represent various options within an application.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-load** - Emitted when the icon has loaded. When using `spriteSheet: true` this will not emit.
+   * - **wa-error** - Emitted when the icon fails to load due to an error. When using `spriteSheet: true` this will not emit.
+   *
+   * ### **CSS Properties:**
+   *  - **--animation-delay** - Sets when the animation will start. _(default: 0)_
+   * - **--animation-direction** - Defines whether or not the animation should play in reverse on alternate cycles. _(default: normal)_
+   * - **--animation-duration** - Defines the length of time that an animation takes to complete one cycle. _(default: 1s)_
+   * - **--animation-iteration-count** - Defines the number of times an animation cycle is played. _(default: infinite)_
+   * - **--animation-timing** - Describes how the animation will progress over one cycle of its duration. _(default: undefined)_
+   * - **--beat-fade-opacity** - Set lowest opacity value an icon with `beat-fade` animation will fade to and from. _(default: undefined)_
+   * - **--beat-fade-scale** - Set max value that an icon with `beat-fade` animation will scale. _(default: undefined)_
+   * - **--beat-scale** - Set max value that an icon with `beat` animation will scale. _(default: undefined)_
+   * - **--bounce-height** - Set the max height an icon with `bounce` animation will jump to when bouncing. _(default: undefined)_
+   * - **--bounce-jump-scale-x** - Set the icon’s horizontal distortion (“squish”) at the top of the jump. _(default: undefined)_
+   * - **--bounce-jump-scale-y** - Set the icon’s vertical distortion (“squish”) at the top of the jump. _(default: undefined)_
+   * - **--bounce-land-scale-x** - Set the icon’s horizontal distortion (“squish”) when landing after the jump. _(default: undefined)_
+   * - **--bounce-land-scale-y** - Set the icon’s vertical distortion (“squish”) when landing after the jump. _(default: undefined)_
+   * - **--bounce-rebound** - Set the amount of rebound an icon with `bounce` animation has when landing after the jump. _(default: undefined)_
+   * - **--bounce-start-scale-x** - Set the icon’s horizontal distortion (“squish”) when starting to bounce. _(default: undefined)_
+   * - **--bounce-start-scale-y** - Set the icon’s vertical distortion (“squish”) when starting to bounce. _(default: undefined)_
+   * - **--fade-opacity** - Set lowest opacity value an icon with `fade` animation will fade to and from. _(default: undefined)_
+   * - **--flip-angle** - Set rotation angle of flip for an icon with `flip` animation. A positive angle denotes a clockwise rotation, a negative angle a counter-clockwise one. _(default: undefined)_
+   * - **--flip-x** - Set x-coordinate of the vector denoting the axis of rotation (between 0 and 1) for an icon with `flip` animation. _(default: undefined)_
+   * - **--flip-y** - Set y-coordinate of the vector denoting the axis of rotation (between 0 and 1) for an icon with `flip` animation. _(default: undefined)_
+   * - **--flip-z** - Set z-coordinate of the vector denoting the axis of rotation (between 0 and 1) for an icon with `flip` animation. _(default: undefined)_
+   * - **--primary-color** - Sets a duotone icon's primary color. _(default: currentColor)_
+   * - **--primary-opacity** - Sets a duotone icon's primary opacity. _(default: 1)_
+   * - **--secondary-color** - Sets a duotone icon's secondary color. _(default: currentColor)_
+   * - **--secondary-opacity** - Sets a duotone icon's secondary opacity. _(default: 0.4)_
+   *
+   * ### **CSS Parts:**
+   *  - **svg** - The internal SVG element.
+   * - **use** - The `<use>` element generated when using `spriteSheet: true`
+   */
+  "wa-icon": Partial<WaIconProps & BaseProps & BaseEvents>;
+
+  /**
+   * Checkboxes allow the user to toggle an option on or off.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **change** - Emitted when the checked state changes.
+   * - **blur** - Emitted when the checkbox loses focus.
+   * - **focus** - Emitted when the checkbox gains focus.
+   * - **input** - Emitted when the checkbox receives input.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **click()** - Simulates a click on the checkbox.
+   * - **focus(options: _FocusOptions_)** - Sets focus on the checkbox.
+   * - **blur()** - Removes focus from the checkbox.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - _default_ - The checkbox's label.
+   * - **hint** - Text that describes how to use the checkbox. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Properties:**
+   *  - **--checked-icon-color** - The color of the checked and indeterminate icons. _(default: undefined)_
+   * - **--checked-icon-scale** - The size of the checked and indeterminate icons relative to the checkbox. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's label .
+   * - **control** - The square container that wraps the checkbox's checked state.
+   * - **checked-icon** - The checked icon, a `<wa-icon>` element.
+   * - **indeterminate-icon** - The indeterminate icon, a `<wa-icon>` element.
+   * - **label** - The container that wraps the checkbox's label.
+   * - **hint** - The hint's wrapper.
+   */
+  "wa-checkbox": Partial<WaCheckboxProps & BaseProps & BaseEvents>;
+
+  /**
+   * Spinners are used to show the progress of an indeterminate operation.
+   * ---
+   *
+   *
+   * ### **CSS Properties:**
+   *  - **--track-width** - The width of the track. _(default: undefined)_
+   * - **--track-color** - The color of the track. _(default: undefined)_
+   * - **--indicator-color** - The color of the spinner's indicator. _(default: undefined)_
+   * - **--speed** - The time it takes for the spinner to complete one animation cycle. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-spinner": Partial<WaSpinnerProps & BaseProps & BaseEvents>;
+
+  /**
+   * A tree item serves as a hierarchical node that lives inside a [tree](/docs/components/tree).
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-expand** - Emitted when the tree item expands.
+   * - **wa-after-expand** - Emitted after the tree item expands and all animations are complete.
+   * - **wa-collapse** - Emitted when the tree item collapses.
+   * - **wa-after-collapse** - Emitted after the tree item collapses and all animations are complete.
+   * - **wa-lazy-change** - Emitted when the tree item's lazy state changes.
+   * - **wa-lazy-load** - Emitted when a lazy item is selected. Use this event to asynchronously load data and append items to the tree before expanding. After appending new items, remove the `lazy` attribute to remove the loading state and update the tree.
+   *
+   * ### **Methods:**
+   *  - **getChildrenItems({ includeDisabled = true }: _{ includeDisabled?: boolean }_): _WaTreeItem[]_** - Gets all the nested tree items in this node.
+   *
+   * ### **Slots:**
+   *  - _default_ - The default slot.
+   * - **expand-icon** - The icon to show when the tree item is expanded.
+   * - **collapse-icon** - The icon to show when the tree item is collapsed.
+   *
+   * ### **CSS Properties:**
+   *  - **--show-duration** - The animation duration when expanding tree items. _(default: 200ms)_
+   * - **--hide-duration** - The animation duration when collapsing tree items. _(default: 200ms)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **item** - The tree item's container. This element wraps everything except slotted tree item children.
+   * - **indentation** - The tree item's indentation container.
+   * - **expand-button** - The container that wraps the tree item's expand button and spinner.
+   * - **spinner** - The spinner that shows when a lazy tree item is in the loading state.
+   * - **spinner__base** - The spinner's base part.
+   * - **label** - The tree item's label.
+   * - **children** - The container that wraps the tree item's nested children.
+   * - **checkbox** - The checkbox that shows when using multiselect.
+   * - **checkbox__base** - The checkbox's exported `base` part.
+   * - **checkbox__control** - The checkbox's exported `control` part.
+   * - **checkbox__checked-icon** - The checkbox's exported `checked-icon` part.
+   * - **checkbox__indeterminate-icon** - The checkbox's exported `indeterminate-icon` part.
+   * - **checkbox__label** - The checkbox's exported `label` part.
+   */
+  "wa-tree-item": Partial<WaTreeItemProps & BaseProps & BaseEvents>;
+
+  /**
+   * A carousel item represent a slide within a carousel.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The carousel item's content..
+   *
+   * ### **CSS Properties:**
+   *  - **--aspect-ratio** - The slide's aspect ratio. Inherited from the carousel by default. _(default: undefined)_
+   */
+  "wa-carousel-item": Partial<WaCarouselItemProps & BaseProps & BaseEvents>;
+
+  /**
+   * Buttons represent actions that are available to the user.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **blur** - Emitted when the button loses focus.
+   * - **focus** - Emitted when the button gains focus.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **click()** - Simulates a click on the button.
+   * - **focus(options: _FocusOptions_)** - Sets focus on the button.
+   * - **blur()** - Removes focus from the button.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - _default_ - The button's label.
+   * - **start** - An element, such as `<wa-icon>`, placed before the label.
+   * - **end** - An element, such as `<wa-icon>`, placed after the label.
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **start** - The container that wraps the `start` slot.
+   * - **label** - The button's label.
+   * - **end** - The container that wraps the `end` slot.
+   * - **caret** - The button's caret icon, a `<wa-icon>` element.
+   * - **spinner** - The spinner that shows when the button is in the loading state.
+   */
+  "wa-button": Partial<WaButtonProps & BaseProps & BaseEvents>;
+
+  /**
+   * A component for displaying animated GIFs and WEBPs that play and pause on interaction.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-load** - Emitted when the image loads successfully.
+   * - **wa-error** - Emitted when the image fails to load.
+   *
+   * ### **Slots:**
+   *  - **play-icon** - Optional play icon to use instead of the default. Works best with `<wa-icon>`.
+   * - **pause-icon** - Optional pause icon to use instead of the default. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Properties:**
+   *  - **--control-box-size** - The size of the icon box. _(default: undefined)_
+   * - **--icon-size** - The size of the play/pause icons. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **control-box** - The container that surrounds the pause/play icons and provides their background.
+   */
+  "wa-animated-image": Partial<WaAnimatedImageProps & BaseProps & BaseEvents>;
+
+  /**
+   * Animate elements declaratively with nearly 100 baked-in presets, or roll your own with custom keyframes. Powered by the [Web Animations API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API).
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-cancel** - Emitted when the animation is canceled.
+   * - **wa-finish** - Emitted when the animation finishes.
+   * - **wa-start** - Emitted when the animation starts or restarts.
+   *
+   * ### **Methods:**
+   *  - **cancel()** - Clears all keyframe effects caused by this animation and aborts its playback.
+   * - **finish()** - Sets the playback time to the end of the animation corresponding to the current playback direction.
+   *
+   * ### **Slots:**
+   *  - _default_ - The element to animate. Avoid slotting in more than one element, as subsequent ones will be ignored. To animate multiple elements, either wrap them in a single container or use multiple `<wa-animation>` elements.
+   */
+  "wa-animation": Partial<WaAnimationProps & BaseProps & BaseEvents>;
+
+  /**
+   * Avatars are used to represent a person or object.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-error** - The image could not be loaded. This may because of an invalid URL, a temporary network condition, or some unknown cause.
+   *
+   * ### **Slots:**
+   *  - **icon** - The default icon to use when no image or initials are present. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Properties:**
+   *  - **--size** - The size of the avatar. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **icon** - The container that wraps the avatar's icon.
+   * - **initials** - The container that wraps the avatar's initials.
+   * - **image** - The avatar image. Only shown when the `image` attribute is set.
+   */
+  "wa-avatar": Partial<WaAvatarProps & BaseProps & BaseEvents>;
+
+  /**
+   * Badges are used to draw attention and display statuses or counts.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The badge's content.
+   * - **start** - An element, such as `<wa-icon>`, placed before the label.
+   * - **end** - An element, such as `<wa-icon>`, placed after the label.
+   *
+   * ### **CSS Properties:**
+   *  - **--pulse-color** - The color of the badge's pulse effect when using `attention="pulse"`. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **start** - The container that wraps the `start` slot.
+   * - **end** - The container that wraps the `end` slot.
+   */
+  "wa-badge": Partial<WaBadgeProps & BaseProps & BaseEvents>;
+
+  /**
+   * Breadcrumb Items are used inside breadcrumbs to represent different links.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The breadcrumb item's label.
+   * - **start** - An element, such as `<wa-icon>`, placed before the label.
+   * - **end** - An element, such as `<wa-icon>`, placed after the label.
+   * - **separator** - The separator to use for the breadcrumb item. This will only change the separator for this item. If you want to change it for all items in the group, set the separator on `<wa-breadcrumb>` instead.
+   *
+   * ### **CSS Parts:**
+   *  - **label** - The breadcrumb item's label.
+   * - **start** - The container that wraps the `start` slot.
+   * - **end** - The container that wraps the `end` slot.
+   * - **separator** - The container that wraps the separator.
+   */
+  "wa-breadcrumb-item": Partial<WaBreadcrumbItemProps & BaseProps & BaseEvents>;
+
+  /**
+   * Breadcrumbs provide a group of links so users can easily navigate a website's hierarchy.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - One or more breadcrumb items to display.
+   * - **separator** - The separator to use between breadcrumb items. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-breadcrumb": Partial<WaBreadcrumbProps & BaseProps & BaseEvents>;
+
+  /**
+   * Button groups can be used to group related buttons into sections.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - One or more `<wa-button>` elements to display in the button group.
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-button-group": Partial<WaButtonGroupProps & BaseProps & BaseEvents>;
+
+  /**
+   * Callouts are used to display important messages inline.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The callout's main content.
+   * - **icon** - An icon to show in the callout. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Parts:**
+   *  - **icon** - The container that wraps the optional icon.
+   * - **message** - The container that wraps the callout's main content.
+   */
+  "wa-callout": Partial<WaCalloutProps & BaseProps & BaseEvents>;
+
+  /**
+   * Cards can be used to group related subjects in a container.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The card's main content.
+   * - **header** - An optional header for the card.
+   * - **footer** - An optional footer for the card.
+   * - **media** - An optional media section to render at the start of the card.
+   * - **actions** - An optional actions section to render at the end for the horizontal card.
+   * - **header-actions** - An optional actions section to render in the header of the vertical card.
+   * - **footer-actions** - An optional actions section to render in the footer of the vertical card.
+   *
+   * ### **CSS Properties:**
+   *  - **--spacing** - The amount of space around and between sections of the card. Expects a single value. _(default: var(--wa-space-l))_
+   *
+   * ### **CSS Parts:**
+   *  - **media** - The container that wraps the card's media.
+   * - **header** - The container that wraps the card's header.
+   * - **body** - The container that wraps the card's main content.
+   * - **footer** - The container that wraps the card's footer.
+   */
+  "wa-card": Partial<WaCardProps & BaseProps & BaseEvents>;
+
+  /**
+   * Carousels display an arbitrary number of content slides along a horizontal or vertical axis.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-slide-change** - Emitted when the active slide changes.
+   *
+   * ### **Methods:**
+   *  - **previous(behavior: _ScrollBehavior_)** - Move the carousel backward by `slides-per-move` slides.
+   * - **next(behavior: _ScrollBehavior_)** - Move the carousel forward by `slides-per-move` slides.
+   * - **goToSlide(index: _number_, behavior: _ScrollBehavior_)** - Scrolls the carousel to the slide specified by `index`.
+   *
+   * ### **Slots:**
+   *  - _default_ - The carousel's main content, one or more `<wa-carousel-item>` elements.
+   * - **next-icon** - Optional next icon to use instead of the default. Works best with `<wa-icon>`.
+   * - **previous-icon** - Optional previous icon to use instead of the default. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Properties:**
+   *  - **--aspect-ratio** - The aspect ratio of each slide. _(default: 16/9)_
+   * - **--scroll-hint** - The amount of padding to apply to the scroll area, allowing adjacent slides to become partially visible as a scroll hint. _(default: undefined)_
+   * - **--slide-gap** - The space between each slide. _(default: var(--wa-space-m))_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The carousel's internal wrapper.
+   * - **scroll-container** - The scroll container that wraps the slides.
+   * - **pagination** - The pagination indicators wrapper.
+   * - **pagination-item** - The pagination indicator.
+   * - **pagination-item-active** - Applied when the item is active.
+   * - **navigation** - The navigation wrapper.
+   * - **navigation-button** - The navigation button.
+   * - **navigation-button-previous** - Applied to the previous button.
+   * - **navigation-button-next** - Applied to the next button.
+   */
+  "wa-carousel": Partial<WaCarouselProps & BaseProps & BaseEvents>;
+
+  /**
+   * Inputs collect data from the user.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **input** - Emitted when the control receives input.
+   * - **change** - Emitted when an alteration to the control's value is committed by the user.
+   * - **blur** - Emitted when the control loses focus.
+   * - **focus** - Emitted when the control gains focus.
+   * - **wa-clear** - Emitted when the clear button is activated.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **focus(options: _FocusOptions_)** - Sets focus on the input.
+   * - **blur()** - Removes focus from the input.
+   * - **select()** - Selects all the text in the input.
+   * - **setSelectionRange(selectionStart: _number_, selectionEnd: _number_, selectionDirection: _'forward' | 'backward' | 'none'_)** - Sets the start and end positions of the text selection (0-based).
+   * - **setRangeText(replacement: _string_, start: _number_, end: _number_, selectMode: _'select' | 'start' | 'end' | 'preserve'_)** - Replaces a range of text with a new string.
+   * - **showPicker()** - Displays the browser picker for an input element (only works if the browser supports it for the input type).
+   * - **stepUp()** - Increments the value of a numeric input type by the value of the step attribute.
+   * - **stepDown()** - Decrements the value of a numeric input type by the value of the step attribute.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - **label** - The input's label. Alternatively, you can use the `label` attribute.
+   * - **start** - An element, such as `<wa-icon>`, placed at the start of the input control.
+   * - **end** - An element, such as `<wa-icon>`, placed at the end of the input control.
+   * - **clear-icon** - An icon to use in lieu of the default clear icon.
+   * - **show-password-icon** - An icon to use in lieu of the default show password icon.
+   * - **hide-password-icon** - An icon to use in lieu of the default hide password icon.
+   * - **hint** - Text that describes how to use the input. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Parts:**
+   *  - **label** - The label
+   * - **hint** - The hint's wrapper.
+   * - **base** - The wrapper being rendered as an input
+   * - **input** - The internal `<input>` control.
+   * - **start** - The container that wraps the `start` slot.
+   * - **clear-button** - The clear button.
+   * - **password-toggle-button** - The password toggle button.
+   * - **end** - The container that wraps the `end` slot.
+   */
+  "wa-input": Partial<WaInputProps & BaseProps & BaseEvents>;
+
+  /**
+   * Popup is a utility that lets you declaratively anchor "popup" containers to another element.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-reposition** - Emitted when the popup is repositioned. This event can fire a lot, so avoid putting expensive operations in your listener or consider debouncing it.
+   *
+   * ### **Methods:**
+   *  - **reposition()** - Forces the popup to recalculate and reposition itself.
+   *
+   * ### **Slots:**
+   *  - _default_ - The popup's content.
+   * - **anchor** - The element the popup will be anchored to. If the anchor lives outside of the popup, you can use the `anchor` attribute or property instead.
+   *
+   * ### **CSS Properties:**
+   *  - **--arrow-size** - The size of the arrow. Note that an arrow won't be shown unless the `arrow` attribute is used. _(default: 6px)_
+   * - **--popup-border-width** - The width of any custom border applied to the popup. This is used to reposition the arrow to overlap to the inside edge of the popup border. _(default: undefined)_
+   * - **--arrow-color** - The color of the arrow. _(default: black)_
+   * - **--auto-size-available-width** - A read-only custom property that determines the amount of width the popup can be before overflowing. Useful for positioning child elements that need to overflow. This property is only available when using `auto-size`. _(default: undefined)_
+   * - **--auto-size-available-height** - A read-only custom property that determines the amount of height the popup can be before overflowing. Useful for positioning child elements that need to overflow. This property is only available when using `auto-size`. _(default: undefined)_
+   * - **--show-duration** - The show duration to use when applying built-in animation classes. _(default: 100ms)_
+   * - **--hide-duration** - The hide duration to use when applying built-in animation classes. _(default: 100ms)_
+   *
+   * ### **CSS Parts:**
+   *  - **arrow** - The arrow's container. Avoid setting `top|bottom|left|right` properties, as these values are assigned dynamically as the popup moves. This is most useful for applying a background color to match the popup, and maybe a border or box shadow.
+   * - **popup** - The popup's container. Useful for setting a background color, box shadow, etc.
+   * - **hover-bridge** - The hover bridge element. Only available when the `hover-bridge` option is enabled.
+   */
+  "wa-popup": Partial<WaPopupProps & BaseProps & BaseEvents>;
+
+  /**
+   * Color pickers allow the user to select a color.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **change** - Emitted when the color picker's value changes.
+   * - **input** - Emitted when the color picker receives input.
+   * - **wa-show**
+   * - **wa-after-show**
+   * - **wa-hide**
+   * - **wa-after-hide**
+   * - **blur** - Emitted when the color picker loses focus.
+   * - **focus** - Emitted when the color picker receives focus.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **getHexString(hue: _number_, saturation: _number_, brightness: _number_, alpha)** - Generates a hex string from HSV values. Hue must be 0-360. All other arguments must be 0-100.
+   * - **focus(options: _FocusOptions_)** - Sets focus on the color picker.
+   * - **blur()** - Removes focus from the color picker.
+   * - **getFormattedValue(format: _'hex' | 'hexa' | 'rgb' | 'rgba' | 'hsl' | 'hsla' | 'hsv' | 'hsva'_)** - Returns the current value as a string in the specified format.
+   * - **reportValidity()** - Checks for validity and shows the browser's validation message if the control is invalid.
+   * - **show()** - Shows the color picker panel.
+   * - **hide()** - Hides the color picker panel
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - **label** - The color picker's form label. Alternatively, you can use the `label` attribute.
+   * - **hint** - The color picker's form hint. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Properties:**
+   *  - **--grid-width** - The width of the color grid. _(default: undefined)_
+   * - **--grid-height** - The height of the color grid. _(default: undefined)_
+   * - **--grid-handle-size** - The size of the color grid's handle. _(default: undefined)_
+   * - **--slider-height** - The height of the hue and alpha sliders. _(default: undefined)_
+   * - **--slider-handle-size** - The diameter of the slider's handle. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **trigger** - The color picker's dropdown trigger.
+   * - **swatches** - The container that holds the swatches.
+   * - **swatch** - Each individual swatch.
+   * - **grid** - The color grid.
+   * - **grid-handle** - The color grid's handle.
+   * - **slider** - Hue and opacity sliders.
+   * - **slider-handle** - Hue and opacity slider handles.
+   * - **hue-slider** - The hue slider.
+   * - **hue-slider-handle** - The hue slider's handle.
+   * - **opacity-slider** - The opacity slider.
+   * - **opacity-slider-handle** - The opacity slider's handle.
+   * - **preview** - The preview color.
+   * - **input** - The text input.
+   * - **eyedropper-button** - The eye dropper button.
+   * - **eyedropper-button__base** - The eye dropper button's exported `button` part.
+   * - **eyedropper-button__start** - The eye dropper button's exported `start` part.
+   * - **eyedropper-button__label** - The eye dropper button's exported `label` part.
+   * - **eyedropper-button__end** - The eye dropper button's exported `end` part.
+   * - **eyedropper-button__caret** - The eye dropper button's exported `caret` part.
+   * - **format-button** - The format button.
+   * - **format-button__base** - The format button's exported `button` part.
+   * - **format-button__start** - The format button's exported `start` part.
+   * - **format-button__label** - The format button's exported `label` part.
+   * - **format-button__end** - The format button's exported `end` part.
+   * - **format-button__caret** - The format button's exported `caret` part.
+   */
+  "wa-color-picker": Partial<WaColorPickerProps & BaseProps & BaseEvents>;
+
+  /**
+   * Compare visual differences between similar content with a sliding panel.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **change** - Emitted when the position changes.
+   *
+   * ### **Slots:**
+   *  - **before** - The before content, often an `<img>` or `<svg>` element.
+   * - **after** - The after content, often an `<img>` or `<svg>` element.
+   * - **handle** - The icon used inside the handle.
+   *
+   * ### **CSS Properties:**
+   *  - **--divider-width** - The width of the dividing line. _(default: undefined)_
+   * - **--handle-size** - The size of the compare handle. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The container that wraps the before and after content.
+   * - **before** - The container that wraps the before content.
+   * - **after** - The container that wraps the after content.
+   * - **divider** - The divider that separates the before and after content.
+   * - **handle** - The handle that the user drags to expose the after content.
+   */
+  "wa-comparison": Partial<WaComparisonProps & BaseProps & BaseEvents>;
+
+  /**
+   * Tooltips display additional information based on a specific action.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-show** - Emitted when the tooltip begins to show.
+   * - **wa-after-show** - Emitted after the tooltip has shown and all animations are complete.
+   * - **wa-hide** - Emitted when the tooltip begins to hide.
+   * - **wa-after-hide** - Emitted after the tooltip has hidden and all animations are complete.
+   *
+   * ### **Methods:**
+   *  - **show()** - Shows the tooltip.
+   * - **hide()** - Hides the tooltip
+   *
+   * ### **Slots:**
+   *  - _default_ - The tooltip's default slot where any content should live. Interactive content should be avoided.
+   *
+   * ### **CSS Properties:**
+   *  - **--max-width** - The maximum width of the tooltip before its content will wrap. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper, an `<wa-popup>` element.
+   * - **base__popup** - The popup's exported `popup` part. Use this to target the tooltip's popup container.
+   * - **base__arrow** - The popup's exported `arrow` part. Use this to target the tooltip's arrow.
+   * - **body** - The tooltip's body where its content is rendered.
+   */
+  "wa-tooltip": Partial<WaTooltipProps & BaseProps & BaseEvents>;
+
+  /**
+   * Copies text data to the clipboard when the user clicks the trigger.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-copy** - Emitted when the data has been copied.
+   * - **wa-error** - Emitted when the data could not be copied.
+   *
+   * ### **Slots:**
+   *  - _default_ - The trigger element. By default, a copy icon button is rendered so this is optional. If desired, you can slot in a custom element such as `<wa-button>` or `<button>`.
+   * - **copy-icon** - The icon to show in the default copy state. Works best with `<wa-icon>`.
+   * - **success-icon** - The icon to show when the content is copied. Works best with `<wa-icon>`.
+   * - **error-icon** - The icon to show when a copy error occurs. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Parts:**
+   *  - **button** - The internal `<button>` element.
+   * - **copy-icon** - The container that holds the copy icon.
+   * - **success-icon** - The container that holds the success icon.
+   * - **error-icon** - The container that holds the error icon.
+   * - **tooltip__base** - The tooltip's exported `base` part.
+   * - **tooltip__base__popup** - The tooltip's exported `popup` part.
+   * - **tooltip__base__arrow** - The tooltip's exported `arrow` part.
+   * - **tooltip__body** - The tooltip's exported `body` part.
+   */
+  "wa-copy-button": Partial<WaCopyButtonProps & BaseProps & BaseEvents>;
+
+  /**
+   * Details show a brief summary and expand to show additional content.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-show** - Emitted when the details opens.
+   * - **wa-after-show** - Emitted after the details opens and all animations are complete.
+   * - **wa-hide** - Emitted when the details closes.
+   * - **wa-after-hide** - Emitted after the details closes and all animations are complete.
+   *
+   * ### **Methods:**
+   *  - **show()** - Shows the details.
+   * - **hide()** - Hides the details
+   *
+   * ### **Slots:**
+   *  - _default_ - The details' main content.
+   * - **summary** - The details' summary. Alternatively, you can use the `summary` attribute.
+   * - **expand-icon** - Optional expand icon to use instead of the default. Works best with `<wa-icon>`.
+   * - **collapse-icon** - Optional collapse icon to use instead of the default. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Properties:**
+   *  - **--spacing** - The amount of space around and between the details' content. Expects a single value. _(default: undefined)_
+   * - **--show-duration** - The show duration to use when applying built-in animation classes. _(default: 200ms)_
+   * - **--hide-duration** - The hide duration to use when applying built-in animation classes. _(default: 200ms)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The inner `<details>` element used to render the component. Styles you apply to the component are automatically applied to this part, so you usually don't need to deal with it unless you need to set the `display` property.
+   * - **header** - The header that wraps both the summary and the expand/collapse icon.
+   * - **summary** - The container that wraps the summary.
+   * - **icon** - The container that wraps the expand/collapse icons.
+   * - **content** - The details content.
+   */
+  "wa-details": Partial<WaDetailsProps & BaseProps & BaseEvents>;
+
+  /**
+   * Dialogs, sometimes called "modals", appear above the page and require the user's immediate attention.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-show** - Emitted when the dialog opens.
+   * - **wa-after-show** - Emitted after the dialog opens and all animations are complete.
+   * - **wa-hide** - Emitted when the dialog is requested to close. Calling `event.preventDefault()` will prevent the dialog from closing. You can inspect `event.detail.source` to see which element caused the dialog to close. If the source is the dialog element itself, the user has pressed [[Escape]] or the dialog has been closed programmatically. Avoid using this unless closing the dialog will result in destructive behavior such as data loss.
+   * - **wa-after-hide** - Emitted after the dialog closes and all animations are complete.
+   *
+   * ### **Slots:**
+   *  - _default_ - The dialog's main content.
+   * - **label** - The dialog's label. Alternatively, you can use the `label` attribute.
+   * - **header-actions** - Optional actions to add to the header. Works best with `<wa-button>`.
+   * - **footer** - The dialog's footer, usually one or more buttons representing various options.
+   *
+   * ### **CSS Properties:**
+   *  - **--spacing** - The amount of space around and between the dialog's content. _(default: undefined)_
+   * - **--width** - The preferred width of the dialog. Note that the dialog will shrink to accommodate smaller screens. _(default: undefined)_
+   * - **--show-duration** - The animation duration when showing the dialog. _(default: 200ms)_
+   * - **--hide-duration** - The animation duration when hiding the dialog. _(default: 200ms)_
+   *
+   * ### **CSS Parts:**
+   *  - **dialog** - The dialog's internal `<dialog>` element.
+   * - **header** - The dialog's header. This element wraps the title and header actions.
+   * - **header-actions** - Optional actions to add to the header. Works best with `<wa-button>`.
+   * - **title** - The dialog's title.
+   * - **close-button** - The close button, a `<wa-button>`.
+   * - **close-button__base** - The close button's exported `base` part.
+   * - **body** - The dialog's body.
+   * - **footer** - The dialog's footer.
+   */
+  "wa-dialog": Partial<WaDialogProps & BaseProps & BaseEvents>;
+
+  /**
+   * Dividers are used to visually separate or group elements.
+   * ---
+   *
+   *
+   * ### **CSS Properties:**
+   *  - **--color** - The color of the divider. _(default: undefined)_
+   * - **--width** - The width of the divider. _(default: undefined)_
+   * - **--spacing** - The spacing of the divider. _(default: undefined)_
+   */
+  "wa-divider": Partial<WaDividerProps & BaseProps & BaseEvents>;
+
+  /**
+   * Drawers slide in from a container to expose additional options and information.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-show** - Emitted when the drawer opens.
+   * - **wa-after-show** - Emitted after the drawer opens and all animations are complete.
+   * - **wa-hide** - Emitted when the drawer is requesting to close. Calling `event.preventDefault()` will prevent the drawer from closing. You can inspect `event.detail.source` to see which element caused the drawer to close. If the source is the drawer element itself, the user has pressed [[Escape]] or the drawer has been closed programmatically. Avoid using this unless closing the drawer will result in destructive behavior such as data loss.
+   * - **wa-after-hide** - Emitted after the drawer closes and all animations are complete.
+   *
+   * ### **Slots:**
+   *  - _default_ - The drawer's main content.
+   * - **label** - The drawer's label. Alternatively, you can use the `label` attribute.
+   * - **header-actions** - Optional actions to add to the header. Works best with `<wa-button>`.
+   * - **footer** - The drawer's footer, usually one or more buttons representing various options.
+   *
+   * ### **CSS Properties:**
+   *  - **--spacing** - The amount of space around and between the drawer's content. _(default: undefined)_
+   * - **--size** - The preferred size of the drawer. This will be applied to the drawer's width or height depending on its `placement`. Note that the drawer will shrink to accommodate smaller screens. _(default: undefined)_
+   * - **--show-duration** - The animation duration when showing the drawer. _(default: 200ms)_
+   * - **--hide-duration** - The animation duration when hiding the drawer. _(default: 200ms)_
+   *
+   * ### **CSS Parts:**
+   *  - **dialog** - The drawer's internal `<dialog>` element.
+   * - **header** - The drawer's header. This element wraps the title and header actions.
+   * - **header-actions** - Optional actions to add to the header. Works best with `<wa-button>`.
+   * - **title** - The drawer's title.
+   * - **close-button** - The close button, a `<wa-button>`.
+   * - **close-button__base** - The close button's exported `base` part.
+   * - **body** - The drawer's body.
+   * - **footer** - The drawer's footer.
+   */
+  "wa-drawer": Partial<WaDrawerProps & BaseProps & BaseEvents>;
+
+  /**
+   * Represents an individual item within a dropdown menu, supporting standard items, checkboxes, and submenus.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **blur** - Emitted when the dropdown item loses focus.
+   * - **focus** - Emitted when the dropdown item gains focus.
+   *
+   * ### **Methods:**
+   *  - **openSubmenu()** - Opens the submenu.
+   * - **closeSubmenu()** - Closes the submenu.
+   *
+   * ### **Slots:**
+   *  - _default_ - The dropdown item's label.
+   * - **icon** - An optional icon to display before the label.
+   * - **details** - Additional content or details to display after the label.
+   * - **submenu** - Submenu items, typically `<wa-dropdown-item>` elements, to create a nested menu.
+   *
+   * ### **CSS Parts:**
+   *  - **checkmark** - The checkmark icon (a `<wa-icon>` element) when the item is a checkbox.
+   * - **icon** - The container for the icon slot.
+   * - **label** - The container for the label slot.
+   * - **details** - The container for the details slot.
+   * - **submenu-icon** - The submenu indicator icon (a `<wa-icon>` element).
+   * - **submenu** - The submenu container.
+   */
+  "wa-dropdown-item": Partial<WaDropdownItemProps & BaseProps & BaseEvents>;
+
+  /**
+   * Dropdowns display a list of options that can be triggered by a button or other element. They support
+   * keyboard navigation, submenus, and various customization options.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-show** - Emitted when the dropdown is about to show.
+   * - **wa-after-show** - Emitted after the dropdown has been shown.
+   * - **wa-hide** - Emitted when the dropdown is about to hide.
+   * - **wa-after-hide** - Emitted after the dropdown has been hidden.
+   * - **wa-select** - Emitted when an item in the dropdown is selected.
+   *
+   * ### **Slots:**
+   *  - _default_ - The dropdown's items, typically `<wa-dropdown-item>` elements.
+   * - **trigger** - The element that triggers the dropdown, such as a `<wa-button>` or `<button>`.
+   *
+   * ### **CSS Properties:**
+   *  - **--show-duration** - The duration of the show animation. _(default: undefined)_
+   * - **--hide-duration** - The duration of the hide animation. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's host element.
+   * - **menu** - The dropdown menu container.
+   */
+  "wa-dropdown": Partial<WaDropdownProps & BaseProps & BaseEvents>;
+
+  /**
+   * Formats a number as a human readable bytes value.
+   * ---
+   *
+   */
+  "wa-format-bytes": Partial<WaFormatBytesProps & BaseProps & BaseEvents>;
+
+  /**
+   * Formats a date/time using the specified locale and options.
+   * ---
+   *
+   */
+  "wa-format-date": Partial<WaFormatDateProps & BaseProps & BaseEvents>;
+
+  /**
+   * Formats a number using the specified locale and options.
+   * ---
+   *
+   */
+  "wa-format-number": Partial<WaFormatNumberProps & BaseProps & BaseEvents>;
+
+  /**
+   * Includes give you the power to embed external HTML files into the page.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-load** - Emitted when the included file is loaded.
+   * - **wa-include-error** - Emitted when the included file fails to load due to an error.
+   */
+  "wa-include": Partial<WaIncludeProps & BaseProps & BaseEvents>;
+
+  /**
+   * Tracks immediate child elements and fires events as they move in and out of view.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-intersect** - Fired when a tracked element begins or ceases intersecting.
+   *
+   * ### **Slots:**
+   *  - _default_ - Elements to track. Only immediate children of the host are monitored.
+   */
+  "wa-intersection-observer": Partial<WaIntersectionObserverProps & BaseProps & BaseEvents>;
+
+  /**
+   * The Mutation Observer component offers a thin, declarative interface to the [`MutationObserver API`](https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver).
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-mutation** - Emitted when a mutation occurs.
+   *
+   * ### **Slots:**
+   *  - _default_ - The content to watch for mutations.
+   */
+  "wa-mutation-observer": Partial<WaMutationObserverProps & BaseProps & BaseEvents>;
+
+  /**
+   * Number inputs allow users to enter and edit numeric values with optional stepper buttons.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **input** - Emitted when the control receives input.
+   * - **change** - Emitted when an alteration to the control's value is committed by the user.
+   * - **blur** - Emitted when the control loses focus.
+   * - **focus** - Emitted when the control gains focus.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **focus(options: _FocusOptions_)** - Sets focus on the input.
+   * - **blur()** - Removes focus from the input.
+   * - **select()** - Selects all the text in the input.
+   * - **stepUp()** - Increments the value by the step amount.
+   * - **stepDown()** - Decrements the value by the step amount.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - **label** - The input's label. Alternatively, you can use the `label` attribute.
+   * - **start** - An element, such as `<wa-icon>`, placed at the start of the input control.
+   * - **end** - An element, such as `<wa-icon>`, placed at the end of the input control (before steppers).
+   * - **increment-icon** - An icon to use in lieu of the default increment icon.
+   * - **decrement-icon** - An icon to use in lieu of the default decrement icon.
+   * - **hint** - Text that describes how to use the input. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Parts:**
+   *  - **label** - The label element.
+   * - **form-control-label** - Alias for the label element.
+   * - **hint** - The hint element.
+   * - **base** - The wrapper containing the input and steppers.
+   * - **input** - The internal `<input>` control.
+   * - **start** - The container that wraps the `start` slot.
+   * - **end** - The container that wraps the `end` slot.
+   * - **stepper** - Both stepper buttons (for shared styling).
+   * - **stepper-increment** - The increment (+) button on the end side.
+   * - **stepper-decrement** - The decrement (-) button on the start side.
+   */
+  "wa-number-input": Partial<WaNumberInputProps & BaseProps & BaseEvents>;
+
+  /**
+   * Tags are used as labels to organize things or to indicate a selection.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-remove** - Emitted when the remove button is activated.
+   *
+   * ### **Slots:**
+   *  - _default_ - The tag's content.
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **content** - The tag's content.
+   * - **remove-button** - The tag's remove button, a `<wa-button>`.
+   * - **remove-button__base** - The remove button's exported `base` part.
+   */
+  "wa-tag": Partial<WaTagProps & BaseProps & BaseEvents>;
+
+  /**
+   * Options define the selectable items within a select component.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The option's label.
+   * - **start** - An element, such as `<wa-icon>`, placed before the label.
+   * - **end** - An element, such as `<wa-icon>`, placed after the label.
+   *
+   * ### **CSS Parts:**
+   *  - **checked-icon** - The checked icon, a `<wa-icon>` element.
+   * - **label** - The option's label.
+   * - **start** - The container that wraps the `start` slot.
+   * - **end** - The container that wraps the `end` slot.
+   */
+  "wa-option": Partial<WaOptionProps & BaseProps & BaseEvents>;
+
+  /**
+   * Selects allow you to choose items from a menu of predefined options.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **input** - Emitted when the control receives input.
+   * - **change** - Emitted when the control's value changes.
+   * - **focus** - Emitted when the control gains focus.
+   * - **blur** - Emitted when the control loses focus.
+   * - **wa-clear** - Emitted when the control's value is cleared.
+   * - **wa-show** - Emitted when the select's menu opens.
+   * - **wa-after-show** - Emitted after the select's menu opens and all animations are complete.
+   * - **wa-hide** - Emitted when the select's menu closes.
+   * - **wa-after-hide** - Emitted after the select's menu closes and all animations are complete.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **show()** - Shows the listbox.
+   * - **hide()** - Hides the listbox.
+   * - **focus(options: _FocusOptions_)** - Sets focus on the control.
+   * - **blur()** - Removes focus from the control.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - _default_ - The listbox options. Must be `<wa-option>` elements. You can use `<wa-divider>` to group items visually.
+   * - **label** - The input's label. Alternatively, you can use the `label` attribute.
+   * - **start** - An element, such as `<wa-icon>`, placed at the start of the combobox.
+   * - **end** - An element, such as `<wa-icon>`, placed at the end of the combobox.
+   * - **clear-icon** - An icon to use in lieu of the default clear icon.
+   * - **expand-icon** - The icon to show when the control is expanded and collapsed. Rotates on open and close.
+   * - **hint** - Text that describes how to use the input. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Properties:**
+   *  - **--show-duration** - The duration of the show animation. _(default: 100ms)_
+   * - **--hide-duration** - The duration of the hide animation. _(default: 100ms)_
+   * - **--tag-max-size** - When using `multiple`, the max size of tags before their content is truncated. _(default: 10ch)_
+   *
+   * ### **CSS Parts:**
+   *  - **form-control** - The form control that wraps the label, input, and hint.
+   * - **form-control-label** - The label's wrapper.
+   * - **form-control-input** - The select's wrapper.
+   * - **hint** - The hint's wrapper.
+   * - **combobox** - The container the wraps the start, end, value, clear icon, and expand button.
+   * - **start** - The container that wraps the `start` slot.
+   * - **end** - The container that wraps the `end` slot.
+   * - **display-input** - The element that displays the selected option's label, an `<input>` element.
+   * - **listbox** - The listbox container where options are slotted.
+   * - **tags** - The container that houses option tags when `multiselect` is used.
+   * - **tag** - The individual tags that represent each multiselect option.
+   * - **tag__content** - The tag's content part.
+   * - **tag__remove-button** - The tag's remove button.
+   * - **tag__remove-button__base** - The tag's remove button base part.
+   * - **clear-button** - The clear button.
+   * - **expand-icon** - The container that wraps the expand icon.
+   */
+  "wa-select": Partial<WaSelectProps & BaseProps & BaseEvents>;
+
+  /**
+   * Popovers display contextual content and interactive elements in a floating panel.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-show** - Emitted when the popover begins to show. Canceling this event will stop the popover from showing.
+   * - **wa-after-show** - Emitted after the popover has shown and all animations are complete.
+   * - **wa-hide** - Emitted when the popover begins to hide. Canceling this event will stop the popover from hiding.
+   * - **wa-after-hide** - Emitted after the popover has hidden and all animations are complete.
+   *
+   * ### **Methods:**
+   *  - **show()** - Shows the popover.
+   * - **hide()** - Hides the popover.
+   *
+   * ### **Slots:**
+   *  - _default_ - The popover's content. Interactive elements such as buttons and links are supported.
+   *
+   * ### **CSS Properties:**
+   *  - **--arrow-size** - The size of the tiny arrow that points to the popover (set to zero to remove). _(default: 0.375rem)_
+   * - **--max-width** - The maximum width of the popover's body content. _(default: 25rem)_
+   * - **--show-duration** - The speed of the show animation. _(default: 100ms)_
+   * - **--hide-duration** - The speed of the hide animation. _(default: 100ms)_
+   *
+   * ### **CSS Parts:**
+   *  - **dialog** - The native dialog element that contains the popover content.
+   * - **body** - The popover's body where its content is rendered.
+   * - **popup** - The internal `<wa-popup>` element that positions the popover.
+   * - **popup__popup** - The popup's exported `popup` part. Use this to target the popover's popup container.
+   * - **popup__arrow** - The popup's exported `arrow` part. Use this to target the popover's arrow.
+   */
+  "wa-popover": Partial<WaPopoverProps & BaseProps & BaseEvents>;
+
+  /**
+   * Progress bars are used to show the status of an ongoing operation.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - A label to show inside the progress indicator.
+   *
+   * ### **CSS Properties:**
+   *  - **--track-height** - The color of the track. _(default: 1rem)_
+   * - **--track-color** - The color of the track. _(default: var(--wa-color-neutral-fill-normal))_
+   * - **--indicator-color** - The color of the indicator. _(default: var(--wa-color-brand-fill-loud))_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **indicator** - The progress bar's indicator.
+   * - **label** - The progress bar's label.
+   */
+  "wa-progress-bar": Partial<WaProgressBarProps & BaseProps & BaseEvents>;
+
+  /**
+   * Progress rings are used to show the progress of a determinate operation in a circular fashion.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - A label to show inside the ring.
+   *
+   * ### **CSS Properties:**
+   *  - **--size** - The diameter of the progress ring (cannot be a percentage). _(default: undefined)_
+   * - **--track-width** - The width of the track. _(default: undefined)_
+   * - **--track-color** - The color of the track. _(default: undefined)_
+   * - **--indicator-width** - The width of the indicator. Defaults to the track width. _(default: undefined)_
+   * - **--indicator-color** - The color of the indicator. _(default: undefined)_
+   * - **--indicator-transition-duration** - The duration of the indicator's transition when the value changes. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **label** - The progress ring label.
+   * - **track** - The progress ring's track.
+   * - **indicator** - The progress ring's indicator.
+   */
+  "wa-progress-ring": Partial<WaProgressRingProps & BaseProps & BaseEvents>;
+
+  /**
+   * Generates a [QR code](https://www.qrcode.com/) and renders it using the [Canvas API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API).
+   * ---
+   *
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-qr-code": Partial<WaQrCodeProps & BaseProps & BaseEvents>;
+
+  /**
+   * Radios allow the user to select a single option from a group.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **blur** - Emitted when the control loses focus.
+   * - **focus** - Emitted when the control gains focus.
+   *
+   * ### **Methods:**
+   *  - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - _default_ - The radio's label.
+   *
+   * ### **CSS Properties:**
+   *  - **--checked-icon-color** - The color of the checked icon. _(default: undefined)_
+   * - **--checked-icon-scale** - The size of the checked icon relative to the radio. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **control** - The circular container that wraps the radio's checked state.
+   * - **checked-icon** - The checked icon.
+   * - **label** - The container that wraps the radio's label.
+   */
+  "wa-radio": Partial<WaRadioProps & BaseProps & BaseEvents>;
+
+  /**
+   * Radio groups are used to group multiple [radios](/docs/components/radio) so they function as a single form control.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **input** - Emitted when the radio group receives user input.
+   * - **change** - Emitted when the radio group's selected value changes.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **focus(options: _FocusOptions_)** - Sets focus on the radio group.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - _default_ - The default slot where `<wa-radio>` elements are placed.
+   * - **label** - The radio group's label. Required for proper accessibility. Alternatively, you can use the `label` attribute.
+   * - **hint** - Text that describes how to use the radio group. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Parts:**
+   *  - **form-control** - The form control that wraps the label, input, and hint.
+   * - **form-control-label** - The label's wrapper.
+   * - **form-control-input** - The input's wrapper.
+   * - **radios** - The wrapper than surrounds radio items, styled as a flex container by default.
+   * - **hint** - The hint's wrapper.
+   */
+  "wa-radio-group": Partial<WaRadioGroupProps & BaseProps & BaseEvents>;
+
+  /**
+   * Ratings give users a way to quickly view and provide feedback.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **change** - Emitted when the rating's value changes.
+   * - **wa-hover** - Emitted when the user hovers over a value. The `phase` property indicates when hovering starts, moves to a new value, or ends. The `value` property tells what the rating's value would be if the user were to commit to the hovered value.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **CSS Properties:**
+   *  - **--symbol-color** - The inactive color for symbols. _(default: undefined)_
+   * - **--symbol-color-active** - The active color for symbols. _(default: undefined)_
+   * - **--symbol-spacing** - The spacing to use around symbols. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-rating": Partial<WaRatingProps & BaseProps & BaseEvents>;
+
+  /**
+   * Outputs a localized time phrase relative to the current date and time.
+   * ---
+   *
+   */
+  "wa-relative-time": Partial<WaRelativeTimeProps & BaseProps & BaseEvents>;
+
+  /**
+   * Scrollers create an accessible container while providing visual cues that help users identify and navigate
+   * through content that scrolls.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The content to show inside the scroller.
+   *
+   * ### **CSS Properties:**
+   *  - **--shadow-color** - The base color of the shadow. _(default: var(--wa-color-surface-default))_
+   * - **--shadow-size** - The size of the shadow. _(default: 2rem)_
+   *
+   * ### **CSS Parts:**
+   *  - **content** - The container that wraps the slotted content.
+   */
+  "wa-scroller": Partial<WaScrollerProps & BaseProps & BaseEvents>;
+
+  /**
+   * The Resize Observer component offers a thin, declarative interface to the [`ResizeObserver API`](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver).
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-resize** - Emitted when the element is resized.
+   *
+   * ### **Slots:**
+   *  - _default_ - One or more elements to watch for resizing.
+   */
+  "wa-resize-observer": Partial<WaResizeObserverProps & BaseProps & BaseEvents>;
+
+  /**
+   * Skeletons are used to provide a visual representation of where content will eventually be drawn.
+   * ---
+   *
+   *
+   * ### **CSS Properties:**
+   *  - **--color** - The color of the skeleton. _(default: undefined)_
+   * - **--sheen-color** - The sheen color when the skeleton is in its loading state. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **indicator** - The skeleton's indicator which is responsible for its color and animation.
+   */
+  "wa-skeleton": Partial<WaSkeletonProps & BaseProps & BaseEvents>;
+
+  /**
+   * Ranges allow the user to select a single value within a given range using a slider.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **change** - Emitted when an alteration to the control's value is committed by the user.
+   * - **blur** - Emitted when the control loses focus.
+   * - **focus** - Emitted when the control gains focus.
+   * - **input** - Emitted when the control receives input.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **focus()** - Sets focus to the slider.
+   * - **blur()** - Removes focus from the slider.
+   * - **stepDown()** - Decreases the slider's value by `step`. This is a programmatic change, so `input` and `change` events will not be
+   * emitted when this is called.
+   * - **stepUp()** - Increases the slider's value by `step`. This is a programmatic change, so `input` and `change` events will not be
+   * emitted when this is called.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - **label** - The slider label. Alternatively, you can use the `label` attribute.
+   * - **hint** - Text that describes how to use the input. Alternatively, you can use the `hint` attribute. instead.
+   * - **reference** - One or more reference labels to show visually below the slider.
+   *
+   * ### **CSS Properties:**
+   *  - **--track-size** - The height or width of the slider's track. _(default: 0.75em)_
+   * - **--marker-width** - The width of each individual marker. _(default: 0.1875em)_
+   * - **--marker-height** - The height of each individual marker. _(default: 0.1875em)_
+   * - **--thumb-width** - The width of the thumb. _(default: 1.25em)_
+   * - **--thumb-height** - The height of the thumb. _(default: 1.25em)_
+   *
+   * ### **CSS Parts:**
+   *  - **label** - The element that contains the sliders's label.
+   * - **hint** - The element that contains the slider's description.
+   * - **slider** - The focusable element with `role="slider"`. Contains the track and reference slot.
+   * - **track** - The slider's track.
+   * - **indicator** - The colored indicator that shows from the start of the slider to the current value.
+   * - **markers** - The container that holds all the markers when `with-markers` is used.
+   * - **marker** - The individual markers that are shown when `with-markers` is used.
+   * - **references** - The container that holds references that get slotted in.
+   * - **thumb** - The slider's thumb.
+   * - **thumb-min** - The min value thumb in a range slider.
+   * - **thumb-max** - The max value thumb in a range slider.
+   * - **tooltip** - The tooltip, a `<wa-tooltip>` element.
+   * - **tooltip__tooltip** - The tooltip's `tooltip` part.
+   * - **tooltip__content** - The tooltip's `content` part.
+   * - **tooltip__arrow** - The tooltip's `arrow` part.
+   */
+  "wa-slider": Partial<WaSliderProps & BaseProps & BaseEvents>;
+
+  /**
+   * Switches allow the user to toggle an option on or off.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **change** - Emitted when the control's checked state changes.
+   * - **input** - Emitted when the control receives input.
+   * - **blur** - Emitted when the control loses focus.
+   * - **focus** - Emitted when the control gains focus.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **click()** - Simulates a click on the switch.
+   * - **focus(options: _FocusOptions_)** - Sets focus on the switch.
+   * - **blur()** - Removes focus from the switch.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - _default_ - The switch's label.
+   * - **hint** - Text that describes how to use the switch. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Properties:**
+   *  - **--width** - The width of the switch. _(default: undefined)_
+   * - **--height** - The height of the switch. _(default: undefined)_
+   * - **--thumb-size** - The size of the thumb. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **control** - The control that houses the switch's thumb.
+   * - **thumb** - The switch's thumb.
+   * - **label** - The switch's label.
+   * - **hint** - The hint's wrapper.
+   */
+  "wa-switch": Partial<WaSwitchProps & BaseProps & BaseEvents>;
+
+  /**
+   * Tabs are used inside [tab groups](/docs/components/tab-group) to represent and activate [tab panels](/docs/components/tab-panel).
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The tab's label.
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-tab": Partial<WaTabProps & BaseProps & BaseEvents>;
+
+  /**
+   * Split panels display two adjacent panels, allowing the user to reposition them.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-reposition** - Emitted when the divider's position changes.
+   *
+   * ### **Slots:**
+   *  - **start** - Content to place in the start panel.
+   * - **end** - Content to place in the end panel.
+   * - **divider** - The divider. Useful for slotting in a custom icon that renders as a handle.
+   *
+   * ### **CSS Properties:**
+   *  - **--divider-width** - The width of the visible divider. _(default: 4px)_
+   * - **--divider-hit-area** - The invisible region around the divider where dragging can occur. This is usually wider than the divider to facilitate easier dragging. _(default: 12px)_
+   * - **--min** - The minimum allowed size of the primary panel. _(default: 0)_
+   * - **--max** - The maximum allowed size of the primary panel. _(default: 100%)_
+   *
+   * ### **CSS Parts:**
+   *  - **start** - The start panel.
+   * - **end** - The end panel.
+   * - **panel** - Targets both the start and end panels.
+   * - **divider** - The divider that separates the start and end panels.
+   */
+  "wa-split-panel": Partial<WaSplitPanelProps & BaseProps & BaseEvents>;
+
+  /**
+   * Tab panels are used inside [tab groups](/docs/components/tab-group) to display tabbed content.
+   * ---
+   *
+   *
+   * ### **Slots:**
+   *  - _default_ - The tab panel's content.
+   *
+   * ### **CSS Properties:**
+   *  - **--padding** - The tab panel's padding. _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-tab-panel": Partial<WaTabPanelProps & BaseProps & BaseEvents>;
+
+  /**
+   * Tab groups organize content into a container that shows one section at a time.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-tab-show** - Emitted when a tab is shown.
+   * - **wa-tab-hide** - Emitted when a tab is hidden.
+   *
+   * ### **Slots:**
+   *  - _default_ - Used for grouping tab panels in the tab group. Must be `<wa-tab-panel>` elements.
+   * - **nav** - Used for grouping tabs in the tab group. Must be `<wa-tab>` elements. Note that `<wa-tab>` will set this slot on itself automatically.
+   *
+   * ### **CSS Properties:**
+   *  - **--indicator-color** - The color of the active tab indicator. _(default: undefined)_
+   * - **--track-color** - The color of the indicator's track (the line that separates tabs from panels). _(default: undefined)_
+   * - **--track-width** - The width of the indicator's track (the line that separates tabs from panels). _(default: undefined)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **nav** - The tab group's navigation container where tabs are slotted in.
+   * - **tabs** - The container that wraps the tabs.
+   * - **body** - The tab group's body where tab panels are slotted in.
+   * - **scroll-button** - The previous/next scroll buttons that show when tabs are scrollable, a `<wa-button>`.
+   * - **scroll-button-start** - The starting scroll button.
+   * - **scroll-button-end** - The ending scroll button.
+   * - **scroll-button__base** - The scroll button's exported `base` part.
+   */
+  "wa-tab-group": Partial<WaTabGroupProps & BaseProps & BaseEvents>;
+
+  /**
+   * Textareas collect data from the user and allow multiple lines of text.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **blur** - Emitted when the control loses focus.
+   * - **change** - Emitted when an alteration to the control's value is committed by the user.
+   * - **focus** - Emitted when the control gains focus.
+   * - **input** - Emitted when the control receives input.
+   * - **wa-invalid** - Emitted when the form control has been checked for validity and its constraints aren't satisfied.
+   *
+   * ### **Methods:**
+   *  - **focus(options: _FocusOptions_)** - Sets focus on the textarea.
+   * - **blur()** - Removes focus from the textarea.
+   * - **select()** - Selects all the text in the textarea.
+   * - **scrollPosition(position: _{ top?: number; left?: number }_): _{ top: number; left: number } | undefined_** - Gets or sets the textarea's scroll position.
+   * - **setSelectionRange(selectionStart: _number_, selectionEnd: _number_, selectionDirection: _'forward' | 'backward' | 'none'_)** - Sets the start and end positions of the text selection (0-based).
+   * - **setRangeText(replacement: _string_, start: _number_, end: _number_, selectMode: _'select' | 'start' | 'end' | 'preserve'_)** - Replaces a range of text with a new string.
+   * - **setCustomValidity(message: _string_)** - Do not use this when creating a "Validator". This is intended for end users of components.
+   * We track manually defined custom errors so we don't clear them on accident in our validators.
+   * - **formStateRestoreCallback(state: _string | File | FormData | null_, reason: _'autocomplete' | 'restore'_)** - Called when the browser is trying to restore element’s state to state in which case reason is "restore", or when
+   * the browser is trying to fulfill autofill on behalf of user in which case reason is "autocomplete". In the case of
+   * "restore", state is a string, File, or FormData object previously set as the second argument to setFormValue.
+   * - **resetValidity()** - Reset validity is a way of removing manual custom errors and native validation.
+   *
+   * ### **Slots:**
+   *  - **label** - The textarea's label. Alternatively, you can use the `label` attribute.
+   * - **hint** - Text that describes how to use the input. Alternatively, you can use the `hint` attribute.
+   *
+   * ### **CSS Parts:**
+   *  - **label** - The label
+   * - **form-control-input** - The input's wrapper.
+   * - **hint** - The hint's wrapper.
+   * - **textarea** - The internal `<textarea>` control.
+   * - **base** - The wrapper around the `<textarea>` control.
+   * - **count** - The character count element, rendered when the `with-count` attribute is present.
+   */
+  "wa-textarea": Partial<WaTextareaProps & BaseProps & BaseEvents>;
+
+  /**
+   * Trees allow you to display a hierarchical list of selectable [tree items](/docs/components/tree-item). Items with children can be expanded and collapsed as desired by the user.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **wa-selection-change** - Emitted when a tree item is selected or deselected.
+   *
+   * ### **Slots:**
+   *  - _default_ - The default slot.
+   * - **expand-icon** - The icon to show when the tree item is expanded. Works best with `<wa-icon>`.
+   * - **collapse-icon** - The icon to show when the tree item is collapsed. Works best with `<wa-icon>`.
+   *
+   * ### **CSS Properties:**
+   *  - **--indent-size** - The size of the indentation for nested items. _(default: var(--wa-space-m))_
+   * - **--indent-guide-color** - The color of the indentation line. _(default: var(--wa-color-surface-border))_
+   * - **--indent-guide-offset** - The amount of vertical spacing to leave between the top and bottom of the indentation line's starting position. _(default: 0)_
+   * - **--indent-guide-style** - The style of the indentation line, e.g. solid, dotted, dashed. _(default: solid)_
+   * - **--indent-guide-width** - The width of the indentation line. _(default: 0)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   */
+  "wa-tree": Partial<WaTreeProps & BaseProps & BaseEvents>;
+
+  /**
+   * Zoomable frames render iframe content with zoom and interaction controls.
+   * ---
+   *
+   *
+   * ### **Events:**
+   *  - **load** - Emitted when the internal iframe when it finishes loading.
+   * - **error** - Emitted from the internal iframe when it fails to load.
+   *
+   * ### **Methods:**
+   *  - **zoomIn()** - Zooms in to the next available zoom level.
+   * - **zoomOut()** - Zooms out to the previous available zoom level.
+   *
+   * ### **Slots:**
+   *  - **zoom-in-icon** - The slot that contains the zoom in icon.
+   * - **zoom-out-icon** - The slot that contains the zoom out icon.
+   *
+   * ### **CSS Parts:**
+   *  - **iframe** - The internal `<iframe>` element.
+   * - **controls** - The container that surrounds zoom control buttons.
+   * - **zoom-in-button** - The zoom in button.
+   * - **zoom-out-button** - The zoom out button.
+   */
+  "wa-zoomable-frame": Partial<WaZoomableFrameProps & BaseProps & BaseEvents>;
+
+  /**
+   * Renders markdown content in plain ol' HTML.
+   * ---
+   *
+   *
+   * ### **Methods:**
+   *  - **getMarked(): _Marked_** - Returns the shared Marked instance used by all `<wa-markdown>` components.
+   * - **updateAll(): _void_** - Re-renders all connected `<wa-markdown>` instances. Call this after changing the Marked configuration.
+   * - **renderMarkdown()** - Reads the script content, normalizes whitespace, parses markdown, and injects the result.
+   */
+  "wa-markdown": Partial<WaMarkdownProps & BaseProps & BaseEvents>;
+
+  /**
+   * Pages offer an easy way to scaffold entire page layouts using minimal markup.
+   * ---
+   *
+   *
+   * ### **Methods:**
+   *  - **visiblePixelsInViewport(element: _HTMLElement | null_)** - https://stackoverflow.com/a/26831113
+   * This prevents awkward gaps when scrolling the page and the aside / menu dont "fill" the gaps.
+   * - **showNavigation()** - Shows the mobile navigation drawer
+   * - **hideNavigation()** - Hides the mobile navigation drawer
+   * - **toggleNavigation()** - Toggles the mobile navigation drawer
+   *
+   * ### **Slots:**
+   *  - _default_ - The page's main content.
+   * - **banner** - The banner that gets display above the header. The banner will not be shown if no content is provided.
+   * - **header** - The header to display at the top of the page. If a banner is present, the header will appear below the banner. The header will not be shown if there is no content.
+   * - **subheader** - A subheader to display below the `header`. This is a good place to put things like breadcrumbs.
+   * - **menu** - The left side of the page. If you slot an element in here, you will override the default `navigation` slot and will be handling navigation on your own. This also will not disable the fallback behavior of the navigation button. This section "sticks" to the top as the page scrolls.
+   * - **navigation-header** - The header for a navigation area. On mobile this will be the header for `<wa-drawer>`.
+   * - **navigation** - The main content to display in the navigation area. This is displayed on the left side of the page, if `menu` is not used. This section "sticks" to the top as the page scrolls.
+   * - **navigation-footer** - The footer for a navigation area. On mobile this will be the footer for `<wa-drawer>`.
+   * - **navigation-toggle** - Use this slot to slot in your own button + icon for toggling the navigation drawer. By default it is a `<wa-button>` + a 3 bars `<wa-icon>`
+   * - **navigation-toggle-icon** - Use this to slot in your own icon for toggling the navigation drawer. By default it is 3 bars `<wa-icon>`.
+   * - **main-header** - Header to display inline above the main content.
+   * - **main-footer** - Footer to display inline below the main content.
+   * - **aside** - Content to be shown on the right side of the page. Typically contains a table of contents, ads, etc. This section "sticks" to the top as the page scrolls.
+   * - **skip-to-content** - The "skip to content" slot. You can override this If you would like to override the `Skip to content` button and add additional "Skip to X", they can be inserted here.
+   * - **footer** - The content to display in the footer. This is always displayed underneath the viewport so will always make the page "scrollable".
+   *
+   * ### **CSS Properties:**
+   *  - **--menu-width** - The width of the page's "menu" section. _(default: auto)_
+   * - **--main-width** - The width of the page's "main" section. _(default: 1fr)_
+   * - **--aside-width** - The wide of the page's "aside" section. _(default: auto)_
+   * - **--banner-height** - The height of the banner. This gets calculated when the page initializes. If the height is known, you can set it here to prevent shifting when the page loads. _(default: 0px)_
+   * - **--header-height** - The height of the header. This gets calculated when the page initializes. If the height is known, you can set it here to prevent shifting when the page loads. _(default: 0px)_
+   * - **--subheader-height** - The height of the subheader. This gets calculated when the page initializes. If the height is known, you can set it here to prevent shifting when the page loads. _(default: 0px)_
+   *
+   * ### **CSS Parts:**
+   *  - **base** - The component's base wrapper.
+   * - **banner** - The banner to show above header.
+   * - **header** - The header, usually for top level navigation / branding.
+   * - **subheader** - Shown below the header, usually intended for things like breadcrumbs and other page level navigation.
+   * - **body** - The wrapper around menu, main, and aside.
+   * - **menu** - The left hand side of the page. Generally intended for navigation.
+   * - **navigation** - The `<nav>` that wraps the navigation slots on desktop viewports.
+   * - **navigation-header** - The header for a navigation area. On mobile this will be the header for `<wa-drawer>`.
+   * - **navigation-footer** - The footer for a navigation area. On mobile this will be the footer for `<wa-drawer>`.
+   * - **navigation-toggle** - The default `<wa-button>` that will toggle the `<wa-drawer>` for mobile viewports.
+   * - **navigation-toggle-icon** - The default `<wa-icon>` displayed inside of the navigation-toggle button.
+   * - **main-header** - The header above main content.
+   * - **main-content** - The main content.
+   * - **main-footer** - The footer below main content.
+   * - **aside** - The right hand side of the page. Used for things like table of contents, ads, etc.
+   * - **skip-links** - Wrapper around skip-link
+   * - **skip-link** - The "skip to main content" link
+   * - **footer** - The footer of the page. This is always below the initial viewport size.
+   * - **dialog-wrapper** - A wrapper around elements such as dialogs or other modal-like elements.
+   */
+  "wa-page": Partial<WaPageProps & BaseProps & BaseEvents>;
+};
+
+declare namespace svelteHTML {
+  // eslint-disable-next-line @typescript-eslint/no-empty-interface
+  interface IntrinsicElements extends CustomElements {}
+}

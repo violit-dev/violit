@@ -1,0 +1,98 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import {
+  i
+} from "./chunk.7OBLIRXR.js";
+
+// src/components/rating/rating.styles.ts
+var rating_styles_default = i`
+  :host {
+    --symbol-color: var(--wa-color-neutral-on-quiet);
+    --symbol-color-active: var(--wa-color-yellow-70);
+    --symbol-spacing: 0.125em;
+
+    display: inline-flex;
+    border-radius: var(--wa-border-radius-m);
+    vertical-align: middle;
+    touch-action: none;
+  }
+
+  :host(:focus) {
+    outline: none;
+  }
+
+  :host(:focus-visible) {
+    outline: var(--wa-focus-ring);
+    outline-offset: var(--wa-focus-ring-offset);
+  }
+
+  .rating {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .symbols {
+    display: inline-flex;
+    gap: 0.125em;
+    position: relative;
+    line-height: 0;
+    color: var(--symbol-color);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .symbols > * {
+    padding: var(--symbol-spacing);
+  }
+
+  .symbol-active,
+  .partial-filled {
+    color: var(--symbol-color-active);
+  }
+
+  .partial-symbol-container {
+    position: relative;
+  }
+
+  .partial-filled {
+    position: absolute;
+    top: var(--symbol-spacing);
+    left: var(--symbol-spacing);
+  }
+
+  .symbol {
+    transition: scale var(--wa-transition-normal) var(--wa-transition-easing);
+    pointer-events: none;
+  }
+
+  .symbol-hover {
+    scale: 1.2;
+  }
+
+  .rating-readonly .symbols {
+    cursor: default;
+  }
+
+  :host([disabled]) .symbol-hover,
+  .rating-readonly .symbol-hover {
+    scale: none;
+  }
+
+  :host([disabled]) {
+    opacity: 0.5;
+  }
+
+  :host([disabled]) .symbols {
+    cursor: not-allowed;
+  }
+
+  /* Forced colors mode */
+  @media (forced-colors: active) {
+    .symbol-active {
+      color: SelectedItem;
+    }
+  }
+`;
+
+export {
+  rating_styles_default
+};

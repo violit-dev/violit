@@ -1,0 +1,61 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import {
+  registerTranslation
+} from "../chunks/chunk.HPOJN4W7.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/it.ts
+var translation = {
+  $code: "it",
+  $name: "Italiano",
+  $dir: "ltr",
+  carousel: "Carosello",
+  clearEntry: "Cancella inserimento",
+  createOption: (value) => `Crea "${value}"`,
+  close: "Chiudi",
+  copied: "Copiato",
+  copy: "Copia",
+  currentValue: "Valore attuale",
+  decrement: "Diminuisci",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  error: "Errore",
+  goToSlide: (slide, count) => `Vai alla diapositiva ${slide} di ${count}`,
+  hidePassword: "Nascondi password",
+  increment: "Aumenta",
+  loading: "In caricamento",
+  nextSlide: "Prossima diapositiva",
+  numCharacters: (num) => {
+    if (num === 1) return "1 carattere";
+    return `${num} caratteri`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 carattere rimanente";
+    return `${num} caratteri rimanenti`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "Nessuna opzione selezionata";
+    if (num === 1) return "1 opzione selezionata";
+    return `${num} opzioni selezionate`;
+  },
+  pauseAnimation: "Metti in pausa animazione",
+  playAnimation: "Riproduci animazione",
+  previousSlide: "Diapositiva precedente",
+  progress: "Avanzamento",
+  remove: "Rimuovi",
+  resize: "Ridimensiona",
+  scrollableRegion: "Area scorrevole",
+  scrollToEnd: "Scorri alla fine",
+  scrollToStart: "Scorri all'inizio",
+  selectAColorFromTheScreen: "Seleziona un colore dalla schermo",
+  showPassword: "Mostra password",
+  slideNum: (slide) => `Diapositiva ${slide}`,
+  toggleColorFormat: "Cambia formato colore",
+  zoomIn: "Ingrandire",
+  zoomOut: "Rimpicciolire"
+};
+registerTranslation(translation);
+var it_default = translation;
+export {
+  it_default as default
+};

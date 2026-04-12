@@ -1,0 +1,63 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.G3ZVQTTB.js";
+import "../chunks/chunk.5OV4QM6R.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HPOJN4W7.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/hi.ts
+var translation = {
+  $code: "hi",
+  $name: "\u0939\u093F\u0928\u094D\u0926\u0940",
+  $dir: "ltr",
+  carousel: "\u0915\u0948\u0930\u094B\u0938\u0947\u0932",
+  clearEntry: "\u092A\u094D\u0930\u0935\u093F\u0937\u094D\u091F\u093F \u0938\u093E\u092B\u093C \u0915\u0930\u0947\u0902",
+  createOption: (value) => `"${value}" \u092C\u0928\u093E\u090F\u0901`,
+  close: "\u092C\u0902\u0926 \u0915\u0930\u0947\u0902",
+  copied: "\u0915\u0949\u092A\u0940 \u0915\u093F\u092F\u093E \u0917\u092F\u093E",
+  copy: "\u0915\u0949\u092A\u0940 \u0915\u0930\u0947\u0902",
+  currentValue: "\u0935\u0930\u094D\u0924\u092E\u093E\u0928 \u092E\u093E\u0928",
+  decrement: "\u0918\u091F\u093E\u090F\u0902",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  error: "\u0924\u094D\u0930\u0941\u091F\u093F",
+  goToSlide: (slide, count) => `${count} \u092E\u0947\u0902 \u0938\u0947 \u0938\u094D\u0932\u093E\u0907\u0921 ${slide} \u092A\u0930 \u091C\u093E\u090F\u0902`,
+  hidePassword: "\u092A\u093E\u0938\u0935\u0930\u094D\u0921 \u091B\u0941\u092A\u093E\u090F\u0902",
+  increment: "\u092C\u0922\u093C\u093E\u090F\u0902",
+  loading: "\u0932\u094B\u0921 \u0939\u094B \u0930\u0939\u093E \u0939\u0948",
+  nextSlide: "\u0905\u0917\u0932\u0940 \u0938\u094D\u0932\u093E\u0907\u0921",
+  numCharacters: (num) => {
+    if (num === 1) return "1 \u0905\u0915\u094D\u0937\u0930";
+    return `${num} \u0905\u0915\u094D\u0937\u0930`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 \u0905\u0915\u094D\u0937\u0930 \u0936\u0947\u0937";
+    return `${num} \u0905\u0915\u094D\u0937\u0930 \u0936\u0947\u0937`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "\u0915\u094B\u0908 \u0935\u093F\u0915\u0932\u094D\u092A \u091A\u092F\u0928\u093F\u0924 \u0928\u0939\u0940\u0902";
+    if (num === 1) return "1 \u0935\u093F\u0915\u0932\u094D\u092A \u091A\u092F\u0928\u093F\u0924";
+    return `${num} \u0935\u093F\u0915\u0932\u094D\u092A \u091A\u092F\u0928\u093F\u0924`;
+  },
+  pauseAnimation: "\u090F\u0928\u093F\u092E\u0947\u0936\u0928 \u0930\u094B\u0915\u0947\u0902",
+  playAnimation: "\u090F\u0928\u093F\u092E\u0947\u0936\u0928 \u091A\u0932\u093E\u090F\u0902",
+  previousSlide: "\u092A\u093F\u091B\u0932\u0940 \u0938\u094D\u0932\u093E\u0907\u0921",
+  progress: "\u092A\u094D\u0930\u0917\u0924\u093F",
+  remove: "\u0939\u091F\u093E\u090F\u0902",
+  resize: "\u0906\u0915\u093E\u0930 \u092C\u0926\u0932\u0947\u0902",
+  scrollableRegion: "\u0938\u094D\u0915\u094D\u0930\u0949\u0932 \u0915\u0930\u0928\u0947 \u092F\u094B\u0917\u094D\u092F \u0915\u094D\u0937\u0947\u0924\u094D\u0930",
+  scrollToEnd: "\u0905\u0902\u0924 \u0924\u0915 \u0938\u094D\u0915\u094D\u0930\u0949\u0932 \u0915\u0930\u0947\u0902",
+  scrollToStart: "\u0906\u0930\u0902\u092D \u0924\u0915 \u0938\u094D\u0915\u094D\u0930\u0949\u0932 \u0915\u0930\u0947\u0902",
+  selectAColorFromTheScreen: "\u0938\u094D\u0915\u094D\u0930\u0940\u0928 \u0938\u0947 \u090F\u0915 \u0930\u0902\u0917 \u091A\u0941\u0928\u0947\u0902",
+  showPassword: "\u092A\u093E\u0938\u0935\u0930\u094D\u0921 \u0926\u093F\u0916\u093E\u090F\u0902",
+  slideNum: (slide) => `\u0938\u094D\u0932\u093E\u0907\u0921 ${slide}`,
+  toggleColorFormat: "\u0930\u0902\u0917 \u092A\u094D\u0930\u093E\u0930\u0942\u092A \u092C\u0926\u0932\u0947\u0902",
+  zoomIn: "\u091C\u093C\u0942\u092E \u0907\u0928",
+  zoomOut: "\u091C\u093C\u0942\u092E \u0906\u0909\u091F"
+};
+registerTranslation(translation);
+var hi_default = translation;
+export {
+  hi_default as default
+};

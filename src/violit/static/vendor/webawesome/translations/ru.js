@@ -1,0 +1,69 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.G3ZVQTTB.js";
+import "../chunks/chunk.5OV4QM6R.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HPOJN4W7.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/ru.ts
+var translation = {
+  $code: "ru",
+  $name: "\u0420\u0443\u0441\u0441\u043A\u0438\u0439",
+  $dir: "ltr",
+  carousel: "\u041A\u0430\u0440\u0443\u0441\u0435\u043B\u044C",
+  clearEntry: "\u041E\u0447\u0438\u0441\u0442\u0438\u0442\u044C \u0437\u0430\u043F\u0438\u0441\u044C",
+  createOption: (value) => `\u0421\u043E\u0437\u0434\u0430\u0442\u044C \xAB${value}\xBB`,
+  close: "\u0417\u0430\u043A\u0440\u044B\u0442\u044C",
+  copied: "\u0421\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D\u043E",
+  copy: "\u0421\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
+  currentValue: "\u0422\u0435\u043A\u0443\u0449\u0435\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435",
+  decrement: "\u0423\u043C\u0435\u043D\u044C\u0448\u0438\u0442\u044C",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  error: "\u041E\u0448\u0438\u0431\u043A\u0430",
+  goToSlide: (slide, count) => `\u041F\u0435\u0440\u0435\u0439\u0442\u0438 \u043A \u0441\u043B\u0430\u0439\u0434\u0443 ${slide} \u0438\u0437 ${count}`,
+  hidePassword: "\u0421\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u0440\u043E\u043B\u044C",
+  increment: "\u0423\u0432\u0435\u043B\u0438\u0447\u0438\u0442\u044C",
+  loading: "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430",
+  nextSlide: "\u0421\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u0441\u043B\u0430\u0439\u0434",
+  numCharacters: (num) => {
+    const mod10 = num % 10;
+    const mod100 = num % 100;
+    if (mod10 === 1 && mod100 !== 11) return `${num} \u0441\u0438\u043C\u0432\u043E\u043B`;
+    if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) return `${num} \u0441\u0438\u043C\u0432\u043E\u043B\u0430`;
+    return `${num} \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432`;
+  },
+  numCharactersRemaining: (num) => {
+    const mod10 = num % 10;
+    const mod100 = num % 100;
+    if (mod10 === 1 && mod100 !== 11) return `\u041E\u0441\u0442\u0430\u043B\u0441\u044F ${num} \u0441\u0438\u043C\u0432\u043E\u043B`;
+    if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) return `\u041E\u0441\u0442\u0430\u043B\u043E\u0441\u044C ${num} \u0441\u0438\u043C\u0432\u043E\u043B\u0430`;
+    return `\u041E\u0441\u0442\u0430\u043B\u043E\u0441\u044C ${num} \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "\u0432\u044B\u0431\u0440\u0430\u043D\u043E 0 \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u043E\u0432";
+    if (num === 1) return "\u0412\u044B\u0431\u0440\u0430\u043D 1 \u0432\u0430\u0440\u0438\u0430\u043D\u0442";
+    return `\u0432\u044B\u0431\u0440\u0430\u043D\u043E ${num} \u0432\u0430\u0440\u0438\u0430\u043D\u0442\u0430`;
+  },
+  pauseAnimation: "\u041F\u0440\u0438\u043E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0430\u043D\u0438\u043C\u0430\u0446\u0438\u044E",
+  playAnimation: "\u0412\u043E\u0441\u043F\u0440\u043E\u0438\u0437\u0432\u0435\u0441\u0442\u0438 \u0430\u043D\u0438\u043C\u0430\u0446\u0438\u044E",
+  previousSlide: "\u041F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0438\u0439 \u0441\u043B\u0430\u0439\u0434",
+  progress: "\u041F\u0440\u043E\u0433\u0440\u0435\u0441\u0441",
+  remove: "\u0423\u0434\u0430\u043B\u0438\u0442\u044C",
+  resize: "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u0440\u0430\u0437\u043C\u0435\u0440",
+  scrollableRegion: "Scrollable region",
+  scrollToEnd: "\u041F\u0440\u043E\u043B\u0438\u0441\u0442\u0430\u0442\u044C \u0434\u043E \u043A\u043E\u043D\u0446\u0430",
+  scrollToStart: "\u041F\u0440\u043E\u043B\u0438\u0441\u0442\u0430\u0442\u044C \u043A \u043D\u0430\u0447\u0430\u043B\u0443",
+  selectAColorFromTheScreen: "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0446\u0432\u0435\u0442 \u043D\u0430 \u044D\u043A\u0440\u0430\u043D\u0435",
+  showPassword: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u043F\u0430\u0440\u043E\u043B\u044C",
+  slideNum: (slide) => `\u0421\u043B\u0430\u0439\u0434 ${slide}`,
+  toggleColorFormat: "\u041F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0446\u0432\u0435\u0442\u043E\u0432\u0443\u044E \u043C\u043E\u0434\u0435\u043B\u044C",
+  zoomIn: "\u0423\u0432\u0435\u043B\u0438\u0447\u0438\u0442\u044C",
+  zoomOut: "\u0423\u043C\u0435\u043D\u044C\u0448\u0438\u0442\u044C"
+};
+registerTranslation(translation);
+var ru_default = translation;
+export {
+  ru_default as default
+};

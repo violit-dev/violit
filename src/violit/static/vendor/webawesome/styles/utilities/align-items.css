@@ -1,0 +1,44 @@
+@layer wa-utilities {
+  /* Apply Flexbox with 0 specificity to ensure an align-items util produces a visible change */
+  :where(
+    .wa-align-items-start,
+    .wa-align-items-end,
+    .wa-align-items-center,
+    .wa-align-items-stretch,
+    .wa-align-items-baseline
+  ) {
+    display: flex;
+  }
+
+  .wa-align-items-start {
+    align-items: flex-start;
+  }
+  .wa-align-items-end {
+    align-items: flex-end;
+  }
+  .wa-align-items-center {
+    align-items: center;
+  }
+  .wa-align-items-stretch {
+    align-items: stretch;
+  }
+  .wa-align-items-baseline {
+    align-items: baseline;
+  }
+
+  .wa-align-self-start {
+    align-self: flex-start;
+  }
+  .wa-align-self-end {
+    align-self: flex-end;
+  }
+  .wa-align-self-center {
+    align-self: center;
+  }
+  .wa-align-self-stretch {
+    align-self: stretch;
+  }
+  .wa-align-self-baseline {
+    align-self: baseline;
+  }
+}
