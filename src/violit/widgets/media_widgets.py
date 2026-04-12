@@ -71,22 +71,22 @@ class MediaWidgetsMixin:
             
             caption_html = ""
             if caption:
-                caption_html = f'<div style="text-align:center;margin-top:0.5rem;color:var(--sl-text-muted);font-size:0.875rem;">{caption}</div>'
+                caption_html = f'<div style="text-align:center;margin-top:0.5rem;color:var(--vl-text-muted);font-size:0.875rem;">{caption}</div>'
             
             # Modal HTML for enlarged image
             modal_id = f"modal-{cid}"
             modal_html = f'''
-            <sl-dialog id="{modal_id}" no-header style="--width: 100%; position: fixed; z-index: 10000;">
+            <wa-dialog id="{modal_id}" without-header style="--width: 100%; position: fixed; z-index: 10000;">
                 <div style="display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.05); border-radius: 0.5rem; overflow: hidden; padding: 1rem;">
                     <img src="{img_src}" style="max-width: 100%; max-height: 70vh; object-fit: contain; box-shadow: 0 10px 25px rgba(0,0,0,0.2);" />
                 </div>
                 {caption_html}
                 <div slot="footer" style="padding: 0; display: flex; justify-content: flex-end;">
-                    <sl-button variant="primary" onclick="document.getElementById('{modal_id}').hide()">닫기</sl-button>
+                    <wa-button variant="brand" appearance="accent" onclick="document.getElementById('{modal_id}').hide()">Close</wa-button>
                 </div>
                 <style>
                     #{modal_id} {{
-                        --sl-panel-background-color: white;
+                        --vl-panel-background-color: white;
                     }}
                     #{modal_id}::part(panel) {{
                         max-width: 900px;
@@ -118,7 +118,7 @@ class MediaWidgetsMixin:
                         }}
                     }}
                 </style>
-            </sl-dialog>
+            </wa-dialog>
             '''
 
             html = f'''
@@ -247,11 +247,11 @@ class MediaWidgetsMixin:
 
             caption_html = ""
             if caption:
-                caption_html = f'<div style="text-align:center;margin-top:0.5rem;color:var(--sl-text-muted);font-size:0.875rem;">{caption}</div>'
+                caption_html = f'<div style="text-align:center;margin-top:0.5rem;color:var(--vl-text-muted);font-size:0.875rem;">{caption}</div>'
             
             html = f'''
             <div class="video-container" style="text-align:center; position: relative;">
-                <video {" ".join(attrs)} style="{width_style} height:auto; border-radius:12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border: 1px solid var(--sl-border);">
+                <video {" ".join(attrs)} style="{width_style} height:auto; border-radius:12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border: 1px solid var(--vl-border);">
                     <source src="{video_src}" type="{format}">
                     Your browser does not support the video element.
                 </video>

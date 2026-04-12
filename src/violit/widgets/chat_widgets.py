@@ -55,10 +55,10 @@ class ChatWidgetsMixin:
                             avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:20px;">{self.avatar}</div>'
                     else:
                         if self.name == "user":
-                            avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#7C4DFF;color:white;display:flex;align-items:center;justify-content:center;"><sl-icon name="person-fill"></sl-icon></div>'
+                            avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#7C4DFF;color:white;display:flex;align-items:center;justify-content:center;"><wa-icon name="person-fill"></wa-icon></div>'
                             bg_color = "rgba(124, 77, 255, 0.05)"
                         elif self.name == "assistant":
-                            avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#FF5252;color:white;display:flex;align-items:center;justify-content:center;"><sl-icon name="robot"></sl-icon></div>'
+                            avatar_content = f'<div style="width:32px;height:32px;border-radius:4px;background:#FF5252;color:white;display:flex;align-items:center;justify-content:center;"><wa-icon name="robot"></wa-icon></div>'
                             bg_color = "rgba(255, 82, 82, 0.05)"
                         else:
                             initial = self.name[0].upper() if self.name else "?"
@@ -129,7 +129,7 @@ class ChatWidgetsMixin:
                 left: 300px;
                 right: 0;
                 padding: 20px; 
-                background: linear-gradient(to top, var(--sl-bg) 80%, transparent);
+                background: linear-gradient(to top, var(--vl-bg) 80%, transparent);
                 z-index: 1000;
                 display: flex;
                 justify-content: center;
@@ -137,27 +137,27 @@ class ChatWidgetsMixin:
                 transition: left 0.3s ease;
             ">
                 <div style="
-                    width: 100%; 
-                    max-width: 800px; 
-                    background: var(--sl-bg-card); 
-                    border: 1px solid var(--sl-border); 
-                    border-radius: 8px; 
-                    padding: 8px; 
+                    width: 100%;
+                    max-width: 800px;
+                    background: var(--vl-bg-card);
+                    border: 1px solid var(--vl-border);
+                    border-radius: 8px;
+                    padding: 8px;
                     box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
                     display: flex;
                     gap: 8px;
                     pointer-events: auto;
                 ">
-                    <input type="text" id="input_{cid}" class="chat-input-box" placeholder="{placeholder}" 
+                    <input type="text" id="input_{cid}" class="chat-input-box" placeholder="{placeholder}"
                         {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
                         {"disabled" if disabled else ""}
                         style="
-                            flex: 1; 
-                            border: none; 
-                            background: transparent; 
-                            padding: 8px; 
-                            font-size: 1rem; 
-                            color: var(--sl-text); 
+                            flex: 1;
+                            border: none;
+                            background: transparent;
+                            padding: 8px;
+                            font-size: 1rem;
+                            color: var(--vl-text);
                             outline: none;
                         "
                         onkeydown="if(event.key==='Enter'){{ 
@@ -166,14 +166,14 @@ class ChatWidgetsMixin:
                             this.value = ''; 
                         }}"
                     >
-                    <sl-button size="small" variant="primary" circle {"disabled" if disabled else ""} onclick="
+                    <wa-button size="small" variant="brand" appearance="accent" {"disabled" if disabled else ""} onclick="
                         const el = document.getElementById('input_{cid}');
                         window.chatInputWasActive = true;
                         {f"sendAction('{cid}', el.value);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: el.value}}, swap: 'none'}});"}
                         el.value = '';
                     ">
-                        <sl-icon name="send" label="Send"></sl-icon>
-                    </sl-button>
+                        <wa-icon name="send" label="Send"></wa-icon>
+                    </wa-button>
                 </div>
             </div>
             <!-- Spacer -->

@@ -100,7 +100,7 @@ class BackgroundTask:
         self._error: Optional[Exception] = None
         self._cancel_event = threading.Event()
 
-    # ── Properties ──────────────────────────────────────────────
+    # Properties
 
     @property
     def state(self) -> str:
@@ -124,7 +124,7 @@ class BackgroundTask:
         """Exception from the background function (available after failure)."""
         return self._error
 
-    # ── Control Methods ─────────────────────────────────────────
+    # Control methods
 
     def start(self, *args):
         """Start the background task. Captures current session automatically.
@@ -172,14 +172,14 @@ class BackgroundTask:
         
             def train():
                 for epoch in range(100):
-                    task.check_cancelled()  # ← raises if cancelled
+                    task.check_cancelled()  # Raises if cancelled
                     model.train()
                     progress.set(epoch / 100)
         """
         if self._cancel_event.is_set():
             raise CancelledError("Background task cancelled by user")
 
-    # ── Internal ────────────────────────────────────────────────
+    # Internal helpers
 
     def _run(self, sid: str):
         """Execute the background function in a worker thread."""

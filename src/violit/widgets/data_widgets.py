@@ -85,8 +85,8 @@ class DataWidgetsMixin:
                     }};
                     const el = document.querySelector('#{cid}');
                     if (el && window.agGrid) {{ 
-                        const grid = new agGrid.Grid(el, opt);
-                        window['grid_{cid}'] = grid;
+                        const gridApi = agGrid.createGrid(el, opt);
+                        window['gridApi_{cid}'] = gridApi;
                     }}
                     else {{ console.error("agGrid not found"); }}
                 }}
@@ -126,25 +126,25 @@ class DataWidgetsMixin:
             # Convert dataframe to HTML table
             html_table = current_df.to_html(index=False, border=0, classes=['data-table'])
             styled_html = f'''
-            <div style="overflow-x:auto;border:1px solid var(--sl-border);border-radius:0.5rem;">
+            <div style="overflow-x:auto;border:1px solid var(--vl-border);border-radius:0.5rem;">
                 <style>
                     .data-table {{
                         width: 100%;
                         border-collapse: collapse;
-                        background: var(--sl-bg-card);
-                        color: var(--sl-text);
+                        background: var(--vl-bg-card);
+                        color: var(--vl-text);
                     }}
                     .data-table thead {{
-                        background: var(--sl-primary);
+                        background: var(--vl-primary);
                         color: white;
                     }}
                     .data-table th, .data-table td {{
                         padding: 0.75rem;
                         text-align: left;
-                        border-bottom: 1px solid var(--sl-border);
+                        border-bottom: 1px solid var(--vl-border);
                     }}
                     .data-table tbody tr:hover {{
-                        background: color-mix(in srgb, var(--sl-bg-card), var(--sl-primary) 5%);
+                        background: color-mix(in srgb, var(--vl-bg-card), var(--vl-primary) 5%);
                     }}
                 </style>
                 {html_table}
@@ -186,10 +186,10 @@ class DataWidgetsMixin:
             editable = not disabled
             cols = [{"field": c, "sortable": True, "filter": True, "editable": editable} for c in _cols_list]
             add_row_btn = '' if num_rows == "fixed" else f'''
-            <sl-button size="small" style="margin-top:0.5rem;" onclick="addDataRow_{cid}()">
-                <sl-icon slot="prefix" name="plus-circle"></sl-icon>
+            <wa-button size="small" appearance="outlined" with-start style="margin-top:0.5rem;" onclick="addDataRow_{cid}()">
+                <wa-icon slot="start" name="plus-circle"></wa-icon>
                 Add Row
-            </sl-button>
+            </wa-button>
             '''
             
             html = f'''
@@ -215,7 +215,8 @@ class DataWidgetsMixin:
                     }};
                     const el = document.querySelector('#{cid}');
                     if (el && window.agGrid) {{
-                        new agGrid.Grid(el, gridOptions);
+                        const gridApi = agGrid.createGrid(el, gridOptions);
+                        window['gridApi_{cid}'] = gridApi;
                     }}
                     
                     window.addDataRow_{cid} = function() {{
@@ -274,7 +275,7 @@ class DataWidgetsMixin:
             help_html = ""
             if help:
                 import html as _h
-                help_html = f' <sl-tooltip content="{_h.escape(help)}"><sl-icon name="question-circle" style="font-size:0.75em;vertical-align:middle;cursor:help;"></sl-icon></sl-tooltip>'
+                help_html = f' <wa-tooltip for="{cid}_help" content="{_h.escape(help)}"></wa-tooltip><wa-icon id="{cid}_help" name="circle-question" style="font-size:0.75em;vertical-align:middle;cursor:help;"></wa-icon>'
 
             # Label visibility
             label_style = ""
@@ -286,18 +287,18 @@ class DataWidgetsMixin:
             delta_html = ""
             if curr_delta:
                 escaped_delta = html_lib.escape(str(curr_delta))
-                color_map = {"positive": "#10b981", "negative": "#ef4444", "normal": "var(--sl-text-muted)"}
-                color = color_map.get(delta_color, "var(--sl-text-muted)")
+                color_map = {"positive": "#10b981", "negative": "#ef4444", "normal": "var(--vl-text-muted)"}
+                color = color_map.get(delta_color, "var(--vl-text-muted)")
                 icon = "arrow-up" if delta_color == "positive" else "arrow-down" if delta_color == "negative" else ""
-                icon_html = f'<sl-icon name="{icon}" style="font-size: 0.8em; margin-right: 2px;"></sl-icon>' if icon else ""
+                icon_html = f'<wa-icon name="{icon}" style="font-size: 0.8em; margin-right: 2px;"></wa-icon>' if icon else ""
                 delta_html = f'<div style="color: {color}; font-size: 0.9rem; margin-top: 0.25rem; font-weight: 500;">{icon_html}{escaped_delta}</div>'
 
-            border_style = "border:1px solid var(--sl-border);border-radius:0.5rem;" if border else ""
+            border_style = "border:1px solid var(--vl-border);border-radius:0.5rem;" if border else ""
 
             html_output = f'''
             <div class="card" style="padding: 1.25rem;{border_style}">
-                <div style="font-size: 0.875rem; color: var(--sl-text-muted); margin-bottom: 0.5rem; font-weight: 500;{label_style}">{escaped_label}{help_html}</div>
-                <div style="font-size: 1.75rem; font-weight: 700; color: var(--sl-text);">{escaped_val}</div>
+                <div style="font-size: 0.875rem; color: var(--vl-text-muted); margin-bottom: 0.5rem; font-weight: 500;{label_style}">{escaped_label}{help_html}</div>
+                <div style="font-size: 1.75rem; font-weight: 700; color: var(--vl-text);">{escaped_val}</div>
                 {delta_html}
             </div>
             '''
@@ -329,9 +330,9 @@ class DataWidgetsMixin:
                 
             json_str = json_lib.dumps(current_body, indent=2, default=str)
             html = f'''
-            <details {"open" if expanded else ""} style="background:var(--sl-bg-card);border:1px solid var(--sl-border);border-radius:0.5rem;padding:0.5rem;">
-                <summary style="cursor:pointer;font-size:0.875rem;color:var(--sl-text-muted);">JSON Data</summary>
-                <pre style="margin:0.5rem 0 0 0;font-size:0.875rem;color:var(--sl-primary);overflow-x:auto;">{json_str}</pre>
+            <details {"open" if expanded else ""} style="background:var(--vl-bg-card);border:1px solid var(--vl-border);border-radius:0.5rem;padding:0.5rem;">
+                <summary style="cursor:pointer;font-size:0.875rem;color:var(--vl-text-muted);">JSON Data</summary>
+                <pre style="margin:0.5rem 0 0 0;font-size:0.875rem;color:var(--vl-primary);overflow-x:auto;">{json_str}</pre>
             </details>
             '''
             _wd = self._get_widget_defaults("json")

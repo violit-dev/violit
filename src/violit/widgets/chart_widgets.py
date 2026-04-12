@@ -9,7 +9,7 @@ from ..style_utils import merge_cls, merge_style
 
 # [OPTIMIZED] Plotly render script with fast updates
 # - Uses global Set (window._vlPlotlyInited) instead of DOM attribute
-#   → survives outerHTML replacement, preventing flicker on reactive updates
+#   This survives outerHTML replacement, preventing flicker on reactive updates
 # - Already-initialized charts skip clientWidth check and IntersectionObserver delay
 # - Uses Plotly.react() for updates (no two-pass sizing = no flicker)
 _PLOTLY_RENDER_SCRIPT = """
@@ -120,10 +120,10 @@ class ChartWidgetsMixin:
             if initial_render_ctx.get() and data_points > _ASYNC_CHART_THRESHOLD:
                 width_style = "width: 100%;" if use_container_width else ""
                 html = f'''
-                <div id="{cid}" class="js-plotly-plot" style="{width_style} height: 500px; display: flex; align-items: center; justify-content: center; background: var(--sl-bg-card); border: 1px solid var(--sl-border); border-radius: var(--sl-radius);">
+                <div id="{cid}" class="js-plotly-plot" style="{width_style} height: 500px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
                     <div style="text-align: center;">
-                        <sl-spinner style="font-size: 2rem; --indicator-color: var(--sl-primary); margin-bottom: 0.75rem;"></sl-spinner>
-                        <div style="font-size: 0.85rem; color: var(--sl-text-muted); font-weight: 500;">Loading dataset ({data_points:,} points)...</div>
+                        <wa-spinner style="font-size: 2rem; margin-bottom: 0.75rem;"></wa-spinner>
+                        <div style="font-size: 0.85rem; color: var(--vl-text-muted); font-weight: 500;">Loading dataset ({data_points:,} points)...</div>
                     </div>
                 </div>
                 <script>

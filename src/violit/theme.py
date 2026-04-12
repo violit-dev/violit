@@ -276,8 +276,8 @@ class Theme:
             'extra_css': """
                 body { font-family: 'Courier New', monospace; font-weight: bold; }
                 .card { border: 3px solid black !important; box-shadow: 5px 5px 0px 0px black !important; }
-                sl-button::part(base) { border: 3px solid black !important; box-shadow: 4px 4px 0px 0px black !important; transition: transform 0.1s !important; }
-                sl-button::part(base):active { transform: translate(2px, 2px) !important; box-shadow: 2px 2px 0px 0px black !important; }
+                wa-button::part(base) { border: 3px solid black !important; box-shadow: 4px 4px 0px 0px black !important; transition: transform 0.1s !important; }
+                wa-button::part(base):active { transform: translate(2px, 2px) !important; box-shadow: 2px 2px 0px 0px black !important; }
                 h1, h2, h3 { text-transform: uppercase; border-bottom: 3px solid black; display: inline-block; padding-bottom: 5px; }
             """
         },
@@ -303,17 +303,17 @@ class Theme:
                     background: #e0e5ec !important;
                     box-shadow: 9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5) !important; 
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     border: none !important;
                     background: #e0e5ec !important;
                     color: #4a5568 !important;
                     box-shadow: 6px 6px 10px 0 rgba(163,177,198, 0.7), -6px -6px 10px 0 rgba(255,255,255, 0.8) !important;
                     transition: all 0.2s ease;
                 }
-                sl-button::part(base):active {
+                wa-button::part(base):active {
                     box-shadow: inset 6px 6px 10px 0 rgba(163,177,198, 0.7), inset -6px -6px 10px 0 rgba(255,255,255, 0.8) !important;
                 }
-                sl-input::part(base) {
+                wa-input::part(base) {
                     background: #e0e5ec !important;
                     box-shadow: inset 6px 6px 10px 0 rgba(163,177,198, 0.7), inset -6px -6px 10px 0 rgba(255,255,255, 0.8) !important;
                     border: none !important;
@@ -346,13 +346,13 @@ class Theme:
                     box-shadow: 0 0 10px #0ff, inset 0 0 20px rgba(0,255,255,0.1) !important;
                     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     border: 1px solid #0ff !important;
                     text-transform: uppercase;
                     letter-spacing: 2px;
                     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
                 }
-                sl-button::part(base):hover {
+                wa-button::part(base):hover {
                     background: #0ff !important;
                     color: #000 !important;
                     box-shadow: 0 0 20px #0ff !important;
@@ -382,11 +382,11 @@ class Theme:
                     border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px !important;
                     box-shadow: 2px 3px 15px rgba(0,0,0,0.1) !important;
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     border: 2px solid #2c3e50 !important;
                     border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px !important;
                 }
-                sl-input::part(base) {
+                wa-input::part(base) {
                     border: 2px solid #2c3e50 !important;
                     border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px !important;
                 }
@@ -411,13 +411,13 @@ class Theme:
             'extra_css': """
                 body { font-family: 'Courier New', monospace; }
                 .card { border: 1px dashed #00ff00 !important; }
-                sl-button::part(base) { 
-                    border: 1px solid #00ff00 !important; 
+                wa-button::part(base) {
+                    border: 1px solid #00ff00 !important;
                     background: black !important;
                     color: #00ff00 !important;
                 }
-                sl-button::part(base):hover { 
-                    background: #00ff00 !important; 
+                wa-button::part(base):hover {
+                    background: #00ff00 !important;
                     color: black !important;
                 }
                 * { text-shadow: 0 0 2px #00ff00; }
@@ -441,7 +441,7 @@ class Theme:
             'input_border_radius_large': '0px',
             'extra_css': """
                 body { font-family: 'Tahoma', 'MS Sans Serif', sans-serif; }
-                .card, sl-button::part(base) {
+                .card, wa-button::part(base) {
                     background: #c0c0c0 !important;
                     border-top: 2px solid #ffffff !important;
                     border-left: 2px solid #ffffff !important;
@@ -449,7 +449,7 @@ class Theme:
                     border-bottom: 2px solid #000000 !important;
                     box-shadow: 1px 1px 0px 0px #000 inset, -1px -1px 0px 0px #fff inset !important;
                 }
-                sl-button::part(base):active {
+                wa-button::part(base):active {
                      border-top: 2px solid #000000 !important;
                     border-left: 2px solid #000000 !important;
                     border-right: 2px solid #ffffff !important;
@@ -480,7 +480,7 @@ class Theme:
                     transition: transform 0.2s;
                 }
                 .card:hover { transform: translate(-2px, -2px); }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     border-radius: 9999px !important; /* Circle/Pill */
                     border: none !important;
                     box-shadow: 4px 4px 0 #000000 !important;
@@ -516,7 +516,7 @@ class Theme:
                     border: 2px solid #01cdfe !important;
                     box-shadow: 0 0 15px #b967ff, inset 0 0 15px #b967ff !important;
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     background: linear-gradient(45deg, #ff71ce, #01cdfe) !important;
                     color: white !important;
                     border: none !important;
@@ -558,12 +558,12 @@ class Theme:
                     border: 2px solid white !important;
                     background: rgba(0, 60, 180, 0.5) !important;
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     background: transparent !important;
                     border: 2px solid white !important;
                     color: white !important;
                 }
-                sl-button::part(base):hover {
+                wa-button::part(base):hover {
                     background: rgba(255,255,255,0.2) !important;
                 }
                 * { font-family: 'Courier New', monospace !important; }
@@ -596,7 +596,7 @@ class Theme:
                     animation: hue-rotate 3s linear infinite;
                     box-shadow: 0 0 10px red;
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     border: 2px solid red;
                     animation: hue-rotate 3s linear infinite reverse;
                 }
@@ -628,7 +628,7 @@ class Theme:
                     border-radius: 0 !important;
                     box-shadow: none !important;
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     font-family: 'Times New Roman', serif;
                     text-transform: uppercase;
                     background: transparent !important;
@@ -636,7 +636,7 @@ class Theme:
                     border: 1px solid black !important;
                     font-weight: bold;
                 }
-                sl-button::part(base):hover {
+                wa-button::part(base):hover {
                     background: black !important;
                     color: white !important;
                 }
@@ -665,14 +665,14 @@ class Theme:
                     box-shadow: inset 10px 10px 20px #dbe4f0, inset -10px -10px 20px #ffffff, 10px 20px 30px rgba(166, 180, 200, 0.4) !important;
                     background: #f0f4f8 !important;
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     border-radius: 20px !important;
                     border: none !important;
                     box-shadow: 8px 8px 16px #dbe4f0, -8px -8px 16px #ffffff !important;
                     color: white !important;
-                    background: var(--sl-primary) !important;
+                    background: var(--vl-primary) !important;
                 }
-                sl-button::part(base):active {
+                wa-button::part(base):active {
                     box-shadow: inset 6px 6px 10px rgba(0,0,0,0.1), inset -6px -6px 10px rgba(255,255,255,0.8) !important;
                 }
             """
@@ -700,7 +700,7 @@ class Theme:
                     border-radius: 2px !important;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
                 }
-                sl-button::part(base) {
+                wa-button::part(base) {
                     border-radius: 2px !important;
                     font-weight: 600;
                     text-transform: uppercase;
@@ -759,7 +759,7 @@ class Theme:
                 /* --- SOPHISTICATED BUTTONS --- */
                 /* Matte finish, rich color, soft colored shadow */
                 
-                sl-button::part(base) {
+                wa-button::part(base) {
                     background: #7C3AED !important; /* Solid Violet 600 */
                     border: 1px solid transparent !important; /* Clean edges */
                     
@@ -777,22 +777,22 @@ class Theme:
                 }
 
                 /* Hover: Subtle Deepening & Lift */
-                sl-button::part(base):hover {
+                wa-button::part(base):hover {
                     background: #6D28D9 !important; /* Violet 700 */
                     transform: translateY(-1px);
                     box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35) !important;
                 }
 
                 /* Active: Precise Press */
-                sl-button::part(base):active {
+                wa-button::part(base):active {
                     transform: translateY(0px) scale(0.98) !important;
                     background: #5B21B6 !important; /* Violet 800 */
                     box-shadow: 0 2px 4px rgba(124, 58, 237, 0.15) !important;
                 }
 
                 /* Remove all pseudo-element animations for cleaner look */
-                sl-button::part(base)::before,
-                sl-button::part(base)::after {
+                wa-button::part(base)::before,
+                wa-button::part(base)::after {
                     display: none !important;
                 }
 
@@ -806,25 +806,25 @@ class Theme:
         },
         'violit_light_jewel': {
             'mode': 'light',
-            'primary': '#6D28D9',       # Royal Purple (Violet-700) — 로고의 가장 진한 보라
+            'primary': '#6D28D9',       # Royal purple anchor color
             'secondary': '#7C3AED',     # Violet-600
             'success': '#16A34A',       # Green-600
             'warning': '#EA580C',       # Orange-600
             'danger': '#DC2626',        # Red-600
-            'bg': '#FFFFFF',            # 쨍한 흰색 (회색조 X)
-            'bg_card': '#FFFFFF',       # 카드도 순백
-            'border': '#E9E5F0',        # 보라끼 살짝 섞인 테두리
-            'text': '#1C1127',          # 아주 짙은 보라-검정 텍스트
-            'text_muted': '#6B5F7B',    # Muted 보라 회색
-            'radius': '0.5rem',         # 과하지 않은 Radius
+            'bg': '#FFFFFF',            # Bright white background
+            'bg_card': '#FFFFFF',       # White card surface
+            'border': '#E9E5F0',        # Soft purple-tinted border
+            'text': '#1C1127',          # Deep purple-black text
+            'text_muted': '#6B5F7B',    # Muted purple text
+            'radius': '0.5rem',         # Balanced corner radius
             'input_border_radius_small': '0.375rem',
             'input_border_radius_medium': '0.5rem',
             'input_border_radius_large': '0.625rem',
             'extra_css': """
                 /*
                    THEME: Clean Crystal (violit_light_2nd)
-                   Concept: Shadcn/Zinc 스타일 + Royal Purple 포인트
-                   핵심: 1px 얇은 Border, Inter 폰트, 0.5rem Radius, 단색 버튼
+                   Concept: Shadcn/Zinc baseline with a royal purple accent
+                   Key points: 1px border, Inter font, 0.5rem radius, white surfaces
                 */
 
                 /* --- @font-face: Inter (로컬 vendor) --- */
@@ -856,7 +856,7 @@ class Theme:
                     line-height: 1.6;
                 }
 
-                /* --- Cards: Material Elevation 1→3 on hover --- */
+                /* --- Cards: elevation level 1 on hover --- */
                 .card {
                     background: #FFFFFF !important;
                     border: 1px solid #E9E5F0 !important;
@@ -874,8 +874,8 @@ class Theme:
                     transform: translateY(-1px);
                 }
 
-                /* --- Buttons: Material Elevation + 단색 --- */
-                sl-button::part(base) {
+                /* --- Buttons: material elevation with white text --- */
+                wa-button::part(base) {
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
                     background: #6D28D9 !important;
                     border: 1px solid transparent !important;
@@ -891,23 +891,23 @@ class Theme:
                     caret-color: transparent !important;
                 }
                 /* Hover: Material Elevation 4 */
-                sl-button::part(base):hover {
+                wa-button::part(base):hover {
                     background: #6D28D9 !important;
                     box-shadow: 0 2px 4px -1px rgba(109, 40, 217, 0.2),
                                 0 4px 5px 0 rgba(109, 40, 217, 0.14),
                                 0 1px 10px 0 rgba(109, 40, 217, 0.12) !important;
                 }
                 /* Active: Material press */
-                sl-button::part(base):active {
+                wa-button::part(base):active {
                     background: #5B21B6 !important;
                     box-shadow: 0 1px 2px rgba(109, 40, 217, 0.1) !important;
                     transform: scale(0.97);
                 }
 
-                /* --- Inputs: 깔끔한 1px 보더 --- */
-                sl-input::part(base),
-                sl-textarea::part(base),
-                sl-select::part(combobox) {
+                /* --- Inputs: clean 1px border --- */
+                wa-input::part(base),
+                wa-textarea::part(base),
+                wa-select::part(combobox) {
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
                     background: #FFFFFF !important;
                     border: 1px solid #E9E5F0 !important;
@@ -915,15 +915,15 @@ class Theme:
                     font-size: 0.875rem;
                     transition: border-color 0.15s ease, box-shadow 0.15s ease;
                 }
-                sl-input::part(base):focus-within,
-                sl-textarea::part(base):focus-within,
-                sl-select::part(combobox):focus-within {
+                wa-input::part(base):focus-within,
+                wa-textarea::part(base):focus-within,
+                wa-select::part(combobox):focus-within {
                     border-color: #6D28D9 !important;
                     box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.08) !important;
                     outline: none;
                 }
 
-                /* --- Typography: 짙은 보라-검정, Sharp --- */
+                /* --- Typography: sharp deep purple-black tone --- */
                 h1, h2, h3, h4, h5, h6 {
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
                     color: #1C1127;
@@ -948,7 +948,7 @@ class Theme:
                     text-decoration: underline;
                 }
 
-                /* --- Sidebar: 깨끗한 구분선 --- */
+                /* --- Sidebar: clean separation --- */
                 #sidebar {
                     background: #FAFAFA !important;
                     border-right: 1px solid #E9E5F0 !important;
@@ -956,7 +956,7 @@ class Theme:
 
                 /* --- Sidebar Navigation: Subtle, Clean Style --- */
                 /* Default state: transparent background, dark text */
-                #sidebar sl-button::part(base) {
+                #sidebar wa-button::part(base) {
                     background: transparent !important;
                     color: #6B5F7B !important;
                     border: none !important;
@@ -965,33 +965,33 @@ class Theme:
                 }
                 
                 /* Hover: subtle purple tint */
-                #sidebar sl-button::part(base):hover {
+                #sidebar wa-button::part(base):hover {
                     background: rgba(109, 40, 217, 0.06) !important;
                     color: #6D28D9 !important;
                     box-shadow: none !important;
                 }
                 
                 /* Active (selected page): purple background + white text */
-                #sidebar sl-button[variant="primary"]::part(base) {
+                #sidebar wa-button[variant="primary"]::part(base) {
                     background: #6D28D9 !important;
                     color: #FFFFFF !important;
                     box-shadow: 0 1px 3px rgba(109, 40, 217, 0.12), 0 1px 2px rgba(109, 40, 217, 0.08) !important;
                 }
                 
-                #sidebar sl-button[variant="primary"]::part(base):hover {
+                #sidebar wa-button[variant="primary"]::part(base):hover {
                     background: #6D28D9 !important;
                     box-shadow: 0 2px 4px -1px rgba(109, 40, 217, 0.2),
                                 0 4px 5px 0 rgba(109, 40, 217, 0.14),
                                 0 1px 10px 0 rgba(109, 40, 217, 0.12) !important;
                 }
                 
-                #sidebar sl-button[variant="primary"]::part(base):active {
+                #sidebar wa-button[variant="primary"]::part(base):active {
                     background: #5B21B6 !important;
                     box-shadow: 0 1px 2px rgba(109, 40, 217, 0.1) !important;
                     transform: scale(0.97);
                 }
 
-                /* --- Table / Data: 미니멀 라인 --- */
+                /* --- Table / Data: minimal accent --- */
                 table {
                     border-collapse: collapse;
                 }
@@ -1007,27 +1007,27 @@ class Theme:
                 }
 
                 /* --- Badges / Tags: 미니멀 --- */
-                sl-tag::part(base) {
+                wa-tag::part(base) {
                     border-radius: 0.375rem !important;
                     border: 1px solid #E9E5F0 !important;
                     font-size: 0.75rem;
                     font-weight: 500;
                 }
 
-                /* --- Scrollbar: 은은한 보라 --- */
+                /* --- Scrollbar: subtle purple --- */
                 ::-webkit-scrollbar { width: 6px; height: 6px; }
                 ::-webkit-scrollbar-track { background: transparent; }
                 ::-webkit-scrollbar-thumb { background: #D4CFE0; border-radius: 3px; }
                 ::-webkit-scrollbar-thumb:hover { background: #B0A6C4; }
 
-                /* --- Selection: 보라 하이라이트 --- */
+                /* --- Selection: light purple highlight --- */
                 ::selection {
                     background: rgba(109, 40, 217, 0.12);
                     color: #1C1127;
                 }
 
                 /* --- Material: Focus ring --- */
-                sl-button:focus-visible::part(base) {
+                wa-button:focus-visible::part(base) {
                     outline: 2px solid #6D28D9 !important;
                     outline-offset: 2px;
                 }
@@ -1088,7 +1088,7 @@ class Theme:
        Mouse-following Glow (stays in Shadow DOM)
        ============================================ */
     document.addEventListener('mousemove', function(e) {
-        var btn = e.target.closest('sl-button');
+        var btn = e.target.closest('wa-button');
         if (curBtn && curBtn !== btn) {
             var pb = curBtn.shadowRoot && curBtn.shadowRoot.querySelector('[part="base"]');
             if (pb) { var g = pb.querySelector('.vl-glow'); if (g) g.style.opacity = '0'; }
@@ -1131,7 +1131,7 @@ class Theme:
 
     /* Phase 1 (pointerdown): Expand from click point */
     document.addEventListener('pointerdown', function(e) {
-        var btn = e.target.closest('sl-button');
+        var btn = e.target.closest('wa-button');
         if (!btn) return;
         var base = btn.shadowRoot && btn.shadowRoot.querySelector('[part="base"]');
         if (!base) return;
@@ -1205,7 +1205,7 @@ class Theme:
         curBtn = null;
         var ol = document.getElementById('vl-ripple-overlay');
         if (ol) ol.remove();
-        document.querySelectorAll('sl-button').forEach(function(btn) {
+        document.querySelectorAll('wa-button').forEach(function(btn) {
             if (!btn.shadowRoot) return;
             var base = btn.shadowRoot.querySelector('[part="base"]');
             if (base) {
@@ -1248,7 +1248,7 @@ class Theme:
                 }
 
                 /* Neon Facet Buttons */
-                sl-button::part(base) {
+                wa-button::part(base) {
                     background: transparent !important;
                     border: 1px solid #8B5CF6 !important;
                     color: #8B5CF6 !important;
@@ -1261,7 +1261,7 @@ class Theme:
                 }
 
                 /* Hover: Fill with Light */
-                sl-button::part(base):hover {
+                wa-button::part(base):hover {
                     background: #8B5CF6 !important;
                     color: white !important;
                     box-shadow: 0 0 20px #8B5CF6, 0 0 40px rgba(139, 92, 246, 0.4) !important;
@@ -1271,7 +1271,7 @@ class Theme:
                 }
 
                 /* Active */
-                sl-button::part(base):active {
+                wa-button::part(base):active {
                     transform: scale(0.95) !important;
                     box-shadow: 0 0 10px #8B5CF6 !important;
                 }
@@ -1282,11 +1282,11 @@ class Theme:
                 }
                 
                 /* Inputs */
-                sl-input::part(base) {
+                wa-input::part(base) {
                     background: rgba(0,0,0,0.3) !important;
                     border: 1px solid #4c1d95 !important;
                 }
-                sl-input::part(base):focus-within {
+                wa-input::part(base):focus-within {
                     border-color: #8B5CF6 !important;
                     box-shadow: 0 0 10px rgba(139, 92, 246, 0.2) !important;
                 }
@@ -1309,10 +1309,29 @@ class Theme:
     
     def to_css_vars(self) -> str:
         """Convert to CSS variables"""
-        return "\n".join([
-            f"--sl-{k.replace('_', '-')}: {v};" 
+        css_vars = [
+            f"--vl-{k.replace('_', '-')}: {v};"
             for k, v in self.current.items() if k not in ['mode', 'extra_css', 'extra_js']
+        ]
+        css_vars.extend([
+            f"--wa-color-brand-fill-loud: {self.current['primary']};",
+            f"--wa-color-brand-border-loud: {self.current['primary']};",
+            f"--wa-color-brand-fill-normal: color-mix(in srgb, {self.current['primary']}, white 18%);",
+            f"--wa-color-brand-on-loud: {self.current['bg']};",
+            f"--wa-color-surface-default: {self.current['bg']};",
+            f"--wa-color-surface-raised: {self.current['bg_card']};",
+            f"--wa-color-surface-border: {self.current['border']};",
+            f"--wa-color-text-normal: {self.current['text']};",
+            f"--wa-color-text-quiet: {self.current['text_muted']};",
+            f"--wa-form-control-background: {self.current['bg_card']};",
+            f"--wa-form-control-resting-border-color: {self.current['border']};",
+            f"--wa-form-control-value-color: {self.current['text']};",
+            f"--wa-border-radius-s: {self.current['input_border_radius_small']};",
+            f"--wa-border-radius-m: {self.current['input_border_radius_medium']};",
+            f"--wa-border-radius-l: {self.current['input_border_radius_large']};",
+            f"--wa-border-radius-xl: {self.current['radius']};",
         ])
+        return "\n".join(css_vars)
     
     @property
     def mode(self) -> str:
@@ -1328,4 +1347,4 @@ class Theme:
     
     @property
     def theme_class(self) -> str:
-        return f"sl-theme-{self.mode}"
+        return f"wa-theme-default wa-{self.mode}"

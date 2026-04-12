@@ -36,7 +36,7 @@ class ListWidgetsMixin:
             
             if not current_items:
                 if empty_message:
-                    content = f'<div style="text-align: center; padding: 2rem; color: var(--sl-text-muted);">{empty_message}</div>'
+                    content = f'<div style="text-align: center; padding: 2rem; color: var(--vl-text-muted);">{empty_message}</div>'
                 else:
                     content = ''
             else:

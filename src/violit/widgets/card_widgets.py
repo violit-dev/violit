@@ -1,6 +1,6 @@
 """
-Card Widgets - Shoelace Card Components
-Provides easy-to-use wrappers for Shoelace card components
+Card Widgets - Web Awesome Card Components
+Provides easy-to-use wrappers for Web Awesome card components
 """
 
 from ..component import Component
@@ -9,11 +9,15 @@ from ..style_utils import merge_cls, merge_style, resolve_value
 
 
 class CardWidgetsMixin:
-    """Mixin for Shoelace Card components"""
+    """Mixin for Web Awesome card components"""
+
+    @staticmethod
+    def _wa_badge_variant(variant: str) -> str:
+        return "brand" if variant == "primary" else variant
     
     def card(self, content=None, header=None, footer=None, cls: str = "", style: str = "", **kwargs):
         """
-        Create a Shoelace card component
+        Create a Web Awesome card component
         
         Args:
             content: Optional card content (str). If None, use as context manager
@@ -75,7 +79,7 @@ class CardWidgetsMixin:
                     
                     # Set full width for consistency
                     card_style = 'style="width: 100%;"'
-                    html_parts = [f'<sl-card{attrs_str} {card_style}>']
+                    html_parts = [f'<wa-card{attrs_str} {card_style}>']
                     
                     if current_header:
                         html_parts.append(f'<div slot="header">{current_header}</div>')
@@ -86,7 +90,7 @@ class CardWidgetsMixin:
                     if current_footer:
                         html_parts.append(f'<div slot="footer">{current_footer}</div>')
                     
-                    html_parts.append('</sl-card>')
+                    html_parts.append('</wa-card>')
                     
                     # Apply full width to wrapper div for consistency
                     _wd = self._get_widget_defaults("card")
@@ -100,7 +104,7 @@ class CardWidgetsMixin:
     
     def badge(self, text, variant="neutral", pill=False, pulse=False, cls: str = "", style: str = ""):
         """
-        Create a Shoelace badge component
+        Create a Web Awesome badge component
         
         Args:
             text: Badge text
@@ -122,15 +126,15 @@ class CardWidgetsMixin:
             finally:
                 rendering_ctx.reset(token)
 
-            attrs = [f'variant="{variant}"']
+            attrs = [f'variant="{self._wa_badge_variant(variant)}"']
             if pill:
                 attrs.append('pill')
             if pulse:
-                attrs.append('pulse')
+                attrs.append('attention="pulse"')
 
             attrs_str = ' '.join(attrs)
             escaped_text = html_lib.escape(resolved_text)
-            html = f'<sl-badge {attrs_str}>{escaped_text}</sl-badge>'
+            html = f'<wa-badge {attrs_str}>{escaped_text}</wa-badge>'
             _wd = self._get_widget_defaults("badge")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -140,10 +144,10 @@ class CardWidgetsMixin:
     
     def icon(self, name, size=None, label=None, cls: str = "", style: str = ""):
         """
-        Create a Shoelace icon component
+        Create a Web Awesome icon component
         
         Args:
-            name: Icon name (from Shoelace icon library)
+            name: Icon name
             size: Icon size (e.g., "small", "medium", "large" or CSS value)
             label: Accessibility label
         
@@ -158,12 +162,20 @@ class CardWidgetsMixin:
             
             attrs = [f'name="{name}"']
             if size:
-                attrs.append(f'style="font-size: {size};"' if not size in ['small', 'medium', 'large'] else f'style="font-size: var(--sl-font-size-{size});"')
+                if size in ['small', 'medium', 'large']:
+                    size_map = {
+                        'small': '0.875rem',
+                        'medium': '1rem',
+                        'large': '1.25rem',
+                    }
+                    attrs.append(f'style="font-size: {size_map[size]};"')
+                else:
+                    attrs.append(f'style="font-size: {size};"')
             if label:
                 attrs.append(f'label="{label}"')
             
             attrs_str = ' '.join(attrs)
-            html = f'<sl-icon {attrs_str}></sl-icon>'
+            html = f'<wa-icon {attrs_str}></wa-icon>'
             
             rendering_ctx.reset(token)
             _wd = self._get_widget_defaults("icon")
@@ -191,10 +203,10 @@ class CardWidgetsMixin:
         import html
         escaped_content = html.escape(str(content))
         
-        header = '<div><sl-badge variant="danger" pulse><sl-icon name="circle-fill" style="font-size: 0.5rem;"></sl-icon> LIVE</sl-badge></div>'
+        header = '<div><wa-badge variant="danger" attention="pulse"><wa-icon name="circle-fill" style="font-size: 0.5rem;"></wa-icon> LIVE</wa-badge></div>'
         footer = None
         if timestamp:
-            footer = f'<div style="text-align: right; font-size: 0.85rem; color: var(--sl-color-neutral-600);"><sl-icon name="clock"></sl-icon> {timestamp}</div>'
+            footer = f'<div style="text-align: right; font-size: 0.85rem; color: var(--wa-color-text-quiet, var(--vl-text-muted));"><wa-icon name="clock"></wa-icon> {timestamp}</div>'
         
         kwargs = {}
         if post_id is not None:
@@ -294,20 +306,20 @@ class CardWidgetsMixin:
         # Create header
         header_parts = []
         if header_badge:
-            badge_attrs = [f'variant="{config["badge_variant"]}"']
+            badge_attrs = [f'variant="{self._wa_badge_variant(config["badge_variant"])}"']
             if config.get('badge_pulse'):
-                badge_attrs.append('pulse')
+                badge_attrs.append('attention="pulse"')
             if config.get('badge_pill'):
                 badge_attrs.append('pill')
             
             badge_content = header_badge
             if config.get('badge_icon'):
-                badge_content = f'<sl-icon name="{config["badge_icon"]}" style="font-size: 0.5rem;"></sl-icon> {header_badge}'
+                badge_content = f'<wa-icon name="{config["badge_icon"]}" style="font-size: 0.5rem;"></wa-icon> {header_badge}'
             
-            header_parts.append(f'<sl-badge {" ".join(badge_attrs)}>{badge_content}</sl-badge>')
+            header_parts.append(f'<wa-badge {" ".join(badge_attrs)}>{badge_content}</wa-badge>')
         
         if header_text:
-            header_parts.append(f'<small style="color: var(--sl-color-neutral-500);"><sl-icon name="clock"></sl-icon> {header_text}</small>')
+            header_parts.append(f'<small style="color: var(--wa-color-text-quiet, var(--vl-text-muted));"><wa-icon name="clock"></wa-icon> {header_text}</small>')
         
         header_html = None
         if header_parts:
@@ -316,7 +328,7 @@ class CardWidgetsMixin:
         # Create footer
         footer_html = None
         if footer_text:
-            footer_html = f'<div style="text-align: right; font-size: 0.85rem; color: var(--sl-color-neutral-600);"><sl-icon name="clock"></sl-icon> {footer_text}</div>'
+            footer_html = f'<div style="text-align: right; font-size: 0.85rem; color: var(--wa-color-text-quiet, var(--vl-text-muted));"><wa-icon name="clock"></wa-icon> {footer_text}</div>'
         
         # If return_html=True, return HTML only (for broadcast)
         if return_html:
@@ -330,7 +342,7 @@ class CardWidgetsMixin:
             footer_slot = f'<div slot="footer">{footer_html}</div>' if footer_html else ''
             
             # Return full HTML (include wrapper div for layout consistency)
-            return f'<div style="width: 100%;"><sl-card{data_attr} style="width: 100%;">{header_slot}<div style="{config["content_style"]}">{escaped_content}</div>{footer_slot}</sl-card></div>'
+            return f'<div style="width: 100%;"><wa-card{data_attr} style="width: 100%;">{header_slot}<div style="{config["content_style"]}">{escaped_content}</div>{footer_slot}</wa-card></div>'
         
         # Normal mode: register component
         kwargs = {}
@@ -420,20 +432,20 @@ class CardWidgetsMixin:
         # Create header
         header_parts = []
         if header_badge:
-            badge_attrs = [f'variant="{config["badge_variant"]}"']
+            badge_attrs = [f'variant="{self._wa_badge_variant(config["badge_variant"])}"']
             if config.get('badge_pulse'):
-                badge_attrs.append('pulse')
+                badge_attrs.append('attention="pulse"')
             if config.get('badge_pill'):
                 badge_attrs.append('pill')
             
             badge_content = header_badge
             if config.get('badge_icon'):
-                badge_content = f'<sl-icon name="{config["badge_icon"]}" style="font-size: 0.5rem;"></sl-icon> {header_badge}'
+                badge_content = f'<wa-icon name="{config["badge_icon"]}" style="font-size: 0.5rem;"></wa-icon> {header_badge}'
             
-            header_parts.append(f'<sl-badge {" ".join(badge_attrs)}>{badge_content}</sl-badge>')
+            header_parts.append(f'<wa-badge {" ".join(badge_attrs)}>{badge_content}</wa-badge>')
         
         if header_text:
-            header_parts.append(f'<small style="color: var(--sl-color-neutral-500);"><sl-icon name="clock"></sl-icon> {header_text}</small>')
+            header_parts.append(f'<small style="color: var(--wa-color-text-quiet, var(--vl-text-muted));"><wa-icon name="clock"></wa-icon> {header_text}</small>')
         
         header_html = ''
         if header_parts:
@@ -442,7 +454,7 @@ class CardWidgetsMixin:
         # Create footer
         footer_html = ''
         if footer_text:
-            footer_html = f'<div slot="footer"><div style="text-align: right; font-size: 0.85rem; color: var(--sl-color-neutral-600);"><sl-icon name="clock"></sl-icon> {footer_text}</div></div>'
+            footer_html = f'<div slot="footer"><div style="text-align: right; font-size: 0.85rem; color: var(--wa-color-text-quiet, var(--vl-text-muted));"><wa-icon name="clock"></wa-icon> {footer_text}</div></div>'
         
         # Data attribute
         data_attr = f' data-post-id="{data_id}"' if data_id else ''
@@ -450,11 +462,11 @@ class CardWidgetsMixin:
         # Arrange card + action area using flexbox layout
         html_content = f'''<div{data_attr} style="display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem;">
     <div style="flex: 1;">
-        <sl-card style="width: 100%;">
+        <wa-card style="width: 100%;">
             {header_html}
             <div style="{config["content_style"]}">{escaped_content}</div>
             {footer_html}
-        </sl-card>
+        </wa-card>
     </div>
 </div>'''
         
@@ -474,7 +486,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><sl-badge variant="primary"><sl-icon name="info-circle"></sl-icon> {title}</sl-badge></div>'
+            header = f'<div><wa-badge variant="brand"><wa-icon name="info-circle"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
@@ -496,7 +508,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><sl-badge variant="success"><sl-icon name="check-circle"></sl-icon> {title}</sl-badge></div>'
+            header = f'<div><wa-badge variant="success"><wa-icon name="check-circle"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
@@ -518,7 +530,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><sl-badge variant="warning"><sl-icon name="exclamation-triangle"></sl-icon> {title}</sl-badge></div>'
+            header = f'<div><wa-badge variant="warning"><wa-icon name="exclamation-triangle"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
@@ -540,7 +552,7 @@ class CardWidgetsMixin:
         """
         header = None
         if title:
-            header = f'<div><sl-badge variant="danger"><sl-icon name="x-circle"></sl-icon> {title}</sl-badge></div>'
+            header = f'<div><wa-badge variant="danger"><wa-icon name="x-circle"></wa-icon> {title}</wa-badge></div>'
         
         self.card(
             content=f'<div style="line-height: 1.6;">{content}</div>',
@@ -597,9 +609,9 @@ class CardContext:
                 if callable(self.footer):
                     current_footer = self.footer()
                 
-                # Add width: 100% to sl-card (consistency with broadcast)
+                # Add width: 100% to wa-card for consistency with broadcast
                 card_style = 'style="width: 100%;"'
-                html_parts = [f'<sl-card{self.attrs_str} {card_style}>']
+                html_parts = [f'<wa-card{self.attrs_str} {card_style}>']
                 
                 if current_header:
                     html_parts.append(f'<div slot="header">{current_header}</div>')
@@ -611,7 +623,7 @@ class CardContext:
                 if current_footer:
                     html_parts.append(f'<div slot="footer">{current_footer}</div>')
                 
-                html_parts.append('</sl-card>')
+                html_parts.append('</wa-card>')
                 
                 # Apply width: 100% to wrapper div (consistency with list_container)
                 _wd = self.app._get_widget_defaults("card")

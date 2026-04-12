@@ -141,8 +141,8 @@ class State:
         """Register a side-effect callback fired on every set().
 
         Callback signature options:
-            callback(new_val)            – receives new value only
-            callback(new_val, old_val)   – receives new and previous value
+            callback(new_val)            - receives new value only
+            callback(new_val, old_val)   - receives new and previous value
 
         Returns a Subscription object. Call .cancel() to unsubscribe.
         """

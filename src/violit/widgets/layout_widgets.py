@@ -184,10 +184,10 @@ class LayoutWidgetsMixin:
                     open_attr = "open" if self.expanded else ""
                     icon_html = f'{self.icon} ' if self.icon else ''
                     html = f'''
-                    <sl-details {open_attr} style="margin-bottom:1rem;">
+                    <wa-details {open_attr} style="margin-bottom:1rem;">
                         <span slot="summary" style="font-weight:500;">{icon_html}{self.label}</span>
                         <div style="padding:0.5rem 0;">{inner_html}</div>
-                    </sl-details>
+                    </wa-details>
                     '''
                     _wd = self.app._get_widget_defaults("expander")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
@@ -240,7 +240,7 @@ class LayoutWidgetsMixin:
                     headers = []
                     for i, label in enumerate(self.labels):
                         active = "active" if i == 0 else ""
-                        headers.append(f'<sl-tab slot="nav" panel="panel-{i}" {active}>{label}</sl-tab>')
+                        headers.append(f'<wa-tab slot="nav" panel="panel-{i}" {active}>{label}</wa-tab>')
                     
                     # Build tab panels
                     panels = []
@@ -256,13 +256,13 @@ class LayoutWidgetsMixin:
                             tab_htmls.append(b().render())
                         
                         panel_content = "".join(tab_htmls)
-                        panels.append(f'<sl-tab-panel name="panel-{i}" {active}>{panel_content}</sl-tab-panel>')
+                        panels.append(f'<wa-tab-panel name="panel-{i}" {active}>{panel_content}</wa-tab-panel>')
                     
                     html = f'''
-                    <sl-tab-group>
+                    <wa-tab-group>
                         {"".join(headers)}
                         {"".join(panels)}
-                    </sl-tab-group>
+                    </wa-tab-group>
                     '''
                     _wd = self.app._get_widget_defaults("tabs")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
@@ -330,7 +330,7 @@ class LayoutWidgetsMixin:
                 return cid
 
             def container(self_):
-                """Context manager — write widget calls inside the placeholder."""
+                """Context manager; write widget calls inside the placeholder."""
                 class _PlaceholderCtx:
                     def __enter__(ctx_self):
                         from ..state import get_session_store
@@ -417,14 +417,13 @@ class LayoutWidgetsMixin:
                     
                     inner_html = "".join(htmls)
                     html = f'''
-                    <sl-dialog id="{modal_id}" label="{title}" open style="--width: {dialog_width};">
+                    <wa-dialog id="{modal_id}" label="{title}" open light-dismiss style="--width: {dialog_width};">
                         <div style="padding:1rem;">{inner_html}</div>
-                        <!--<sl-button slot="footer" variant="primary" onclick="document.getElementById('{modal_id}').hide()">Close</sl-button>-->
-                    </sl-dialog>
+                    </wa-dialog>
                     <script>
                         document.getElementById('{modal_id}').show();
                         // Listen for native close event (e.g. backdrop click, escape key, etc.)
-                        document.getElementById('{modal_id}').addEventListener('sl-after-hide', (e) => {{
+                        document.getElementById('{modal_id}').addEventListener('wa-after-hide', (e) => {{
                             if (e.target.id === '{modal_id}') {{
                                 window.sendAction('{dialog_id}', 'closed');
                             }}
@@ -585,14 +584,14 @@ class LayoutWidgetsMixin:
                     help_attr = f'title="{self.help_text}"' if self.help_text else ''
                     
                     html = f'''
-                    <sl-dropdown id="{self.popover_id}" {disabled_attr}>
-                        <sl-button slot="trigger" caret {disabled_attr} {width_style} {help_attr}>
+                    <wa-dropdown id="{self.popover_id}" {disabled_attr}>
+                        <wa-button slot="trigger" with-caret variant="neutral" appearance="outlined" {disabled_attr} {width_style} {help_attr}>
                             {self.label}
-                        </sl-button>
-                        <div style="padding: 1rem; background: var(--sl-panel-background-color, var(--sl-bg-card)); border-radius: var(--sl-border-radius-medium); min-width: 200px; max-width: 400px; box-shadow: var(--sl-shadow-large);">
+                        </wa-button>
+                        <div style="padding: 1rem; background: var(--wa-color-surface-raised, var(--vl-bg-card)); border-radius: var(--wa-border-radius-m, var(--vl-radius)); min-width: 200px; max-width: 400px; box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);">
                             {inner_html}
                         </div>
-                    </sl-dropdown>
+                    </wa-dropdown>
                     '''
                     _wd = self.app._get_widget_defaults("popover")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)

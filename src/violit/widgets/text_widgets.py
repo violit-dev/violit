@@ -164,8 +164,8 @@ class TextWidgetsMixin:
         # Inline elements
         html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
         html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
-        html = re.sub(r'`(.+?)`', r'<code style="background:var(--sl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
-        html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--sl-primary);">\1</a>', html)
+        html = re.sub(r'`(.+?)`', r'<code style="background:var(--vl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
+        html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--vl-primary);">\1</a>', html)
         
         return html
     
@@ -189,7 +189,7 @@ class TextWidgetsMixin:
                     font-size: 0.9rem;
                 }}
                 .dataframe th {{
-                    background: var(--sl-color-primary-600);
+                    background: var(--vl-primary);
                     color: white;
                     padding: 0.75rem;
                     text-align: left;
@@ -197,10 +197,10 @@ class TextWidgetsMixin:
                 }}
                 .dataframe td {{
                     padding: 0.5rem 0.75rem;
-                    border-bottom: 1px solid var(--sl-color-neutral-200);
+                    border-bottom: 1px solid var(--vl-border);
                 }}
                 .dataframe tr:hover {{
-                    background: var(--sl-color-neutral-50);
+                    background: var(--vl-bg-card);
                 }}
             </style>
             {html}
@@ -239,9 +239,9 @@ class TextWidgetsMixin:
             
             grad = "gradient-text" if level == 1 else ""
             anchor_attr = f' id="{html_lib.escape(anchor, quote=True)}"' if anchor else ''
-            help_html = f' <sl-tooltip content="{html_lib.escape(str(help), quote=True)}"><sl-icon name="question-circle" style="font-size:0.7em;color:var(--sl-text-muted);vertical-align:middle;cursor:help;"></sl-icon></sl-tooltip>' if help else ''
+            help_html = f' <wa-tooltip for="{cid}_help" content="{html_lib.escape(str(help), quote=True)}"></wa-tooltip><wa-icon id="{cid}_help" name="circle-question" style="font-size:0.7em;color:var(--vl-text-muted);vertical-align:middle;cursor:help;"></wa-icon>' if help else ''
             html_output = f'<h{level}{anchor_attr} class="{grad}">{escaped_content}{help_html}</h{level}>'
-            if divider: html_output += '<sl-divider class="divider"></sl-divider>'
+            if divider: html_output += '<wa-divider class="divider"></wa-divider>'
             _wd = self._get_widget_defaults("heading")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -384,7 +384,7 @@ class TextWidgetsMixin:
                     elif not stripped:
                         result.append('<br>')
                         i += 1
-                    # Regular text — single newline produces <br> (GFM-style)
+                    # Regular text: a single newline produces <br> (GFM-style)
                     else:
                         result.append(f'{line}<br>')
                         i += 1
@@ -397,16 +397,16 @@ class TextWidgetsMixin:
                 # Italic *text* (avoid matching list markers)
                 html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
                 # Code `text`
-                html = re.sub(r'`(.+?)`', r'<code style="background:var(--sl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
+                html = re.sub(r'`(.+?)`', r'<code style="background:var(--vl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
                 # Links [text](url)
-                html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--sl-primary);">\1</a>', html)
+                html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--vl-primary);">\1</a>', html)
             
             rendering_ctx.reset(token)
             _wd = self._get_widget_defaults("markdown")
             _fc = merge_cls(_wd.get("cls", ""), "markdown", cls)
             _fs = merge_style(_wd.get("style", ""), style)
             if help:
-                html += f' <sl-tooltip content="{help}"><sl-icon name="question-circle" style="font-size:0.85em;vertical-align:middle;cursor:help;"></sl-icon></sl-tooltip>'
+                html += f' <wa-tooltip for="{cid}_help" content="{help}"></wa-tooltip><wa-icon id="{cid}_help" name="circle-question" style="font-size:0.85em;vertical-align:middle;cursor:help;"></wa-icon>'
             return Component("div", id=cid, content=html, class_=_fc, style=_fs or None, **props)
         self._register_component(cid, builder)
     
@@ -477,7 +477,7 @@ class TextWidgetsMixin:
             # Theme colors
             if theme == "light":
                 bg_color = "#fafafa"
-                border_color = "var(--sl-border, #e5e7eb)"
+                border_color = "var(--vl-border, #e5e7eb)"
                 bar_bg = "#f0f0f0"
                 bar_dot_colors = ("#ff5f57", "#febc2e", "#28c840")
                 title_color = "#6b7280"
@@ -530,14 +530,14 @@ class TextWidgetsMixin:
                 " onmouseenter="this.style.color='{copy_btn_hover}';this.style.borderColor='{copy_btn_hover}'"
                   onmouseleave="this.style.color='{copy_btn_color}';this.style.borderColor='{border_color}'"
                 >
-                    <sl-icon name="clipboard" style="font-size: 0.85rem;"></sl-icon>
+                    <wa-icon name="clipboard" style="font-size: 0.85rem;"></wa-icon>
                     <span>Copy</span>
                 </button>
                 <script>
                 function {copy_fn}(btn) {{
                     const pre = btn.closest('.violit-code-block').querySelector('code');
                     navigator.clipboard.writeText(pre.textContent).then(() => {{
-                        const icon = btn.querySelector('sl-icon');
+                        const icon = btn.querySelector('wa-icon');
                         const span = btn.querySelector('span');
                         if (icon) icon.setAttribute('name', 'check2');
                         if (span) span.textContent = 'Copied!';
@@ -661,7 +661,7 @@ class TextWidgetsMixin:
             _wd = self._get_widget_defaults("divider")
             _fc = merge_cls(_wd.get("cls", ""), "divider", cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            return Component("sl-divider", id=cid, class_=_fc, style=_fs or None)
+            return Component("wa-divider", id=cid, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
 
     def space(self, size="1rem"):

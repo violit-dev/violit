@@ -69,8 +69,8 @@ class InputWidgetsMixin:
         if placeholder: extra["placeholder"] = placeholder
         if autocomplete: extra["autocomplete"] = autocomplete
         if disabled: extra["disabled"] = True
-        if help: extra["help-text"] = help
-        return self._input_component("input", "sl-input", label, value, on_change, key,
+        if help: extra["hint"] = help
+        return self._input_component("input", "wa-input", label, value, on_change, key,
                                      cls=cls, style=style, label_visibility=label_visibility,
                                      **extra, **props)
 
@@ -90,8 +90,8 @@ class InputWidgetsMixin:
         if value is None: value = min_value
         extra = {}
         if disabled: extra["disabled"] = True
-        if help: extra["help-text"] = help
-        return self._input_component("slider", "sl-range", label, value, on_change, key,
+        if help: extra["hint"] = help
+        return self._input_component("slider", "wa-slider", label, value, on_change, key,
                                      cls=cls, style=style, live_update=live_update,
                                      label_visibility=label_visibility,
                                      min=min_value, max=max_value, step=step,
@@ -140,7 +140,7 @@ class InputWidgetsMixin:
             range_id = f"{cid}_range"
 
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="sl-change" hx-swap="none" hx-vals="js:{{value: event.target.value}}"'
+                attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.value}}"'
                 listener_script = ""
             else:
                 attrs_str = ""
@@ -152,10 +152,10 @@ class InputWidgetsMixin:
                     var opts = {json.dumps(options_str)};
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-input', function() {{
+                        el.addEventListener('input', function() {{
                             if (display) display.textContent = opts[parseInt(el.value)];
                         }});
-                        el.addEventListener('sl-change', function() {{
+                        el.addEventListener('change', function() {{
                             window.sendAction('{cid}', el.value);
                         }});
                     }}
@@ -188,7 +188,7 @@ class InputWidgetsMixin:
             # 6. HTML Construction
             html_content = f'''
                 <label style="display:block; font-size:0.875rem; font-weight:500; margin-bottom:0.25rem;">{html_lib.escape(str(label))}</label>
-                <sl-range id="{range_id}" min="0" max="{max_idx}" step="1" value="{current_idx}" tooltip="none" {attrs_str} {props_str}></sl-range>
+                <wa-slider id="{range_id}" min="0" max="{max_idx}" step="1" value="{current_idx}" tooltip="none" {attrs_str} {props_str}></wa-slider>
                 <div style="position:relative; width:100%; height:1rem; margin-top:0.15rem;">
                     {ticks}
                 </div>
@@ -236,7 +236,7 @@ class InputWidgetsMixin:
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="sl-change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
+                attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
                 listener_script = ""
             else:
                 # WS mode: use addEventListener for Shoelace custom events
@@ -247,7 +247,7 @@ class InputWidgetsMixin:
                     const el = document.getElementById('{cid}');
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-change', function(e) {{
+                        el.addEventListener('change', function(e) {{
                             window.sendAction('{cid}', el.checked);
                         }});
                     }}
@@ -256,8 +256,8 @@ class InputWidgetsMixin:
                 '''
             
             disabled_attr = 'disabled' if disabled else ''
-            help_html = f'<br><span style="font-size:0.75rem;color:var(--sl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
-            html = f'<sl-checkbox id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</sl-checkbox>{listener_script}'
+            help_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
+            html = f'<wa-checkbox id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</wa-checkbox>{listener_script}'
             _wd = self._get_widget_defaults("checkbox")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -299,11 +299,11 @@ class InputWidgetsMixin:
                 escaped_opt = html_lib.escape(str(opt), quote=True)
                 caption_html = ''
                 if captions and i_opt < len(captions) and captions[i_opt]:
-                    caption_html = f'<br><span style="font-size:0.75rem;color:var(--sl-text-muted);font-weight:normal;">{html_lib.escape(str(captions[i_opt]))}</span>'
-                opts_html += f'<sl-radio value="{escaped_opt}" {sel}>{escaped_opt}{caption_html}</sl-radio>'
+                    caption_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);font-weight:normal;">{html_lib.escape(str(captions[i_opt]))}</span>'
+                opts_html += f'<wa-radio value="{escaped_opt}" {sel}>{escaped_opt}{caption_html}</wa-radio>'
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="sl-change" hx-swap="none" name="value"'
+                attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" name="value"'
                 listener_script = ""
             else:
                 # WS mode: use addEventListener for Shoelace custom events
@@ -314,7 +314,7 @@ class InputWidgetsMixin:
                     const el = document.getElementById('{cid}');
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-change', function(e) {{
+                        el.addEventListener('change', function(e) {{
                             window.sendAction('{cid}', el.value);
                         }});
                     }}
@@ -325,10 +325,10 @@ class InputWidgetsMixin:
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
             escaped_cv = html_lib.escape(str(cv), quote=True)
             disabled_attr = 'disabled' if disabled else ''
-            help_attr = f'help-text="{html_lib.escape(str(help), quote=True)}"' if help else ''
+            help_attr = f'hint="{html_lib.escape(str(help), quote=True)}"' if help else ''
             # Horizontal layout via fieldset attribute (Shoelace) + CSS override
             horiz_style = ' style="display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;"' if horizontal else ''
-            html = f'<sl-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div{horiz_style}>{opts_html}</div></sl-radio-group>{listener_script}'
+            html = f'<wa-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div{horiz_style}>{opts_html}</div></wa-radio-group>{listener_script}'
             
             _wd = self._get_widget_defaults("radio")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -339,10 +339,10 @@ class InputWidgetsMixin:
         return s
 
     @staticmethod
-    def _sl_encode(v):
-        """Encode a string for safe use as Shoelace sl-option value attribute.
+    def _select_encode(v):
+        """Encode a string for safe use as select option value attribute.
         
-        Shoelace sl-select treats the value attribute as a space-separated
+        Shoelace wa-select treats the value attribute as a space-separated
         token list (like HTML class). Spaces in values break selection/matching.
         We percent-encode spaces (and %) to produce a single safe token.
         """
@@ -352,8 +352,8 @@ class InputWidgetsMixin:
         return s
 
     @staticmethod
-    def _sl_decode(v):
-        """Decode a Shoelace-safe value back to the original string."""
+    def _select_decode(v):
+        """Decode a select-safe value back to the original string."""
         s = str(v)
         s = s.replace('%20', ' ')
         s = s.replace('%25', '%')
@@ -378,7 +378,7 @@ class InputWidgetsMixin:
         s = self.state(default_val, key=state_key)
         
         def action(v):
-            decoded = InputWidgetsMixin._sl_decode(v)
+            decoded = InputWidgetsMixin._select_decode(v)
             s.set(decoded)
             if on_change: on_change(decoded)
             
@@ -389,21 +389,21 @@ class InputWidgetsMixin:
             
             opts_html = ""
             for opt in options:
-                encoded_opt = InputWidgetsMixin._sl_encode(opt)
+                encoded_opt = InputWidgetsMixin._select_encode(opt)
                 escaped_encoded = html_lib.escape(encoded_opt, quote=True)
                 escaped_display = html_lib.escape(str(opt), quote=True)
                 sel = 'selected' if opt == cv else ''
-                opts_html += f'<sl-option value="{escaped_encoded}" {sel}>{escaped_display}</sl-option>'
+                opts_html += f'<wa-option value="{escaped_encoded}" {sel}>{escaped_display}</wa-option>'
             
-            encoded_cv = InputWidgetsMixin._sl_encode(cv) if cv is not None else ''
+            encoded_cv = InputWidgetsMixin._select_encode(cv) if cv is not None else ''
             escaped_cv = html_lib.escape(encoded_cv, quote=True)
             escaped_label = html_lib.escape(str(label), quote=True)
             
             if self.mode == 'lite':
-                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "sl-change", "hx-swap": "none", "name": "value"}
+                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "change", "hx-swap": "none", "name": "value"}
                 listener_script = ""
             else:
-                # WS mode: use addEventListener for Shoelace custom events
+                # WS mode: use native change events from Web Awesome
                 attrs = {}
                 desired_json = json.dumps(encoded_cv, ensure_ascii=False)
                 listener_script = f'''
@@ -429,7 +429,7 @@ class InputWidgetsMixin:
                         
                         if (!el.hasAttribute('data-ws-listener')) {{
                             el.setAttribute('data-ws-listener', 'true');
-                            el.addEventListener('sl-change', function(e) {{
+                            el.addEventListener('change', function(e) {{
                                 window.sendAction('{cid}', el.value);
                             }});
                         }}
@@ -438,17 +438,17 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            select_html = f'<sl-select id="{cid}" label="{escaped_label}" value="{escaped_cv}"'
+            select_html = f'<wa-select id="{cid}" label="{escaped_label}" value="{escaped_cv}" appearance="outlined"'
             extra_attrs = {}
             if placeholder: extra_attrs['placeholder'] = placeholder
             if disabled: extra_attrs['disabled'] = True
-            if help: extra_attrs['help-text'] = help
+            if help: extra_attrs['hint'] = help
             for k, v in {**attrs, **extra_attrs, **props}.items():
                 if v is True:
                     select_html += f' {k}'
                 elif v is not False and v is not None:
                     select_html += f' {k}="{v}"'
-            select_html += f'>{opts_html}</sl-select>{listener_script}'
+            select_html += f'>{opts_html}</wa-select>{listener_script}'
             
             _wd = self._get_widget_defaults("selectbox")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -479,9 +479,9 @@ class InputWidgetsMixin:
         
         def action(v):
             if isinstance(v, str):
-                selected = [InputWidgetsMixin._sl_decode(x.strip()) for x in v.split(',') if x.strip()]
+                selected = [InputWidgetsMixin._select_decode(x.strip()) for x in v.split(',') if x.strip()]
             elif isinstance(v, list):
-                selected = [InputWidgetsMixin._sl_decode(x) for x in v]
+                selected = [InputWidgetsMixin._select_decode(x) for x in v]
             else:
                 selected = []
             s.set(selected)
@@ -494,15 +494,15 @@ class InputWidgetsMixin:
             
             opts_html = ""
             for opt in options:
-                encoded_opt = InputWidgetsMixin._sl_encode(opt)
+                encoded_opt = InputWidgetsMixin._select_encode(opt)
                 escaped_encoded = html_lib.escape(encoded_opt, quote=True)
                 escaped_display = html_lib.escape(str(opt), quote=True)
                 sel = 'selected' if opt in cv else ''
-                opts_html += f'<sl-option value="{escaped_encoded}" {sel}>{escaped_display}</sl-option>'
+                opts_html += f'<wa-option value="{escaped_encoded}" {sel}>{escaped_display}</wa-option>'
             
             listener_script = ""
             if self.mode == 'ws':
-                encoded_cv = [InputWidgetsMixin._sl_encode(x) for x in cv] if cv else []
+                encoded_cv = [InputWidgetsMixin._select_encode(x) for x in cv] if cv else []
                 desired_json = json.dumps(encoded_cv, ensure_ascii=False)
                 listener_script = f'''
                 <script>
@@ -529,7 +529,7 @@ class InputWidgetsMixin:
                         
                         if (!el.hasAttribute('data-ws-listener')) {{
                             el.setAttribute('data-ws-listener', 'true');
-                            el.addEventListener('sl-change', function(e) {{
+                            el.addEventListener('change', function(e) {{
                                 const vals = Array.isArray(el.value) ? el.value : (el.value ? [el.value] : []);
                                 window.sendAction('{cid}', vals.join(','));
                             }});
@@ -542,14 +542,14 @@ class InputWidgetsMixin:
             _wd = self._get_widget_defaults("multiselect")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            # sl-select: cls/style applied via wrapper since this is a Shoelace component
+            # wa-select: cls/style applied via wrapper since this is a Shoelace component
             # label escaping handled by Component.render(); opts_html is raw so manually escaped above
             _ms_extra = {}
             if placeholder: _ms_extra['placeholder'] = placeholder
             if disabled: _ms_extra['disabled'] = True
-            if help: _ms_extra['help-text'] = help
+            if help: _ms_extra['hint'] = help
             if max_selections: _ms_extra['max-options-visible'] = max_selections
-            inner = Component("sl-select", id=cid, label=label, content=opts_html, multiple=True, clearable=True, **_ms_extra)
+            inner = Component("wa-select", id=cid, label=label, content=opts_html, multiple=True, with_clear=True, appearance="outlined", **_ms_extra)
             inner_html = inner.render() + listener_script
             if _fc or _fs:
                 return Component(None, id=f"{cid}_wrap", content=wrap_html(inner_html, _fc, _fs))
@@ -572,7 +572,7 @@ class InputWidgetsMixin:
                         }}
                         if (!el.hasAttribute('data-listener-added')) {{
                             el.setAttribute('data-listener-added', 'true');
-                            el.addEventListener('sl-change', function(e) {{
+                            el.addEventListener('change', function(e) {{
                                 const values = Array.isArray(el.value) ? el.value : [];
                                 const valueStr = values.join(',');
                                 htmx.ajax('POST', '/action/{cid}', {{
@@ -631,7 +631,7 @@ class InputWidgetsMixin:
             rendering_ctx.reset(token)
             
             if self.mode == 'lite':
-                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "sl-input delay:50ms", "hx-swap": "none", "name": "value"}
+                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
                 listener_script = ""
             else:
                 # WS mode: use addEventListener for Shoelace custom events
@@ -642,7 +642,7 @@ class InputWidgetsMixin:
                     const el = document.getElementById('{cid}');
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-input', function(e) {{
+                        el.addEventListener('input', function(e) {{
                             window.sendAction('{cid}', el.value);
                         }});
                     }}
@@ -670,12 +670,12 @@ class InputWidgetsMixin:
             if max_chars is not None: textarea_props["maxlength"] = max_chars
             if placeholder: textarea_props["placeholder"] = placeholder
             if disabled: textarea_props["disabled"] = True
-            if help: textarea_props["help-text"] = help
-            html = f'<sl-textarea id="{cid}" label="{label}" value="{cv}"'
+            if help: textarea_props["hint"] = help
+            html = f'<wa-textarea id="{cid}" label="{label}" value="{cv}" appearance="outlined"'
             for k, v in {**attrs, **textarea_props, **props}.items():
                 if v is True: html += f' {k}'
                 elif v is not False and v is not None: html += f' {k}="{v}"'
-            html += f'></sl-textarea>{listener_script}'
+            html += f'></wa-textarea>{listener_script}'
             
             _wd = self._get_widget_defaults("text_area")
             _fc = merge_cls(_wd.get("cls", ""), _cls)
@@ -717,7 +717,7 @@ class InputWidgetsMixin:
             rendering_ctx.reset(token)
             
             if self.mode == 'lite':
-                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "sl-input delay:50ms", "hx-swap": "none", "name": "value"}
+                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
                 listener_script = ""
             else:
                 # WS mode: use addEventListener
@@ -728,7 +728,7 @@ class InputWidgetsMixin:
                     const el = document.getElementById('{cid}');
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-input', function(e) {{
+                        el.addEventListener('input', function(e) {{
                             window.sendAction('{cid}', el.value);
                         }});
                     }}
@@ -742,13 +742,13 @@ class InputWidgetsMixin:
             if step is not None: num_props["step"] = step
             if placeholder: num_props["placeholder"] = placeholder
             if disabled: num_props["disabled"] = True
-            if help: num_props["help-text"] = help
+            if help: num_props["hint"] = help
             
-            html = f'<sl-input id="{cid}" label="{label}" value="{cv}"'
+            html = f'<wa-input id="{cid}" label="{label}" value="{cv}" appearance="outlined"'
             for k, v in {**attrs, **num_props, **props}.items():
                 if v is True: html += f' {k}'
                 elif v is not False and v is not None: html += f' {k}="{v}"'
-            html += f'></sl-input>{listener_script}'
+            html += f'></wa-input>{listener_script}'
             
             _wd = self._get_widget_defaults("number_input")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -824,24 +824,24 @@ class InputWidgetsMixin:
             # Build file info display
             if cv:
                 if isinstance(cv, list):
-                    file_info = f"✅ {len(cv)} file(s) uploaded"
+                    file_info = f"Uploaded {len(cv)} file(s)"
                 else:
                     size_kb = cv.size / 1024
                     size_str = f"{size_kb:.1f}KB" if size_kb < 1024 else f"{size_kb/1024:.1f}MB"
-                    file_info = f"✅ {cv.name} ({size_str})"
+                    file_info = f"Uploaded {cv.name} ({size_str})"
             else:
                 file_info = ""
             
             accept_str = accept if accept else "*"
-            help_html = f'<div style="font-size:0.75rem;color:var(--sl-text-muted);margin-top:0.25rem;">{help}</div>' if help else ""
+            help_html = f'<div style="font-size:0.75rem;color:var(--vl-text-muted);margin-top:0.25rem;">{help}</div>' if help else ""
             
             html = f'''
             <div class="file-uploader" style="margin-bottom:1rem;">
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--sl-text);">{label}</label>
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="file" id="{cid}_input" accept="{accept_str}" {'multiple' if multiple else ''} 
-                       style="display:block;padding:0.5rem;border:1px solid var(--sl-border);border-radius:0.25rem;background:var(--sl-bg-card);color:var(--sl-text);width:100%;font-family:inherit;cursor:pointer;" />
+                       style="display:block;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.25rem;background:var(--vl-bg-card);color:var(--vl-text);width:100%;font-family:inherit;cursor:pointer;" />
                 {help_html}
-                <div id="{cid}_info" style="margin-top:0.5rem;font-size:0.875rem;color:var(--sl-text-muted);">{file_info}</div>
+                <div id="{cid}_info" style="margin-top:0.5rem;font-size:0.875rem;color:var(--vl-text-muted);">{file_info}</div>
             </div>
             <script>
             (function() {{
@@ -854,7 +854,7 @@ class InputWidgetsMixin:
                     input.addEventListener('change', function(e) {{
                         const files = e.target.files;
                         if (files && files.length > 0) {{
-                            infoDiv.textContent = '⏳ Uploading...';
+                            infoDiv.textContent = 'Uploading...';
                             
                             const fileArray = Array.from(files);
                             const promises = fileArray.map(file => {{
@@ -885,11 +885,11 @@ class InputWidgetsMixin:
                                 
                                 // Update UI immediately
                                 if ({'true' if multiple else 'false'}) {{
-                                    infoDiv.textContent = '✅ ' + results.length + ' file(s) uploaded';
+                                    infoDiv.textContent = 'Uploaded ' + results.length + ' file(s)';
                                 }} else {{
                                     const file = results[0];
                                     const sizeKB = (file.size / 1024).toFixed(1);
-                                    infoDiv.textContent = '✅ ' + file.name + ' (' + sizeKB + ' KB)';
+                                    infoDiv.textContent = 'Uploaded ' + file.name + ' (' + sizeKB + ' KB)';
                                 }}
                                 
                                 // Send to backend
@@ -904,7 +904,7 @@ class InputWidgetsMixin:
                                     }});
                                 }}
                             }}).catch(function(err) {{
-                                infoDiv.textContent = '❌ Upload failed';
+                                infoDiv.textContent = 'Upload failed';
                                 console.error('File upload error:', err);
                             }});
                         }}
@@ -951,7 +951,7 @@ class InputWidgetsMixin:
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="sl-change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
+                attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
                 listener_script = ""
             else:
                 # WS mode: use addEventListener for Shoelace custom events
@@ -962,7 +962,7 @@ class InputWidgetsMixin:
                     const el = document.getElementById('{cid}');
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('sl-change', function(e) {{
+                        el.addEventListener('change', function(e) {{
                             window.sendAction('{cid}', el.checked);
                         }});
                     }}
@@ -971,8 +971,8 @@ class InputWidgetsMixin:
                 '''
             
             disabled_attr = 'disabled' if disabled else ''
-            help_html = f'<br><span style="font-size:0.75rem;color:var(--sl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
-            html = f'<sl-switch id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{label}{help_html}</sl-switch>{listener_script}'
+            help_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
+            html = f'<wa-switch id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{label}{help_html}</wa-switch>{listener_script}'
             _wd = self._get_widget_defaults("toggle")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -1004,11 +1004,11 @@ class InputWidgetsMixin:
             rendering_ctx.reset(token)
             
             if self.mode == 'lite':
-                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "sl-change", "hx-swap": "none", "name": "value"}
+                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "change", "hx-swap": "none", "name": "value"}
             else:
-                attrs = {"on_sl_change": f"window.sendAction('{cid}', this.value)"}
+                attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
             
-            inner = Component("sl-color-picker", id=cid, label=label, value=cv, **attrs, **props)
+            inner = Component("wa-color-picker", id=cid, label=label, value=cv, appearance="outlined", **attrs, **props)
             _wd = self._get_widget_defaults("color_picker")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -1044,9 +1044,9 @@ class InputWidgetsMixin:
             
             html = f'''
             <div style="margin-bottom: 0.5rem;">
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--sl-text);">{label}</label>
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="date" id="{cid}_input" value="{cv}" 
-                       style="width:100%;padding:0.5rem;border:1px solid var(--sl-border);border-radius:0.5rem;background:var(--sl-bg-card);color:var(--sl-text);font-family:inherit;"
+                       style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
                        {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
             </div>
             '''
@@ -1083,9 +1083,9 @@ class InputWidgetsMixin:
             
             html = f'''
             <div style="margin-bottom: 0.5rem;">
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--sl-text);">{label}</label>
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="time" id="{cid}_input" value="{cv}" 
-                       style="width:100%;padding:0.5rem;border:1px solid var(--sl-border);border-radius:0.5rem;background:var(--sl-bg-card);color:var(--sl-text);font-family:inherit;"
+                       style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
                        {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
             </div>
             '''
@@ -1122,9 +1122,9 @@ class InputWidgetsMixin:
             
             html = f'''
             <div style="margin-bottom: 0.5rem;">
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--sl-text);">{label}</label>
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="datetime-local" id="{cid}_input" value="{cv}" 
-                       style="width:100%;padding:0.5rem;border:1px solid var(--sl-border);border-radius:0.5rem;background:var(--sl-bg-card);color:var(--sl-text);font-family:inherit;"
+                       style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
                        {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
             </div>
             '''
@@ -1149,8 +1149,8 @@ class InputWidgetsMixin:
             s.set(v)
             if on_change: on_change(v)
         
-        # Choose event: sl-input fires during drag, sl-change fires on release
-        sl_event = 'sl-input' if live_update else 'sl-change'
+        # Web Awesome form controls emit native input/change events.
+        input_event = 'input' if live_update else 'change'
         
         def builder():
             token = rendering_ctx.set(cid)
@@ -1158,7 +1158,7 @@ class InputWidgetsMixin:
             rendering_ctx.reset(token)
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="{sl_event}" hx-swap="none" name="value"'
+                attrs_str = f'hx-post="/action/{cid}" hx-trigger="{input_event}" hx-swap="none" name="value"'
                 listener_script = ""
             else:
                 # WS mode: use addEventListener for Shoelace custom events
@@ -1169,7 +1169,7 @@ class InputWidgetsMixin:
                     const el = document.getElementById('{cid}');
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('{sl_event}', function(e) {{
+                        el.addEventListener('{input_event}', function(e) {{
                             window.sendAction('{cid}', el.value);
                         }});
                     }}
@@ -1191,10 +1191,10 @@ class InputWidgetsMixin:
             # label_visibility support
             _lbl = label
             if label_visibility == "hidden":
-                _lbl = ""  # Shoelace still reserves space for empty label
+                _lbl = ""
             elif label_visibility == "collapsed":
                 _lbl = ""
-            html = f'<{tag_name} id="{cid}" label="{_lbl}" value="{escaped_cv}" {attrs_str} {props_str}></{tag_name}>{listener_script}'
+            html = f'<{tag_name} id="{cid}" label="{_lbl}" value="{escaped_cv}" appearance="outlined" {attrs_str} {props_str}></{tag_name}>{listener_script}'
             
             _wd = self._get_widget_defaults(type_name)
             _fc = merge_cls(_wd.get("cls", ""), cls)

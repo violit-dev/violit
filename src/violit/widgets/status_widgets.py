@@ -51,15 +51,16 @@ class StatusWidgetsMixin:
             escaped_val = _re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', escaped_val)
             escaped_val = _re.sub(r'`(.+?)`', r'<code>\1</code>', escaped_val)
             escaped_val = escaped_val.replace('\n', '<br>')
-            icon_html = f'<sl-icon slot="icon" name="{icon}"></sl-icon>' if icon else ""
-            html_output = f'<sl-alert variant="{variant}" open>{icon_html}{escaped_val}</sl-alert>'
+            variant_map = {"primary": "brand", "danger": "danger"}.get(variant, variant)
+            icon_html = f'<wa-icon slot="icon" name="{icon}"></wa-icon>' if icon else ""
+            html_output = f'<wa-callout variant="{variant_map}" appearance="filled-outlined">{icon_html}{escaped_val}</wa-callout>'
             _wd = self._get_widget_defaults("alert")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    # ── Callout / Admonition ─────────────────────────────────────────────────
+    # Callout / Admonition
     _CALLOUT_VARIANTS = {
         "tip": {
             "icon": "lightbulb",
@@ -146,8 +147,8 @@ class StatusWidgetsMixin:
                 f'background:{v["bg"]};border:1px solid {v["border"]};'
                 f'border-radius:0.625rem;margin:0.75rem 0 1.25rem;'
                 f'border-left:4px solid {v["accent"]};">'
-                f'<sl-icon name="{icon_name}" style="font-size:1.1rem;'
-                f'color:{v["accent"]};flex-shrink:0;margin-top:0.1rem;"></sl-icon>'
+                f'<wa-icon name="{icon_name}" style="font-size:1.1rem;'
+                f'color:{v["accent"]};flex-shrink:0;margin-top:0.1rem;"></wa-icon>'
                 f'<div>{title_html}'
                 f'<div style="font-size:0.85rem;color:{v["text_color"]};'
                 f'line-height:1.6;">{display_body}</div>'
@@ -249,11 +250,11 @@ class StatusWidgetsMixin:
             escaped_tb = html_lib.escape(tb)
             
             html_output = f'''
-            <sl-alert variant="danger" open style="margin-bottom:1rem;">
-                <sl-icon slot="icon" name="exclamation-octagon"></sl-icon>
+            <wa-callout variant="danger" appearance="filled-outlined" style="margin-bottom:1rem;">
+                <wa-icon slot="icon" name="exclamation-circle"></wa-icon>
                 <strong>{escaped_name}:</strong> {escaped_msg}
                 <pre style="margin-top:0.5rem;padding:0.5rem;background:rgba(0,0,0,0.1);border-radius:0.25rem;overflow-x:auto;font-size:0.85rem;">{escaped_tb}</pre>
-            </sl-alert>
+            </wa-callout>
             '''
             _wd = self._get_widget_defaults("exception")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -336,10 +337,10 @@ class StatusWidgetsMixin:
             html_output = f'''
             <div style="margin-bottom:0.5rem;">
                 <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem;">
-                    <span style="font-size:0.875rem;color:var(--sl-text);">{escaped_text}</span>
-                    <span style="font-size:0.875rem;color:var(--sl-text-muted);">{val_num}%</span>
+                    <span style="font-size:0.875rem;color:var(--vl-text);">{escaped_text}</span>
+                    <span style="font-size:0.875rem;color:var(--vl-text-muted);">{val_num}%</span>
                 </div>
-                <sl-progress-bar value="{val_num}"></sl-progress-bar>
+                <wa-progress-bar value="{val_num}"></wa-progress-bar>
             </div>
             '''
             _wd = self._get_widget_defaults("progress")
@@ -376,8 +377,8 @@ class StatusWidgetsMixin:
             
             html_output = f'''
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
-                <sl-spinner style="font-size:1.5rem;"></sl-spinner>
-                <span style="color:var(--sl-text-muted);font-size:0.875rem;">{escaped_text}</span>
+                <wa-spinner style="font-size:1.5rem;"></wa-spinner>
+                <span style="color:var(--vl-text-muted);font-size:0.875rem;">{escaped_text}</span>
             </div>
             '''
             _wd = self._get_widget_defaults("spinner")
@@ -420,17 +421,17 @@ class StatusWidgetsMixin:
                     
                     # Status icon and color based on state
                     if self.state == "running":
-                        icon = '<sl-spinner style="font-size:1rem;"></sl-spinner>'
-                        border_color = "var(--sl-primary)"
+                        icon = '<wa-spinner style="font-size:1rem;"></wa-spinner>'
+                        border_color = "var(--vl-primary)"
                     elif self.state == "complete":
-                        icon = '<sl-icon name="check-circle-fill" style="color:#10b981;font-size:1rem;"></sl-icon>'
+                        icon = '<wa-icon name="check-circle" style="color:#10b981;font-size:1rem;"></wa-icon>'
                         border_color = "#10b981"
                     elif self.state == "error":
-                        icon = '<sl-icon name="x-circle-fill" style="color:#ef4444;font-size:1rem;"></sl-icon>'
+                        icon = '<wa-icon name="circle-xmark" style="color:#ef4444;font-size:1rem;"></wa-icon>'
                         border_color = "#ef4444"
                     else:
-                        icon = '<sl-icon name="info-circle-fill" style="color:var(--sl-primary);font-size:1rem;"></sl-icon>'
-                        border_color = "var(--sl-primary)"
+                        icon = '<wa-icon name="circle-info" style="color:var(--vl-primary);font-size:1rem;"></wa-icon>'
+                        border_color = "var(--vl-primary)"
                     
                     # XSS protection: escape label
                     import html as html_lib
@@ -438,7 +439,7 @@ class StatusWidgetsMixin:
                     
                     # Build status container
                     html_output = f'''
-                    <sl-details {"open" if self.expanded else ""} style="margin-bottom:1rem;">
+                    <wa-details {"open" if self.expanded else ""} style="margin-bottom:1rem;">
                         <div slot="summary" style="display:flex;align-items:center;gap:0.5rem;font-weight:600;">
                             {icon}
                             <span>{escaped_label}</span>
@@ -446,7 +447,7 @@ class StatusWidgetsMixin:
                         <div style="padding:0.5rem 0 0 1.5rem;border-left:2px solid {border_color};margin-left:0.5rem;">
                             {inner_html}
                         </div>
-                    </sl-details>
+                    </wa-details>
                     '''
                     _wd = self.app._get_widget_defaults("status")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)

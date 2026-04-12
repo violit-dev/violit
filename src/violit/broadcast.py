@@ -96,7 +96,7 @@ class Broadcaster:
                 detail: {data_json}
             }});
             window.dispatchEvent(event);
-            console.log('🔔 Event received: {event_name}');
+            console.log('[Violit] Event received: {event_name}');
         }})();
         """
         
@@ -302,7 +302,7 @@ window.violit.createLiveCard = (data) => {
     const wrapper = document.createElement('div');
     wrapper.style.cssText = 'width: 100%;';
     
-    const card = document.createElement('sl-card');
+    const card = document.createElement('wa-card');
     card.setAttribute('data-post-id', data.id);
     card.style.cssText = 'width: 100%;';
     
@@ -313,10 +313,10 @@ window.violit.createLiveCard = (data) => {
     const headerInner = document.createElement('div');
     headerInner.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
     
-    const badge = document.createElement('sl-badge');
+    const badge = document.createElement('wa-badge');
     badge.setAttribute('variant', 'danger');
-    badge.setAttribute('pulse', '');
-    badge.innerHTML = '<sl-icon name="circle-fill" style="font-size: 0.5rem;"></sl-icon> LIVE';
+    badge.setAttribute('attention', 'pulse');
+    badge.innerHTML = '<wa-icon slot="start" name="circle"></wa-icon> LIVE';
     
     headerInner.appendChild(badge);
     headerWrapper.appendChild(headerInner);
@@ -331,8 +331,8 @@ window.violit.createLiveCard = (data) => {
     footerWrapper.setAttribute('slot', 'footer');
     
     const footerInner = document.createElement('div');
-    footerInner.style.cssText = 'text-align: right; font-size: 0.85rem; color: var(--sl-color-neutral-600);';
-    footerInner.innerHTML = `<sl-icon name="clock"></sl-icon> ${window.violit.escapeHtml(data.created_at)}`;
+    footerInner.style.cssText = 'text-align: right; font-size: 0.85rem; color: var(--vl-text-muted);';
+    footerInner.innerHTML = `<wa-icon name="clock"></wa-icon> ${window.violit.escapeHtml(data.created_at)}`;
     
     footerWrapper.appendChild(footerInner);
     
@@ -345,7 +345,7 @@ window.violit.createLiveCard = (data) => {
     return wrapper;  // Return wrapper
 };
 
-console.log('✅ Violit helpers loaded (XSS-safe)');
+console.log('[Violit] Helpers loaded (XSS-safe)');
 </script>
         """
     
@@ -561,21 +561,7 @@ window.violit.primitives = {{
     
     // ===== Feedback Operations =====
     'feedback.toast': (params) => {{
-        const alert = document.createElement('sl-alert');
-        alert.variant = params.variant || 'neutral';
-        alert.closable = true;
-        alert.duration = params.duration || 3000;
-        
-        const iconName = {{
-            'success': 'check-circle',
-            'warning': 'exclamation-triangle',
-            'danger': 'exclamation-octagon',
-            'neutral': 'info-circle'
-        }}[params.variant] || 'info-circle';
-        
-        alert.innerHTML = `<sl-icon slot="icon" name="${{iconName}}"></sl-icon>${{params.message}}`;
-        document.body.appendChild(alert);
-        alert.toast();
+        createToast(params.message, params.variant || 'primary');
         
         console.log(`[Violit] Toast: ${{params.message}}`);
     }},
@@ -646,7 +632,7 @@ window.violit.routeEvent = (eventName, detail) => {{
         }}
     }});
     
-    console.log(`✅ Event routed: ${{eventName}}`);
+    console.log(`[Violit] Event routed: ${{eventName}}`);
 }};
 
 // ========== Global Event Listener (Single Instance) ==========
@@ -661,10 +647,10 @@ if (!window.violit.listenersRegistered) {{
     }});
     
     window.violit.listenersRegistered = true;
-    console.log('✅ Violit Event Router loaded');
-    console.log('📋 Registered events:', Object.keys(window.violit.bindings));
+    console.log('[Violit] Event router loaded');
+    console.log('[Violit] Registered events:', Object.keys(window.violit.bindings));
 }} else {{
-    console.log('⚠️ Violit Event Router already loaded (skipped duplicate registration)');
+    console.log('[Violit] Event router already loaded; skipped duplicate registration');
 }}
 </script>
         """

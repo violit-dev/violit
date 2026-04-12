@@ -9,6 +9,19 @@ from ..style_utils import merge_cls, merge_style
 
 class FormWidgetsMixin:
     """Form-related widgets (form, form_submit_button, button, download_button, link_button, page_link)"""
+
+    @staticmethod
+    def _wa_button_theme(variant: str):
+        variant_map = {
+            "primary": ("brand", "accent"),
+            "default": ("neutral", "outlined"),
+            "secondary": ("neutral", "outlined"),
+            "text": ("neutral", "plain"),
+            "success": ("success", "accent"),
+            "warning": ("warning", "accent"),
+            "danger": ("danger", "accent"),
+        }
+        return variant_map.get(variant, ("neutral", "outlined"))
     
     def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None,
                variant="primary", type="primary",
@@ -33,7 +46,8 @@ class FormWidgetsMixin:
             bt = text() if callable(text) else text
             rendering_ctx.reset(token)
             attrs = self.engine.click_attrs(cid)
-            icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon and not any(ord(c) > 127 for c in str(icon)) else ''
+            theme_variant, appearance = self._wa_button_theme(_variant)
+            icon_html = f'<wa-icon slot="start" name="{icon}"></wa-icon>' if icon and not any(ord(c) > 127 for c in str(icon)) else ''
             icon_emoji = f'{icon} ' if icon and any(ord(c) > 127 for c in str(icon)) else ''
             disabled_attr = 'disabled' if disabled else ''
             _wd = self._get_widget_defaults("button")
@@ -42,9 +56,10 @@ class FormWidgetsMixin:
             host_style = _fs
             if use_container_width:
                 host_style = merge_style(host_style, "width:100%;")
-            inner = Component("sl-button", id=cid, content=f"{icon_html}{icon_emoji}{bt}",
+            inner = Component("wa-button", id=cid, content=f"{icon_html}{icon_emoji}{bt}",
                               class_=_fc or None, style=host_style or None,
-                              variant=_variant, **attrs, **props)
+                              variant=theme_variant, appearance=appearance,
+                              with_start=bool(icon_html) or None, **attrs, **props)
             # Inject disabled attribute manually since Component may not handle it
             inner_html = inner.render()
             if disabled:
@@ -168,17 +183,17 @@ class FormWidgetsMixin:
                  # Check if we're in lite mode or ws mode
                  if self.mode == 'lite':
                      html = f'''
-                     <sl-button variant="primary" hx-post="/action/{cid}" hx-swap="none" hx-trigger="click">
-                         <sl-icon slot="prefix" name="download"></sl-icon>
+                     <wa-button variant="brand" appearance="accent" hx-post="/action/{cid}" hx-swap="none" hx-trigger="click">
+                         <wa-icon slot="start" name="download"></wa-icon>
                          {label}
-                     </sl-button>
+                     </wa-button>
                      '''
                  else:
                      html = f'''
-                     <sl-button variant="primary" onclick="window.sendAction('{cid}')">
-                         <sl-icon slot="prefix" name="download"></sl-icon>
+                     <wa-button variant="brand" appearance="accent" onclick="window.sendAction('{cid}')">
+                         <wa-icon slot="start" name="download"></wa-icon>
                          {label}
-                     </sl-button>
+                     </wa-button>
                      '''
             else:
                  # Web Mode: JS Download
@@ -197,10 +212,10 @@ class FormWidgetsMixin:
                 
                 html = f'''
                 {download_script}
-                <sl-button variant="primary" onclick="download_{cid}()">
-                    <sl-icon slot="prefix" name="download"></sl-icon>
+                <wa-button variant="brand" appearance="accent" onclick="download_{cid}()">
+                    <wa-icon slot="start" name="download"></wa-icon>
                     {label}
-                </sl-button>
+                </wa-button>
                 '''
             _wd = self._get_widget_defaults("download_button")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -221,16 +236,16 @@ class FormWidgetsMixin:
         cid = self._get_next_cid("link_btn")
 
         def builder():
-            icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon and not any(ord(c) > 127 for c in str(icon)) else ''
+            icon_html = f'<wa-icon slot="start" name="{icon}"></wa-icon>' if icon and not any(ord(c) > 127 for c in str(icon)) else ''
             icon_emoji = f'{icon} ' if icon and any(ord(c) > 127 for c in str(icon)) else ''
             if not icon:
-                icon_html = '<sl-icon slot="prefix" name="box-arrow-up-right"></sl-icon>'
+                icon_html = '<wa-icon slot="start" name="arrow-up-right-from-square"></wa-icon>'
             disabled_attr = 'disabled' if disabled else ''
             width_attr = 'style="width:100%;"' if use_container_width else ''
             html = f'''
-            <sl-button variant="primary" href="{url}" target="_blank" {disabled_attr} {width_attr}>
+            <wa-button variant="brand" appearance="accent" href="{url}" target="_blank" with-start {disabled_attr} {width_attr}>
                 {icon_html}{icon_emoji}{label}
-            </sl-button>
+            </wa-button>
             '''
             _wd = self._get_widget_defaults("link_button")
             _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -248,10 +263,10 @@ class FormWidgetsMixin:
         cid = self._get_next_cid("page_link")
         
         def builder():
-            icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>' if icon else ""
+            icon_html = f'<wa-icon name="{icon}"></wa-icon>' if icon else ""
             disabled_style = "pointer-events:none;opacity:0.5;" if disabled else ""
             html = f'''
-            <a href="{page}" style="display:inline-flex;align-items:center;gap:0.5rem;color:var(--sl-primary);text-decoration:none;padding:0.5rem 1rem;border-radius:0.25rem;transition:background 0.2s;{disabled_style}">
+            <a href="{page}" style="display:inline-flex;align-items:center;gap:0.5rem;color:var(--vl-primary);text-decoration:none;padding:0.5rem 1rem;border-radius:0.25rem;transition:background 0.2s;{disabled_style}">
                 {icon_html}
                 {label}
             </a>
@@ -321,7 +336,7 @@ class FormWidgetsMixin:
                         htmls.append(b().render())
                     
                     inner_html = "".join(htmls)
-                    border_style = "border:1px solid var(--sl-border);" if self.border else ""
+                    border_style = "border:1px solid var(--vl-border);" if self.border else ""
                     if self.enter_to_submit:
                         # Trigger the submit button's onclick (WebSocket action) on Enter,
                         # but skip textareas where Enter should insert a newline.
@@ -329,13 +344,13 @@ class FormWidgetsMixin:
                             'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey'
                             '&&event.target.tagName!==\'TEXTAREA\'){'
                             'event.preventDefault();'
-                            'var btn=this.querySelector(\'sl-button[type=submit]\');'
+                            'var btn=this.querySelector(\'wa-button[type=submit]\');'
                             'if(btn)btn.click();}"'
                         )
                     else:
                         enter_handler = 'onkeydown="if(event.key===\'Enter\')event.preventDefault()"'
                     html = f'''
-                    <form id="{self.form_id}_element" {enter_handler} onsubmit="return false;" style="display:flex;flex-direction:column;gap:1rem;padding:1rem;{border_style}border-radius:0.5rem;background:var(--sl-bg-card);">
+                    <form id="{self.form_id}_element" {enter_handler} onsubmit="return false;" style="display:flex;flex-direction:column;gap:1rem;padding:1rem;{border_style}border-radius:0.5rem;background:var(--vl-bg-card);">
                         {inner_html}
                     </form>
                     '''
@@ -372,18 +387,19 @@ class FormWidgetsMixin:
             _variant = "default" if type == "secondary" else "primary"
             icon_html = ''
             if icon and not any(ord(c) > 127 for c in str(icon)):
-                icon_html = f'<sl-icon slot="prefix" name="{icon}"></sl-icon>'
+                icon_html = f'<wa-icon slot="start" name="{icon}"></wa-icon>'
             elif icon:
                 icon_html = f'{icon} '
             else:
-                icon_html = '<sl-icon slot="prefix" name="check-circle"></sl-icon>'
+                icon_html = '<wa-icon slot="start" name="check-circle"></wa-icon>'
             disabled_attr = 'disabled' if disabled else ''
             width_attr = 'style="width:100%;"' if use_container_width else ''
+            variant, appearance = _wa_button_theme(type)
             html = f'''
-            <sl-button type="submit" variant="{_variant}" {disabled_attr} {width_attr} {attrs_str}>
+            <wa-button type="submit" variant="{variant}" appearance="{appearance}" with-start {disabled_attr} {width_attr} {attrs_str}>
                 {icon_html}
                 {label}
-            </sl-button>
+            </wa-button>
             '''
             _wd = self._get_widget_defaults("form_submit_button")
             _fc = merge_cls(_wd.get("cls", ""), cls)

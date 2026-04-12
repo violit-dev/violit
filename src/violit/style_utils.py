@@ -14,7 +14,7 @@ def merge_cls(*class_strings: str) -> str:
         Combined class string with duplicates preserved (CSS specificity matters).
         
     Example:
-        merge_cls("r:full shadow:md", "", "mt:2rem") → "r:full shadow:md mt:2rem"
+        merge_cls("r:full shadow:md", "", "mt:2rem") ??"r:full shadow:md mt:2rem"
     """
     parts = []
     for s in class_strings:
@@ -35,8 +35,8 @@ def merge_style(*style_strings: str) -> str:
         Combined style string. Later values override earlier ones for same property.
         
     Example:
-        merge_style("margin-top: 2rem;", "", "--sl-color-primary-600: cyan;")
-        → "margin-top: 2rem; --sl-color-primary-600: cyan;"
+        merge_style("margin-top: 2rem;", "", "--vl-primary: cyan;")
+        ??"margin-top: 2rem; --vl-primary: cyan;"
     """
     parts = []
     for s in style_strings:
@@ -55,9 +55,9 @@ def resolve_value(arg):
     """Resolve a reactive argument to its plain value at render time.
 
     Handles the three reactive forms Violit supports:
-    - State / ComputedState   → .value
-    - callable (lambda/func)  → called with no arguments
-    - plain value             → returned as-is
+    - State / ComputedState   ??.value
+    - callable (lambda/func)  ??called with no arguments
+    - plain value             ??returned as-is
 
     Use this inside every builder that accepts content arguments so that
     State, ComputedState, and lambda are all evaluated correctly.

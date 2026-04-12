@@ -270,14 +270,14 @@ class App(
                 to {{ transform: rotate(360deg); }}
             }}
         </style>
-        <div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--sl-bg, #ffffff);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1);">
+        <div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:var(--vl-bg, #ffffff);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1);">
             <div style="width:3.4rem;height:3.4rem;display:grid;place-items:center;flex:0 0 3.4rem;margin-bottom:0.95rem;">
                 <svg aria-hidden="true" viewBox="0 0 64 64" width="52" height="52" style="display:block;animation:vl-splash-rotate 0.95s linear infinite;overflow:visible;">
-                    <circle cx="32" cy="32" r="22" fill="none" stroke="color-mix(in srgb, var(--sl-primary, #7c3aed), white 84%)" stroke-width="2.5" opacity="0.38"></circle>
-                    <circle cx="32" cy="32" r="22" fill="none" stroke="var(--sl-primary, #7c3aed)" stroke-width="3" stroke-linecap="round" stroke-dasharray="58 80"></circle>
+                    <circle cx="32" cy="32" r="22" fill="none" stroke="color-mix(in srgb, var(--vl-primary, #7c3aed), white 84%)" stroke-width="2.5" opacity="0.38"></circle>
+                    <circle cx="32" cy="32" r="22" fill="none" stroke="var(--vl-primary, #7c3aed)" stroke-width="3" stroke-linecap="round" stroke-dasharray="58 80"></circle>
                 </svg>
             </div>
-            <div style="min-height:1.5rem;line-height:1.5rem;font-size:1.2rem;font-weight:700;color:var(--sl-primary, #7c3aed);letter-spacing:-0.02em;text-align:center;white-space:nowrap;font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">Loading...</div>
+            <div style="min-height:1.5rem;line-height:1.5rem;font-size:1.2rem;font-weight:700;color:var(--vl-primary, #7c3aed);letter-spacing:-0.02em;text-align:center;white-space:nowrap;font-family:'Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">Loading...</div>
         </div>
         <script>
         (function() {{
@@ -287,6 +287,7 @@ class App(
             let domReady = document.readyState !== 'loading';
             let wsReady = ("{self.mode}" !== "ws");
             let resourcesReady = false;
+            let resourcesStarted = false;
             let hidden = false;
             let hasServerRenderedContent = false;
 
@@ -335,19 +336,28 @@ class App(
                 if (!pending) resolve();
             }});
 
-            const waitForShoelaceComponents = () => {{
+            const waitForWebAwesomeComponents = () => {{
+                const root = document.getElementById('root');
+                const scope = root || document;
                 const tags = [...new Set(
-                    Array.from(document.querySelectorAll('*'))
+                    Array.from(scope.querySelectorAll('*'))
                         .map((el) => el.tagName.toLowerCase())
-                        .filter((tag) => tag.startsWith('sl-') && !customElements.get(tag))
+                        .filter((tag) => tag.startsWith('wa-') && !customElements.get(tag))
                 )];
 
-                if (!tags.length) return Promise.resolve();
-                return Promise.all(tags.map((tag) => customElements.whenDefined(tag)));
+                const ready = tags.length
+                    ? Promise.all(tags.map((tag) => customElements.whenDefined(tag)))
+                    : Promise.resolve();
+
+                return ready.then(() => new Promise((resolve) => {{
+                    requestAnimationFrame(() => requestAnimationFrame(resolve));
+                }}));
             }};
 
             const markResourcesReady = () => {{
-                Promise.all([waitForCriticalStyles(), waitForShoelaceComponents()]).then(() => {{
+                if (resourcesStarted) return;
+                resourcesStarted = true;
+                Promise.all([waitForCriticalStyles(), waitForWebAwesomeComponents()]).then(() => {{
                     resourcesReady = true;
                     requestAnimationFrame(() => requestAnimationFrame(hideSplash));
                 }});
@@ -393,16 +403,15 @@ class App(
             const markDomReady = () => {{
                 domReady = true;
                 detectInitialContent();
+                markResourcesReady();
                 requestAnimationFrame(hideSplash);
             }};
 
             if (domReady) {{
-                detectInitialContent();
-                requestAnimationFrame(hideSplash);
+                markDomReady();
             }} else {{
                 document.addEventListener('DOMContentLoaded', markDomReady, {{ once: true }});
             }}
-            markResourcesReady();
             
             if ("{self.mode}" === "ws") {{
                 const checkWS = setInterval(() => {{
@@ -545,7 +554,7 @@ class App(
             
         Example:
             app.add_css('''
-                .cyan-btn { --sl-color-primary-600: cyan; }
+                .cyan-btn { --vl-primary: cyan; }
                 .glass { backdrop-filter: blur(16px); background: rgba(255,255,255,0.6); }
                 #my-btn::part(base) { border-radius: 9999px; }
             ''')
@@ -1114,10 +1123,10 @@ class App(
                             f"[render] component '{cid}' failed: {e}"
                         )
                         target_list.append(
-                            f'<div id="{cid}" style="border:1px solid var(--sl-color-danger-600,red);'
-                            f'padding:0.75rem;border-radius:0.375rem;color:var(--sl-color-danger-600,red);'
+                            f'<div id="{cid}" style="border:1px solid var(--vl-danger,red);'
+                            f'padding:0.75rem;border-radius:0.375rem;color:var(--vl-danger,red);'
                             f'font-size:0.85rem;">'
-                            f'⚠ Render error in <code>{cid}</code>: {e}'
+                            f'[Render error] <code>{cid}</code>: {e}'
                             f'</div>'
                         )
 
@@ -1176,8 +1185,8 @@ class App(
                     res.append(Component(
                         "div", id=cid,
                         content=(
-                            f'<span style="color:var(--sl-color-danger-600,red);font-size:0.85rem;">'
-                            f'⚠ Render error in <code>{cid}</code>: {e}</span>'
+                            f'<span style="color:var(--vl-danger,red);font-size:0.85rem;">'
+                            f'[Render error] <code>{cid}</code>: {e}</span>'
                         )
                     ))
                 finally:
@@ -1325,7 +1334,7 @@ class App(
             return Component("div", id=cid, style="display:none", content=script_content)
         self._register_component(cid, builder)
 
-    # ─── Interval API ──────────────────────────────────────────────
+    # Interval API
 
     def interval(
         self,
@@ -1422,9 +1431,9 @@ class App(
 
         threading.Thread(target=_run, daemon=True).start()
 
-    # ─── End Interval API ─────────────────────────────────────────
+    # End Interval API
 
-    # ─── Background Task API ──────────────────────────────────────
+    # Background Task API
 
     def background(
         self,
@@ -1479,7 +1488,7 @@ class App(
             executor=executor,
         )
 
-    # ─── End Background Task API ──────────────────────────────────
+    # End Background Task API
 
     def navigation(self, pages: List[Any], position="sidebar", auto_run=True, reactivity_mode=False):
         """Create multi-page navigation
@@ -1502,7 +1511,7 @@ class App(
         # Navigation Menu Builder
         cid = self._get_next_cid("nav_menu")
 
-        # Per-instance state key derived from cid — allows multiple navigation()
+        # Per-instance state key derived from cid; allows multiple navigation()
         # instances (e.g. sidebar + top tabs) to coexist without sharing state.
         current_page_key_state = self.state(final_pages[0].key, key=f"__nav_selection_{cid}__")
         nav_cid = cid  # Capture for use in nav_action closure
@@ -1513,35 +1522,38 @@ class App(
             items = []
             for p in final_pages:
                 is_active = p.key == curr
-                click_attr = ""
+                page_hash = p.key.replace("page_", "")
                 if self.mode == 'lite':
-                    # Lite mode: update hash and HTMX post
-                    page_hash = p.key.replace("page_", "")
-                    click_attr = (
-                        f'onclick="'
+                    # Lite mode: scroll-save + hash + HTMX post
+                    onclick_prefix = (
                         f'if(window._currentPageKey){{window._pageScrollPositions=window._pageScrollPositions||{{}};window._pageScrollPositions[window._currentPageKey]=window.scrollY;}}'
                         f"window._currentPageKey='{p.key}';"
                         f"window.location.hash='{page_hash}';"
+                    )
+                    click_attr = (
+                        f'onclick="{onclick_prefix}'
                         f"setTimeout(function(){{window.scrollTo(0,window._pageScrollPositions&&window._pageScrollPositions['{p.key}']||0);}},100);"
                         f'" hx-post="/action/{cid}" hx-vals=\'{{"value": "{p.key}"}}\' hx-target="#{cid}" hx-swap="outerHTML"'
                     )
                 else:
-                    # WebSocket mode (including native)
-                    click_attr = f'onclick="window.sendAction(\'{cid}\', \'{p.key}\')"'
+                    # WebSocket mode: simple direct sendAction – it already handles scroll save and hash update
+                    click_attr = f"""onclick="window.sendAction('{cid}','{p.key}')" """
                 
                 # Styling for active/inactive nav items
                 if is_active:
-                    style = "width: 100%; justify-content: start; --sl-color-primary-500: var(--sl-primary); --sl-color-primary-600: var(--sl-primary);"
-                    variant = "primary"
+                    style = "width: 100%; justify-content: start;"
+                    variant = "brand"
+                    appearance = "accent"
                 else:
-                    style = "width: 100%; justify-content: start; --sl-color-neutral-700: var(--sl-text);"
-                    variant = "text"
+                    style = "width: 100%; justify-content: start;"
+                    variant = "neutral"
+                    appearance = "plain"
                 
-                icon_html = f'<sl-icon name="{p.icon}" slot="prefix"></sl-icon> ' if p.icon else ""
-                items.append(f'<sl-button style="{style}" variant="{variant}" {click_attr}>{icon_html}{p.title}</sl-button>')
+                icon_html = f'<wa-icon name="{p.icon}" slot="start" style="pointer-events: none;"></wa-icon> ' if p.icon else ""
+                items.append(f'<wa-button data-page-key="{p.key}" data-nav-active="{"true" if is_active else "false"}" style="{style}" variant="{variant}" appearance="{appearance}" with-start {click_attr}><span style="pointer-events: none;">{p.title}</span></wa-button>')
             
             rendering_ctx.reset(token)
-            return Component("div", id=cid, content="<br>".join(items), class_="nav-container")
+            return Component("div", id=cid, content="\n".join(items), class_="nav-container")
             
         def nav_action(key):
             current_page_key_state.set(key)
@@ -1785,10 +1797,14 @@ class App(
             inactive_theme_name = "light" if active_theme_name == "dark" else "dark"
             if self.use_cdn:
                 vendor_resources = """
-    <link rel="stylesheet" data-vl-critical="true" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/__ACTIVE_THEME__.css" />
-    <link rel="preload" as="style" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/__INACTIVE_THEME__.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/__INACTIVE_THEME__.css" /></noscript>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace-autoloader.js"></script>
+    <link rel="stylesheet" data-vl-critical="true" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/styles/webawesome.css" />
+    <link rel="preload" data-vl-critical="true" as="style" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/styles/themes/default.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/styles/themes/default.css" /></noscript>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js"></script>
+    <script type="module">
+        import { setIconPath } from 'https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js';
+        setIconPath('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons');
+    </script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet"></noscript>
@@ -1804,9 +1820,9 @@ class App(
     (function() {
         var _libs = {
             'Plotly':  'https://cdn.plot.ly/plotly-2.27.0.min.js',
-            'agGrid':  'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js',
+            'agGrid':  'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/dist/ag-grid-community.min.js',
                 'hljs':    'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js',
-                'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js'
+                'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js'
         };
         var _q = {};  // callback queues per lib
         var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
@@ -1831,14 +1847,16 @@ class App(
                 """.replace("__ACTIVE_THEME__", active_theme_name).replace("__INACTIVE_THEME__", inactive_theme_name)
             else:
                 # Local/Offline Mode
-                # Note: Shoelace autoloader might need full assets for some components.
-                # Basic components should work with the downloaded files.
                 # Added 'defer' to non-critical heavy scripts to unblock rendering (LCP/FCP improvement)
                 vendor_resources = """
-    <link rel="stylesheet" data-vl-critical="true" href="/static/vendor/shoelace/themes/__ACTIVE_THEME__.css" />
-    <link rel="preload" as="style" href="/static/vendor/shoelace/themes/__INACTIVE_THEME__.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="/static/vendor/shoelace/themes/__INACTIVE_THEME__.css" /></noscript>
-    <script type="module" src="/static/vendor/shoelace/shoelace-autoloader.js"></script>
+    <link rel="stylesheet" data-vl-critical="true" href="/static/vendor/webawesome/styles/webawesome.css" />
+    <link rel="preload" data-vl-critical="true" as="style" href="/static/vendor/webawesome/styles/themes/default.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/static/vendor/webawesome/styles/themes/default.css" /></noscript>
+    <script type="module" src="/static/vendor/webawesome/webawesome.loader.js"></script>
+    <script type="module">
+        import { setIconPath } from '/static/vendor/webawesome/webawesome.loader.js';
+        setIconPath('/static/vendor/bootstrap-icons/icons');
+    </script>
     <script src="/static/vendor/htmx/htmx.min.js" defer></script>
     <script src="/static/vendor/master-css/master-css-runtime.js" defer></script>
     <link rel="preload" as="style" href="/static/vendor/highlightjs/atom-one-dark.min.css" onload="this.onload=null;this.rel='stylesheet'">
@@ -1854,7 +1872,7 @@ class App(
             'Plotly':  '/static/vendor/plotly/plotly-2.27.0.min.js',
             'agGrid':  '/static/vendor/ag-grid/ag-grid-community.min.js',
             'hljs':    '/static/vendor/highlightjs/highlight.min.js',
-            'katex':   '/static/vendor/katex/katex.min.js'
+            'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js'
         };
         var _q = {};  // callback queues per lib
         var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
@@ -1895,7 +1913,7 @@ class App(
             unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
         }
     </style>
-                """.replace("__ACTIVE_THEME__", active_theme_name).replace("__INACTIVE_THEME__", inactive_theme_name)
+                """
 
             # Build user CSS from add_css() calls
             user_css = ""
@@ -2029,7 +2047,7 @@ class App(
             
             self.debug_print(f"[WEBSOCKET] Session: {sid[:8]}...")
 
-            # Capture uvicorn's event loop once — used by background tasks
+            # Capture uvicorn's event loop once; used by background tasks
             # to push updates via run_coroutine_threadsafe instead of
             # spawning a new loop per push.
             if self._main_loop is None:
@@ -2049,7 +2067,7 @@ class App(
                 # Ensure session context is active for the current WebSocket message.
                 msg_token = session_ctx.set(sid)
                 try:
-                    # ── Interval tick handler ──────────────────────────
+                    # Interval tick handler
                     if msg_type == 'tick':
                         interval_id = data.get('id')
                         info = self._interval_callbacks.get(interval_id)
@@ -2066,7 +2084,7 @@ class App(
                                 if dirty:
                                     await self.ws_engine.push_updates(sid, dirty)
                         return
-                    # ── End interval tick handler ──────────────────────
+                    # End interval tick handler
 
                     # Debug WebSocket data
                     self.debug_print(f"[WEBSOCKET ACTION] CID: {data.get('id')}")
@@ -2370,12 +2388,12 @@ class App(
                 intentional_restart = False
                 while server_process[0].poll() is None and not should_exit[0]:
                     if watcher.check():
-                        self.debug_print("\n[Server Manager] 🔄 Reloading server...", flush=True)
+                        self.debug_print("\n[Server Manager] Reloading server...", flush=True)
                         intentional_restart = True
                         _terminate_process(server_process[0])
                         try:
                             server_process[0].wait(timeout=2)
-                            self.debug_print("[Server Manager] ✓ Server stopped gracefully", flush=True)
+                            self.debug_print("[Server Manager] Server stopped gracefully", flush=True)
                         except subprocess.TimeoutExpired:
                             self.debug_print("[Server Manager] WARNING: Force killing server...", flush=True)
                             _kill_process(server_process[0])
@@ -2562,7 +2580,7 @@ class App(
             
             @self.fastapi.on_event("startup")
             async def _on_native_startup():
-                # "Uvicorn running on..." 메시지 + 403 Forbidden 필터링
+                # Suppress the "Uvicorn running on..." and 403 Forbidden logs.
                 class _SuppressUvicornRunningFilter(logging.Filter):
                     def filter(self, record):
                         return 'Uvicorn running on' not in record.getMessage()
@@ -2581,7 +2599,7 @@ class App(
             t = threading.Thread(target=srv, daemon=True)
             t.start()
             
-            # Don't wait for server — let webview engine init in parallel
+            # Do not wait for the server; let the webview initialize in parallel.
             # By the time WebView2 engine initializes (~1s), the server will already be ready
             
             # Patch webview to use custom icon (Windows)
@@ -2624,10 +2642,10 @@ class App(
             print("App closed. Exiting...")
             os._exit(0)
         elif is_server_only:
-            # Native + reload 서브프로세스: 403 로그 억제 + 커스텀 메시지
+            # Native reload subprocess: suppress 403 logs and print a custom startup message.
             @self.fastapi.on_event("startup")
             async def _on_native_reload_startup():
-                # 403 Forbidden + "Uvicorn running on..." 필터링
+                # Suppress both 403 Forbidden and "Uvicorn running on..." logs.
                 class _SuppressForbiddenAndRunningFilter(logging.Filter):
                     def filter(self, record):
                         msg = record.getMessage()
@@ -2637,10 +2655,10 @@ class App(
                 print(f"INFO:     Violit desktop app running on port {args.port} (hot reload)")
             uvicorn.run(self.fastapi, host="0.0.0.0", port=args.port)
         else:
-            # Web mode: 커스텀 startup 메시지
+            # Web mode: print a custom startup message.
             @self.fastapi.on_event("startup")
             async def _on_web_startup():
-                # "Uvicorn running on..." 메시지 필터링
+                # Suppress the default "Uvicorn running on..." message.
                 class _SuppressUvicornRunningFilter(logging.Filter):
                     def filter(self, record):
                         return 'Uvicorn running on' not in record.getMessage()
@@ -2664,6 +2682,7 @@ HTML_TEMPLATE = r"""
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <title>%TITLE%</title>
+    <script>const mode = "%MODE%";</script>
     %CSRF_SCRIPT%
     %DEBUG_SCRIPT%
     %VENDOR_RESOURCES%
@@ -2673,12 +2692,12 @@ HTML_TEMPLATE = r"""
             %CSS_VARS%
             --sidebar-width: 300px;
         }
-        sl-alert { --sl-color-primary-500: var(--sl-primary); --sl-color-primary-600: var(--sl-primary); }
-        sl-alert::part(base) { border: 1px solid var(--sl-border); }
+           wa-callout { --wa-color-brand-fill-loud: var(--vl-primary); }
+           wa-callout::part(base) { border: 1px solid var(--vl-border); }
         
-        sl-button {
-             --sl-color-primary-500: var(--sl-primary);
-             --sl-color-primary-600: color-mix(in srgb, var(--sl-primary), black 10%);
+           wa-button {
+               --wa-color-brand-fill-loud: var(--vl-primary);
+               --wa-color-brand-border-loud: color-mix(in srgb, var(--vl-primary), black 10%);
              caret-color: transparent;
         }
         html {
@@ -2689,7 +2708,7 @@ HTML_TEMPLATE = r"""
             overflow: hidden !important;
             overscroll-behavior: none;
         }
-        body { margin: 0; background: var(--sl-bg); color: var(--sl-text); font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; overflow-x: hidden; transition: background 0.3s, color 0.3s; }
+        body { margin: 0; background: var(--vl-bg); color: var(--vl-text); font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; overflow-x: hidden; transition: background 0.3s, color 0.3s; }
         
         /* Soft Animation Mode - Only for sidebar; page transitions are applied by JS on navigation only */
         body.anim-soft #sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, opacity 0.3s ease; }
@@ -2698,32 +2717,33 @@ HTML_TEMPLATE = r"""
         body.anim-hard *, body.anim-hard ::part(base) { transition: none !important; animation: none !important; }
         
         #root { display: flex; width: 100%; min-height: 100vh; }
-        #sidebar { 
+        #sidebar {
             position: fixed;
             top: 0;
             left: 0;
-            width: var(--sidebar-width); 
+            width: var(--sidebar-width);
             height: 100vh;
-            background: var(--sl-bg-card); 
-            border-right: 1px solid var(--sl-border); 
-            padding: 2rem 1rem; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 1rem; 
-            overflow-y: auto; 
-            overflow-x: hidden; 
+            background: var(--vl-bg-card);
+            border-right: 1px solid var(--vl-border);
+            padding: 2rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            overflow-y: auto;
+            overflow-x: hidden;
             white-space: nowrap;
             z-index: 1100;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, opacity 0.3s ease;
         }
-        #sidebar.collapsed { width: 0; padding: 2rem 0; border-right: none; opacity: 0; }
+        #sidebar.collapsed { width: 0 !important; padding: 2rem 0 !important; border-right: none !important; opacity: 0 !important; pointer-events: none; }
         
-        #main { 
-            flex: 1; 
+        #main {
+            flex: 1;
             margin-left: var(--sidebar-width);
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            padding: 0 1.5rem 3rem 2.5rem; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 1.5rem 3rem 2.5rem;
             transition: margin-left 0.3s ease, padding 0.3s ease;
         }
         #main.sidebar-collapsed { margin-left: 0; }
@@ -2734,10 +2754,20 @@ HTML_TEMPLATE = r"""
         
         #header { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; padding: 1rem 0; display: flex; align-items: center; }
         #app { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; display: flex; flex-direction: column; gap: 1.5rem; }
+        .nav-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            width: 100%;
+        }
+        .nav-container wa-button {
+            width: 100%;
+            caret-color: transparent;
+        }
         
         .fragment { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; }
         .page-container { display: flex; flex-direction: column; gap: %WIDGET_GAP%; width: 100%; }
-        .card { background: var(--sl-bg-card); border: 1px solid var(--sl-border); padding: 1.5rem; border-radius: var(--sl-radius); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 0.5rem; }
+        .card { background: var(--vl-bg-card); border: 1px solid var(--vl-border); padding: 1.5rem; border-radius: var(--vl-radius); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 0.5rem; }
         
         /* Widget spacing - natural breathing room */
         .page-container > div { margin-bottom: 0.5rem; }
@@ -2750,23 +2780,23 @@ HTML_TEMPLATE = r"""
         .page-container > h1:first-child, .page-container > h2:first-child, .page-container > h3:first-child,
         h1:first-child, h2:first-child, h3:first-child { margin-top: 0; }
         
-        /* Shoelace component spacing */
-        sl-input, sl-select, sl-textarea, sl-range, sl-checkbox, sl-switch, sl-radio-group, sl-color-picker {
+        /* Web Awesome component spacing */
+        wa-input, wa-select, wa-textarea, wa-slider, wa-checkbox, wa-switch, wa-radio-group, wa-color-picker {
             display: block;
             margin-bottom: 1rem;
         }
-        sl-alert {
+        wa-callout {
             display: block;
             margin-bottom: 1.25rem;
         }
-        sl-button {
+        wa-button {
             margin-top: 0.25rem;
             margin-bottom: 0.5rem;
         }
-        sl-divider, .divider { 
-            --color: var(--sl-border); 
-            margin: 1.5rem 0; 
-            width: 100%; 
+        wa-divider, .divider {
+            --color: var(--vl-border);
+            margin: 1.5rem 0;
+            width: 100%;
         }
         
         /* Column layouts - using CSS variables for flexible override */
@@ -2796,13 +2826,13 @@ HTML_TEMPLATE = r"""
         .violit-list-container > * {
             width: 100%;
         }
-        .violit-list-container sl-card {
+        .violit-list-container wa-card {
             width: 100%;
         }
         
-        .gradient-text { background: linear-gradient(to right, var(--sl-primary), var(--sl-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .text-muted { color: var(--sl-text-muted); }
-        .metric-label { color: var(--sl-text-muted); font-size: 0.875rem; margin-bottom: 0.25rem; }
+        .gradient-text { background: linear-gradient(to right, var(--vl-primary), var(--vl-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .text-muted { color: var(--vl-text-muted); }
+        .metric-label { color: var(--vl-text-muted); font-size: 0.875rem; margin-bottom: 0.25rem; }
         .metric-value { font-size: 2rem; font-weight: 600; }
         .no-select { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
         
@@ -2949,16 +2979,20 @@ HTML_TEMPLATE = r"""
         <div id="sidebar" style="%SIDEBAR_STYLE%">
             %SIDEBAR_CONTENT%
         </div>
-        <div id="main" class="%MAIN_CLASS%">
-            <div id="header">
-                 <sl-icon-button name="list" style="font-size: 1.5rem; color: var(--sl-text);" onclick="toggleSidebar()"></sl-icon-button>
-            </div>
-            <div id="app">%CONTENT%</div>
+    <div id="main" class="%MAIN_CLASS%">
+        <div id="header">
+             <wa-button variant="neutral" appearance="plain" onclick="toggleSidebar()"><wa-icon name="list" style="pointer-events: none;"></wa-icon></wa-button>
         </div>
+        <div id="app">%CONTENT%</div>
+    </div>
     </div>
     <div id="toast-injector" style="display:none;"></div>
     <script>
-        const mode = "%MODE%";
+        // Honor server-provided debug mode only.
+        window._debug_mode = window._debug_mode === true;
+
+        // Sidebar navigation is handled via direct onclick on each wa-button.
+        // No delegated listener needed.
         
         // Debug logging helper
         const debugLog = (...args) => {
@@ -2967,7 +3001,7 @@ HTML_TEMPLATE = r"""
             }
         };
         
-        // [LOCK] HTMX에 CSRF 토큰 자동 추가 (Lite Mode)
+        // [LOCK] Automatically attach the HTMX CSRF token in Lite mode.
         if (mode === 'lite' && window._csrf_token) {
             document.addEventListener('DOMContentLoaded', function() {
                 document.body.addEventListener('htmx:configRequest', function(evt) {
@@ -3008,11 +3042,11 @@ HTML_TEMPLATE = r"""
                 }, 150);
             });
 
-            // 2. Resize on Tab Switch (Shoelace sl-tab-show event)
+            // 2. Resize on Tab Switch
             // Charts in previously hidden tabs are handled by IntersectionObserver
             // in the chart render script. This handler covers charts that were
             // already rendered but may need resizing after a tab switch.
-            document.addEventListener('sl-tab-show', (event) => {
+            document.addEventListener('wa-tab-show', (event) => {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                         document.querySelectorAll('.js-plotly-plot').forEach(el => {
@@ -3056,9 +3090,8 @@ HTML_TEMPLATE = r"""
         // Initialize Resizer
         document.addEventListener('DOMContentLoaded', setupPlotlyResizer);
 
-
         if (mode === 'ws') {
-            // ── Interval Infrastructure ───────────────────────────
+            // Interval infrastructure
             window._vlIntervals = window._vlIntervals || {};
 
             window._vlCreateInterval = function(id, ms, autostart) {
@@ -3115,10 +3148,8 @@ HTML_TEMPLATE = r"""
                     waitAndStart();
                 }
             };
-            // ── End Interval Infrastructure ───────────────────────
+            // End interval infrastructure
 
-            // [FIX] Pre-define sendAction with queue to handle clicks before WebSocket connects
-            // Use window properties for debugging access
             window._wsReady = false;
             window._actionQueue = [];
             window._ws = null;
@@ -3132,57 +3163,50 @@ HTML_TEMPLATE = r"""
                 debugLog(`[sendAction] Called with cid=${cid}, val=${val}`);
                 
                 const payload = {
-                    type: 'click', 
-                    id: cid, 
+                    type: 'click',
+                    id: cid,
                     value: val
                 };
                 
-                // CSRF 토큰 추가
                 if (window._csrf_token) {
                     payload._csrf_token = window._csrf_token;
                 }
                 
-                // [SECURE] Native 토큰 추가 (pywebview에서 필요)
                 const urlParams = new URLSearchParams(window.location.search);
                 const nativeToken = urlParams.get('_native_token');
                 if (nativeToken) {
                     payload._native_token = nativeToken;
                 }
                 
-                // Check if this is a navigation menu click (nav_menu_X)
                 if (cid.startsWith('nav_menu')) {
-                    // Save current page scroll position before navigating away
                     if (window._currentPageKey) {
                         window._pageScrollPositions[window._currentPageKey] = window.scrollY;
-                        debugLog(`💾 Saved scroll ${window.scrollY}px for page: ${window._currentPageKey}`);
+                        debugLog(`Saved scroll ${window.scrollY}px for page: ${window._currentPageKey}`);
                     }
-                    // Track the target page key
                     window._pendingPageKey = val;
-                    
-                    // Update URL hash to reflect current page
-                    // val is "page_reactive-logic", we make it #reactive-logic
                     const pageName = val.replace('page_', '');
                     window.location.hash = pageName;
-                    debugLog(`🔗 Updated Hash: #${pageName}`);
+                    debugLog(`Updated hash: #${pageName}`);
                 }
                 
-                // Queue action if WebSocket not ready, otherwise send immediately
                 if (!window._wsReady || !window._ws) {
-                    debugLog(`⏳ WebSocket not ready (wsReady=${window._wsReady}, ws=${!!window._ws}), queueing action: ${cid}`);
+                    debugLog(`WebSocket not ready, queueing action: ${cid}`);
                     window._actionQueue.push(payload);
                 } else {
-                    debugLog(`✅ Sending action to server: ${cid}`);
+                    debugLog(`Sending action to server: ${cid}`);
                     window._ws.send(JSON.stringify(payload));
                 }
             };
-            
+
+            window._ws = null;
+
             // Now connect WebSocket
             window._ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + "/ws");
             
             // Auto-reconnect/reload logic
             window._ws.onclose = () => {
                 window._wsReady = false;
-                debugLog("🔌 Connection lost. Auto-reloading...");
+                debugLog("[WebSocket] Connection lost. Auto-reloading...");
 
                 let retryDelay = 50;
                 const maxDelay = 2000;
@@ -3191,7 +3215,7 @@ HTML_TEMPLATE = r"""
                    fetch(location.href)
                        .then(r => {
                            if(r.ok) {
-                               debugLog("✓ Server back online. Reloading...");
+                               debugLog("[Hot Reload] Server back online. Reloading...");
                                window.location.reload();
                            } else {
                                retryDelay = Math.min(retryDelay * 1.5, maxDelay);
@@ -3208,12 +3232,12 @@ HTML_TEMPLATE = r"""
             
             // CRITICAL: Restore from hash ONLY after WebSocket is connected
             window._ws.onopen = () => {
-                debugLog("✅ [WebSocket] Connected successfully!");
+                debugLog("[WebSocket] Connected successfully");
                 window._wsReady = true;
                 
                 // Process queued actions
                 if (window._actionQueue.length > 0) {
-                    debugLog(`📤 Processing ${window._actionQueue.length} queued action(s)...`);
+                    debugLog(`[WebSocket] Processing ${window._actionQueue.length} queued action(s)...`);
                     window._actionQueue.forEach(payload => {
                         window._ws.send(JSON.stringify(payload));
                     });
@@ -3227,7 +3251,7 @@ HTML_TEMPLATE = r"""
             // Handle WebSocket errors
             window._ws.onerror = (error) => {
                 window._wsReady = false;
-                debugLog("❌ WebSocket error:", error);
+                debugLog("[WebSocket] Error:", error);
             };
 
             window._ws.onmessage = (e) => {
@@ -3251,7 +3275,7 @@ HTML_TEMPLATE = r"""
                                  if (isSelfOrChild || isShadowChild) {
                                      // Check if it's actually an input that needs protection
                                      const tag = document.activeElement.tagName.toLowerCase();
-                                     const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('sl-input') || tag.startsWith('sl-textarea') || tag.startsWith('sl-range');
+                                     const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('wa-input') || tag.startsWith('wa-textarea') || tag.startsWith('wa-slider');
                                      
                                      // If it's an input, block update. If it's a button (nav menu), ALLOW update.
                                      if (isInput) {
@@ -3270,13 +3294,13 @@ HTML_TEMPLATE = r"""
                                     // Parse new HTML to extract checked state
                                     const temp = document.createElement('div');
                                     temp.innerHTML = item.html;
-                                    const newCheckbox = temp.querySelector('sl-checkbox, sl-switch');
+                                    const newCheckbox = temp.querySelector('wa-checkbox, wa-switch');
                                     
                                     if (newCheckbox) {
                                         // Find the actual checkbox element (may be direct or nested)
-                                        const checkboxEl = el.tagName && (el.tagName.toLowerCase() === 'sl-checkbox' || el.tagName.toLowerCase() === 'sl-switch')
+                                        const checkboxEl = el.tagName && (el.tagName.toLowerCase() === 'wa-checkbox' || el.tagName.toLowerCase() === 'wa-switch')
                                             ? el 
-                                            : el.querySelector('sl-checkbox, sl-switch');
+                                            : el.querySelector('wa-checkbox, wa-switch');
                                         
                                         if (checkboxEl) {
                                             const shouldBeChecked = newCheckbox.hasAttribute('checked');
@@ -3293,10 +3317,10 @@ HTML_TEMPLATE = r"""
                                 if (widgetType === 'slider') {
                                     const temp = document.createElement('div');
                                     temp.innerHTML = item.html;
-                                    const newRange = temp.querySelector('sl-range');
+                                    const newRange = temp.querySelector('wa-slider');
                                     if (newRange) {
-                                        const rangeEl = el.tagName && el.tagName.toLowerCase() === 'sl-range'
-                                            ? el : el.querySelector('sl-range');
+                                        const rangeEl = el.tagName && el.tagName.toLowerCase() === 'wa-slider'
+                                            ? el : el.querySelector('wa-slider');
                                         if (rangeEl) {
                                             const newVal = newRange.getAttribute('value');
                                             if (newVal !== null && rangeEl.value !== parseFloat(newVal)) {
@@ -3393,10 +3417,10 @@ HTML_TEMPLATE = r"""
                         requestAnimationFrame(() => {
                             if (savedScroll !== undefined && savedScroll > 0) {
                                 window.scrollTo(0, savedScroll);
-                                debugLog(`📜 Restored scroll ${savedScroll}px for page: ${targetKey}`);
+                                debugLog(`[Navigation] Restored scroll ${savedScroll}px for page: ${targetKey}`);
                             } else {
                                 window.scrollTo(0, 0);
-                                debugLog(`📜 Scroll to top for page: ${targetKey}`);
+                                debugLog(`[Navigation] Scroll to top for page: ${targetKey}`);
                             }
                         });
                     }
@@ -3439,7 +3463,7 @@ HTML_TEMPLATE = r"""
                         .then(r => {
                             if (r.ok) {
                                 if (!serverAlive) {
-                                    debugLog("✓ Server back online. Reloading...");
+                                    debugLog("[Hot Reload] Server back online. Reloading...");
                                     document.body.style.opacity = '1'; // Restore opacity
                                     window.location.reload();
                                 }
@@ -3453,7 +3477,7 @@ HTML_TEMPLATE = r"""
                         })
                         .catch(() => {
                             if (serverAlive) {
-                                debugLog("🔌 Server down. Waiting for restart...");
+                                debugLog("[Hot Reload] Server down. Waiting for restart...");
                                 // Dim the page to indicate connection lost
                                 document.body.style.transition = 'opacity 0.5s';
                                 document.body.style.opacity = '0.5';
@@ -3486,6 +3510,7 @@ HTML_TEMPLATE = r"""
                         document.body.appendChild(backdrop);
                     }
                     requestAnimationFrame(() => backdrop.classList.add('active'));
+                    sb.style.display = 'flex'; // Ensure visible
                 } else {
                     // Closing
                     if (backdrop) {
@@ -3506,15 +3531,16 @@ HTML_TEMPLATE = r"""
         
         // Auto-close sidebar on mobile after nav button click
         document.addEventListener('click', function(e) {
-            if (window.innerWidth > 768) return;
-            var btn = e.target.closest('#sidebar sl-button');
+            const btn = e.target.closest('#sidebar wa-button');
             if (btn) {
-                setTimeout(function() {
-                    var sb = document.getElementById('sidebar');
-                    if (sb && sb.classList.contains('mobile-open')) {
-                        toggleSidebar();
-                    }
-                }, 150);
+                if (window.innerWidth <= 768) {
+                    setTimeout(function() {
+                        var sb = document.getElementById('sidebar');
+                        if (sb && sb.classList.contains('mobile-open')) {
+                            toggleSidebar();
+                        }
+                    }, 150);
+                }
             }
         });
 
@@ -3522,14 +3548,14 @@ HTML_TEMPLATE = r"""
             const variantColors = { primary: '#0ea5e9', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' };
             const toast = document.createElement('div');
             // Use CSS variables directly so theme changes are reflected automatically
-            toast.style.cssText = `position: fixed; top: 20px; right: 20px; z-index: 10000; min-width: 300px; background: var(--sl-panel-background-color, var(--sl-bg-card)); color: var(--sl-text); border: 1px solid var(--sl-border); border-left: 4px solid ${variantColors[variant]}; border-radius: 4px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); display: flex; align-items: center; gap: 12px; opacity: 0; transform: translateX(400px); transition: all 0.3s;`;
-            toast.innerHTML = `<div style="flex: 1; font-size: 14px;">${message}</div><button onclick="this.parentElement.remove()" style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--sl-text-muted); font-size: 20px;">&times;</button>`;
+            toast.style.cssText = `position: fixed; top: 20px; right: 20px; z-index: 10000; min-width: 300px; background: var(--wa-color-surface-raised, var(--vl-bg-card)); color: var(--vl-text); border: 1px solid var(--vl-border); border-left: 4px solid ${variantColors[variant]}; border-radius: 4px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3); display: flex; align-items: center; gap: 12px; opacity: 0; transform: translateX(400px); transition: all 0.3s;`;
+            toast.innerHTML = `<div style="flex: 1; font-size: 14px;">${message}</div><button onclick="this.parentElement.remove()" style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--vl-text-muted); font-size: 20px;">&times;</button>`;
             document.body.appendChild(toast);
             requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
             setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(400px)'; setTimeout(() => toast.remove(), 300); }, 3300);
         }
         function createBalloons() {
-            const emojis = ['🎈', '🎈', '🎈', '✨', '🎈', '🎈'];
+            const emojis = ['\uD83C\uDF88', '\uD83C\uDF89', '\u2728', '\uD83C\uDF8A', '\uD83C\uDF81', '\uD83C\uDF8F'];
             for (let i = 0; i < 60; i++) {
                 const b = document.createElement('div');
                 b.className = 'balloon';
@@ -3545,7 +3571,7 @@ HTML_TEMPLATE = r"""
             }
         }
         function createSnow() {
-            const emojis = ['❄️', '❅', '❆', '❄️'];
+            const emojis = ['\u2744\uFE0F', '\u2603\uFE0F', '\u2745', '\uD83E\uDDCA'];
             for (let i = 0; i < 50; i++) {
                 const s = document.createElement('div');
                 s.className = 'snowflake';
@@ -3561,7 +3587,25 @@ HTML_TEMPLATE = r"""
         
         // Restore state from URL Hash (or force Home if no hash)
         function restoreFromHash() {
-            // 🔄 URL 해시 디코딩 (한글 등 인코딩된 문자 처리)
+            const getNavButtonPageKey = (btn) => {
+                if (!btn) return null;
+                const dataKey = btn.getAttribute('data-page-key');
+                if (dataKey) return dataKey;
+                const onclickAttr = btn.getAttribute('onclick') || '';
+                const keyMatch = onclickAttr.match(/'(page_[^']+)'/);
+                if (keyMatch) return keyMatch[1];
+                const hxVals = btn.getAttribute('hx-vals') || '';
+                const hxMatch = hxVals.match(/"value"\s*:\s*"(page_[^"]+)"/);
+                return hxMatch ? hxMatch[1] : null;
+            };
+
+            const isNavButtonActive = (btn) => {
+                if (!btn) return false;
+                return btn.getAttribute('data-nav-active') === 'true'
+                    || (btn.getAttribute('variant') === 'brand' && btn.getAttribute('appearance') === 'accent');
+            };
+
+            // Decode the URL hash, including encoded non-ASCII characters.
             let hash = window.location.hash.substring(1); // Remove #
             try {
                 hash = decodeURIComponent(hash);
@@ -3569,23 +3613,21 @@ HTML_TEMPLATE = r"""
                 debugLog('Hash decode error:', e);
             }
             
-            // If no hash, force navigation to Home to reset server state
-            if (!hash || hash === 'home' || hash === '홈') {
-                debugLog('🏠 No hash - forcing Home page');
+            // If no hash, treat it as Home and avoid stale initial navigation state.
+            if (!hash || hash === 'home') {
+                debugLog('[Navigation] No hash found, forcing Home page');
                 // Initialize current page key for scroll tracking
                 window._currentPageKey = 'page_home';
                 const tryClickHome = (attempts = 0) => {
                     if (attempts >= 20) return;
-                    const navButtons = document.querySelectorAll('#sidebar sl-button');
+                    const navButtons = document.querySelectorAll('#sidebar wa-button');
                     if (navButtons.length > 0) {
                         const homeBtn = navButtons[0]; // First button is Home
-                        // Extract actual page key from button onclick
-                        const onclickAttr = homeBtn.getAttribute('onclick') || '';
-                        const keyMatch = onclickAttr.match(/'(page_[^']+)'/);
-                        if (keyMatch) window._currentPageKey = keyMatch[1];
-                        if (homeBtn.getAttribute('variant') !== 'primary') {
+                        const homeKey = getNavButtonPageKey(homeBtn);
+                        if (homeKey) window._currentPageKey = homeKey;
+                        if (!isNavButtonActive(homeBtn)) {
                             homeBtn.click();
-                            debugLog('🏠 Clicked Home button');
+                            debugLog('[Navigation] Clicked Home button');
                         }
                     } else {
                         setTimeout(() => tryClickHome(attempts + 1), 100);
@@ -3598,31 +3640,28 @@ HTML_TEMPLATE = r"""
             const targetKey = 'page_' + hash;
             // Initialize current page key for scroll tracking
             window._currentPageKey = targetKey;
-            debugLog(`📍 Restoring from Hash: "${hash}" (key: ${targetKey})`);
+            debugLog(`[Navigation] Restoring from hash: "${hash}" (key: ${targetKey})`);
             
             const tryRestore = (attempts = 0) => {
                 // Stop after 5 seconds
                 if (attempts >= 50) {
-                     console.warn(`⚠ Failed to restore hash "${hash}"`);
+                     console.warn(`[Navigation] Failed to restore hash "${hash}"`);
                      return;
                 }
                 
-                const navButtons = document.querySelectorAll('#sidebar sl-button');
+                const navButtons = document.querySelectorAll('#sidebar wa-button');
                 if (navButtons.length === 0) {
                     setTimeout(() => tryRestore(attempts + 1), 100);
                     return;
                 }
                 
                 for (let btn of navButtons) {
-                    const onclick = btn.getAttribute('onclick') || '';
-                    const hxVals = btn.getAttribute('hx-vals') || '';
-                    
-                    // Match either onclick (WS mode) or hx-vals (Lite mode)
-                    if (onclick.includes(targetKey) || hxVals.includes(targetKey)) {
-                        debugLog(`✓ Found target button for hash "${hash}". Clicking...`);
+                    const btnKey = getNavButtonPageKey(btn);
+                    if (btnKey === targetKey) {
+                        debugLog(`[Navigation] Found target button for hash "${hash}". Clicking...`);
                         
                         // Check if already active to avoid redundant clicks
-                        if (btn.getAttribute('variant') === 'primary') {
+                        if (isNavButtonActive(btn)) {
                             debugLog('  - Already active, skipping click.');
                             return;
                         }
