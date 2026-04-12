@@ -1872,6 +1872,63 @@ class App(
             };
             document.head.appendChild(s);
         };
+
+        window._vlPreloadLib = function(name) {
+            if (window[name] || _s[name]) return;
+
+            var run = function() {
+                window._vlLoadLib(name, function() {});
+            };
+
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(run, { timeout: 1500 });
+            } else {
+                setTimeout(run, 200);
+            }
+        };
+
+        var _deferredActionQueue = [];
+        var _deferredActionKeys = new Set();
+        var _deferredActionBusy = false;
+
+        function _drainDeferredActions() {
+            if (_deferredActionBusy || !_deferredActionQueue.length) return;
+
+            if (!window.sendAction) {
+                setTimeout(_drainDeferredActions, 50);
+                return;
+            }
+
+            _deferredActionBusy = true;
+            var next = _deferredActionQueue.shift();
+            _deferredActionKeys.delete(next.cid + '::' + next.value);
+            window.sendAction(next.cid, next.value);
+
+            setTimeout(function() {
+                _deferredActionBusy = false;
+                if (_deferredActionQueue.length) {
+                    if ('requestIdleCallback' in window) {
+                        window.requestIdleCallback(_drainDeferredActions, { timeout: 250 });
+                    } else {
+                        setTimeout(_drainDeferredActions, 16);
+                    }
+                }
+            }, 16);
+        }
+
+        window._vlQueueDeferredAction = function(cid, value) {
+            var key = cid + '::' + value;
+            if (_deferredActionKeys.has(key)) return;
+
+            _deferredActionKeys.add(key);
+            _deferredActionQueue.push({ cid: cid, value: value });
+
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(_drainDeferredActions, { timeout: 250 });
+            } else {
+                setTimeout(_drainDeferredActions, 0);
+            }
+        };
     })();
     </script>
                 """.replace("__ACTIVE_THEME__", active_theme_name).replace("__INACTIVE_THEME__", inactive_theme_name)
@@ -1951,6 +2008,63 @@ class App(
                 cbs.forEach(function(fn) { fn(); });
             };
             document.head.appendChild(s);
+        };
+
+        window._vlPreloadLib = function(name) {
+            if (window[name] || _s[name]) return;
+
+            var run = function() {
+                window._vlLoadLib(name, function() {});
+            };
+
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(run, { timeout: 1500 });
+            } else {
+                setTimeout(run, 200);
+            }
+        };
+
+        var _deferredActionQueue = [];
+        var _deferredActionKeys = new Set();
+        var _deferredActionBusy = false;
+
+        function _drainDeferredActions() {
+            if (_deferredActionBusy || !_deferredActionQueue.length) return;
+
+            if (!window.sendAction) {
+                setTimeout(_drainDeferredActions, 50);
+                return;
+            }
+
+            _deferredActionBusy = true;
+            var next = _deferredActionQueue.shift();
+            _deferredActionKeys.delete(next.cid + '::' + next.value);
+            window.sendAction(next.cid, next.value);
+
+            setTimeout(function() {
+                _deferredActionBusy = false;
+                if (_deferredActionQueue.length) {
+                    if ('requestIdleCallback' in window) {
+                        window.requestIdleCallback(_drainDeferredActions, { timeout: 250 });
+                    } else {
+                        setTimeout(_drainDeferredActions, 16);
+                    }
+                }
+            }, 16);
+        }
+
+        window._vlQueueDeferredAction = function(cid, value) {
+            var key = cid + '::' + value;
+            if (_deferredActionKeys.has(key)) return;
+
+            _deferredActionKeys.add(key);
+            _deferredActionQueue.push({ cid: cid, value: value });
+
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(_drainDeferredActions, { timeout: 250 });
+            } else {
+                setTimeout(_drainDeferredActions, 0);
+            }
         };
     })();
     </script>

@@ -78,12 +78,109 @@ _ASYNC_CHART_THRESHOLD = 50000
 
 class ChartWidgetsMixin:
     """Chart widgets (line, bar, area, scatter, plotly, pyplot, etc.)"""
+
+    def _chart_should_defer_first_render(self, cid):
+        if getattr(self, 'mode', None) != 'ws':
+            return False
+
+        store = get_session_store()
+        requested = store.setdefault('_vl_chart_requested', set())
+        return cid not in requested
+
+    def _chart_mark_requested(self, cid):
+        store = get_session_store()
+        store.setdefault('_vl_chart_requested', set()).add(cid)
+        store.setdefault('forced_dirty', set()).add(cid)
+
+    def _chart_placeholder_component(self, cid, widget_name, height, use_container_width, cls, style, message):
+        width_style = "width: 100%;" if use_container_width else ""
+        html = f'''
+        <div id="{cid}" class="js-plotly-plot" data-vl-deferred-chart="true" style="{width_style} height: {height}px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
+            <div style="text-align: center;">
+                <wa-spinner style="font-size: 1.5rem; margin-bottom: 0.75rem;"></wa-spinner>
+                <div style="font-size: 0.85rem; color: var(--vl-text-muted); font-weight: 500;">{message}</div>
+            </div>
+        </div>
+        <script>
+            (function() {{
+                const chartId = '{cid}';
+
+                if (!window._vlDeferredChartsRequested) {{
+                    window._vlDeferredChartsRequested = new Set();
+                }}
+
+                const requestHydration = () => {{
+                    if (window._vlDeferredChartsRequested.has(chartId)) return;
+
+                    const el = document.getElementById(chartId);
+                    if (!el) return;
+
+                    window._vlDeferredChartsRequested.add(chartId);
+
+                    if (window._vlPreloadLib) window._vlPreloadLib('Plotly');
+
+                    if (window._vlQueueDeferredAction) {{
+                        window._vlQueueDeferredAction(chartId, '__REQUEST_DATA__');
+                    }} else if (window.sendAction) {{
+                        window.sendAction(chartId, '__REQUEST_DATA__');
+                    }}
+                }};
+
+                const observeVisibility = () => {{
+                    const el = document.getElementById(chartId);
+                    if (!el) {{
+                        setTimeout(observeVisibility, 50);
+                        return;
+                    }}
+
+                    if (window._vlPreloadLib) window._vlPreloadLib('Plotly');
+
+                    if (!('IntersectionObserver' in window)) {{
+                        requestHydration();
+                        return;
+                    }}
+
+                    const io = new IntersectionObserver((entries) => {{
+                        const entry = entries[0];
+                        if (!entry) return;
+                        if (entry.isIntersecting || entry.boundingClientRect.top < window.innerHeight + 240) {{
+                            io.disconnect();
+                            requestHydration();
+                        }}
+                    }}, {{ rootMargin: '240px 0px 320px 0px' }});
+
+                    io.observe(el);
+                }};
+
+                if (document.readyState === 'loading') {{
+                    document.addEventListener('DOMContentLoaded', observeVisibility, {{ once: true }});
+                }} else {{
+                    observeVisibility();
+                }}
+            }})();
+        </script>
+        '''
+        _wd = self._get_widget_defaults(widget_name)
+        _fc = merge_cls(_wd.get("cls", ""), cls)
+        _fs = merge_style(_wd.get("style", ""), style)
+        return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
     
     def plotly_chart(self, fig: Union['go.Figure', Callable, State], use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display Plotly chart with Signal/Lambda support"""
         cid = self._get_next_cid("plot")
         
         def builder():
+            if self._chart_should_defer_first_render(cid):
+                return self._chart_placeholder_component(
+                    cid,
+                    "plotly_chart",
+                    500,
+                    use_container_width,
+                    cls,
+                    style,
+                    "Preparing Plotly chart...",
+                )
+
             import plotly.graph_objects as go
             import plotly.io as pio
             # Handle Signal/Lambda/Direct Figure
@@ -172,10 +269,7 @@ class ChartWidgetsMixin:
             
         def action(val):
             if val == '__REQUEST_DATA__':
-                store = get_session_store()
-                if 'forced_dirty' not in store:
-                    store['forced_dirty'] = set()
-                store['forced_dirty'].add(cid)
+                self._chart_mark_requested(cid)
 
         self._register_component(cid, builder, action=action)
 
@@ -251,6 +345,17 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("line_chart")
         
         def builder():
+            if self._chart_should_defer_first_render(cid):
+                return self._chart_placeholder_component(
+                    cid,
+                    "line_chart",
+                    height,
+                    use_container_width,
+                    cls,
+                    style,
+                    "Preparing line chart...",
+                )
+
             import plotly.graph_objects as go
             import plotly.io as pio
             traces = self._parse_chart_data(data, x, y, color=color)
@@ -275,13 +380,28 @@ class ChartWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
-        self._register_component(cid, builder)
+        def action(val):
+            if val == '__REQUEST_DATA__':
+                self._chart_mark_requested(cid)
+
+        self._register_component(cid, builder, action=action)
 
     def bar_chart(self, data, x=None, y=None, color=None, horizontal=False, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display simple bar chart"""
         cid = self._get_next_cid("bar_chart")
         
         def builder():
+            if self._chart_should_defer_first_render(cid):
+                return self._chart_placeholder_component(
+                    cid,
+                    "bar_chart",
+                    height,
+                    use_container_width,
+                    cls,
+                    style,
+                    "Preparing bar chart...",
+                )
+
             import plotly.graph_objects as go
             import plotly.io as pio
             traces = self._parse_chart_data(data, x, y, color=color)
@@ -310,13 +430,28 @@ class ChartWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
-        self._register_component(cid, builder)
+        def action(val):
+            if val == '__REQUEST_DATA__':
+                self._chart_mark_requested(cid)
+
+        self._register_component(cid, builder, action=action)
 
     def area_chart(self, data, x=None, y=None, color=None, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display area chart"""
         cid = self._get_next_cid("area_chart")
         
         def builder():
+            if self._chart_should_defer_first_render(cid):
+                return self._chart_placeholder_component(
+                    cid,
+                    "area_chart",
+                    height,
+                    use_container_width,
+                    cls,
+                    style,
+                    "Preparing area chart...",
+                )
+
             import plotly.graph_objects as go
             import plotly.io as pio
             traces = self._parse_chart_data(data, x, y, color=color)
@@ -342,13 +477,28 @@ class ChartWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
-        self._register_component(cid, builder)
+        def action(val):
+            if val == '__REQUEST_DATA__':
+                self._chart_mark_requested(cid)
+
+        self._register_component(cid, builder, action=action)
 
     def scatter_chart(self, data, x=None, y=None, color=None, size=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
         """Display scatter chart"""
         cid = self._get_next_cid("scatter_chart")
         
         def builder():
+            if self._chart_should_defer_first_render(cid):
+                return self._chart_placeholder_component(
+                    cid,
+                    "scatter_chart",
+                    height,
+                    use_container_width,
+                    cls,
+                    style,
+                    "Preparing scatter chart...",
+                )
+
             import plotly.graph_objects as go
             import plotly.io as pio
             traces = self._parse_chart_data(data, x, y, color=color)
@@ -376,7 +526,11 @@ class ChartWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
         
-        self._register_component(cid, builder)
+        def action(val):
+            if val == '__REQUEST_DATA__':
+                self._chart_mark_requested(cid)
+
+        self._register_component(cid, builder, action=action)
 
     def bokeh_chart(self, figure, use_container_width=True, cls: str = "", style: str = "", **props):
         """Display Bokeh chart"""
