@@ -1549,8 +1549,9 @@ class App(
                     variant = "neutral"
                     appearance = "plain"
                 
-                icon_html = f'<wa-icon name="{p.icon}" slot="start" style="pointer-events: none;"></wa-icon> ' if p.icon else ""
-                items.append(f'<wa-button data-page-key="{p.key}" data-nav-active="{"true" if is_active else "false"}" style="{style}" variant="{variant}" appearance="{appearance}" with-start {click_attr}><span style="pointer-events: none;">{p.title}</span></wa-button>')
+                icon_html = f'<wa-icon name="{p.icon}" slot="start" style="pointer-events: none;"></wa-icon>' if p.icon else ""
+                with_start_attr = "with-start" if icon_html else ""
+                items.append(f'<wa-button data-page-key="{p.key}" data-nav-active="{"true" if is_active else "false"}" style="{style}" variant="{variant}" appearance="{appearance}" {with_start_attr} {click_attr}>{icon_html}<span style="pointer-events: none;">{p.title}</span></wa-button>')
             
             rendering_ctx.reset(token)
             return Component("div", id=cid, content="\n".join(items), class_="nav-container")
