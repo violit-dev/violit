@@ -183,16 +183,7 @@ class ChartWidgetsMixin:
 
             import plotly.graph_objects as go
             import plotly.io as pio
-            # Handle Signal/Lambda/Direct Figure
-            current_fig = fig
-            if isinstance(fig, State):
-                token = rendering_ctx.set(cid)
-                current_fig = fig.value
-                rendering_ctx.reset(token)
-            elif callable(fig):
-                token = rendering_ctx.set(cid)
-                current_fig = fig()
-                rendering_ctx.reset(token)
+            current_fig = self._resolve_chart_data(fig, cid)
             
             if current_fig is None:
                 return Component("div", id=f"{cid}_wrapper", content="No data")
@@ -315,7 +306,9 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("pyplot")
         
         def builder():
-            current_fig = fig if fig is not None else plt.gcf()
+            current_fig = self._resolve_chart_data(fig, cid) if fig is not None else plt.gcf()
+            if current_fig is None:
+                current_fig = plt.gcf()
 
             if selected_font:
                 try:
@@ -358,7 +351,8 @@ class ChartWidgetsMixin:
 
             import plotly.graph_objects as go
             import plotly.io as pio
-            traces = self._parse_chart_data(data, x, y, color=color)
+            current_data = self._resolve_chart_data(data, cid)
+            traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()
             trace_cls = go.Scattergl if render_mode == "webgl" else go.Scatter
@@ -404,7 +398,8 @@ class ChartWidgetsMixin:
 
             import plotly.graph_objects as go
             import plotly.io as pio
-            traces = self._parse_chart_data(data, x, y, color=color)
+            current_data = self._resolve_chart_data(data, cid)
+            traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()
             for t in traces:
@@ -454,7 +449,8 @@ class ChartWidgetsMixin:
 
             import plotly.graph_objects as go
             import plotly.io as pio
-            traces = self._parse_chart_data(data, x, y, color=color)
+            current_data = self._resolve_chart_data(data, cid)
+            traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()
             trace_cls = go.Scattergl if render_mode == "webgl" else go.Scatter
@@ -501,14 +497,15 @@ class ChartWidgetsMixin:
 
             import plotly.graph_objects as go
             import plotly.io as pio
-            traces = self._parse_chart_data(data, x, y, color=color)
+            current_data = self._resolve_chart_data(data, cid)
+            traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()
             trace_cls = go.Scattergl if render_mode == "webgl" else go.Scatter
             for t in traces:
                 marker_kw = {}
-                if size and isinstance(data, __import__('pandas').DataFrame) and size in data.columns:
-                    marker_kw['size'] = data[size].tolist()
+                if size and isinstance(current_data, __import__('pandas').DataFrame) and size in current_data.columns:
+                    marker_kw['size'] = current_data[size].tolist()
                 fig.add_trace(trace_cls(x=t['x'], y=t['y'], mode='markers', name=t['name'], marker=marker_kw or None))
             fig.update_layout(
                 height=height,
@@ -539,7 +536,11 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("bokeh_chart")
         
         def builder():
-            script, div = components(figure)
+            current_figure = self._resolve_chart_data(figure, cid)
+            if current_figure is None:
+                return Component("div", id=cid, content="No data")
+
+            script, div = components(current_figure)
             width_style = "width: 100%;" if use_container_width else ""
             html = f'''
             <div style="{width_style}">
@@ -553,6 +554,23 @@ class ChartWidgetsMixin:
             return Component("div", id=cid, content=html, class_=_fc or None, style=_fs or None)
         
         self._register_component(cid, builder)
+
+    def _resolve_chart_data(self, data, cid=None):
+        current_data = data
+        token = rendering_ctx.set(cid) if cid else None
+        try:
+            for _ in range(3):
+                if isinstance(current_data, State):
+                    current_data = current_data.value
+                    continue
+                if callable(current_data):
+                    current_data = current_data()
+                    continue
+                break
+            return current_data
+        finally:
+            if token is not None:
+                rendering_ctx.reset(token)
 
     def _parse_chart_data(self, data, x, y, color=None):
         """Parse chart data into list of trace dicts [{x, y, name}, ...]
