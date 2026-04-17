@@ -473,6 +473,13 @@ class App(
         # Interval System (app.interval API)
         self._interval_count = 0
         self._interval_callbacks: Dict[str, Dict] = {}
+
+        # Navigation registry for programmatic page switching
+        self._navigation_pages_by_key: Dict[str, Page] = {}
+        self._navigation_pages_by_title: Dict[str, Page] = {}
+        self._navigation_pages_by_path: Dict[str, Page] = {}
+        self._navigation_pages_by_entry: Dict[Callable, Page] = {}
+        self._navigation_states: List[State] = []
         
         # Internal theme/settings state
         self._theme_state = self.state(self.theme_manager.mode)
@@ -1514,6 +1521,13 @@ class App(
         # Per-instance state key derived from cid; allows multiple navigation()
         # instances (e.g. sidebar + top tabs) to coexist without sharing state.
         current_page_key_state = self.state(final_pages[0].key, key=f"__nav_selection_{cid}__")
+        for p in final_pages:
+            self._navigation_pages_by_key[p.key] = p
+            self._navigation_pages_by_title[p.title] = p
+            self._navigation_pages_by_title[p.title.lower()] = p
+            self._navigation_pages_by_path[p.url_path] = p
+            self._navigation_pages_by_entry[p.entry_point] = p
+        self._navigation_states.append(current_page_key_state)
         nav_cid = cid  # Capture for use in nav_action closure
         def nav_builder():
             token = rendering_ctx.set(cid)

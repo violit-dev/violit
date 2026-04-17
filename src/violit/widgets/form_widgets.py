@@ -279,16 +279,76 @@ class FormWidgetsMixin:
         self._register_component(cid, builder)
 
     def switch_page(self, page):
-        """Switch to a different page (navigation)"""
-        # This would be implemented with the navigation system
-        # For now, we can use JavaScript to navigate
-        code = f"window.location.href = '{page}';"
+        """Switch to a different page (navigation).
+
+        Accepts a Page object, page function, page title, url_path slug,
+        or hash URL such as '#settings' or '/#settings'.
+        """
+        target_page = None
+        target_key = None
+        target_hash = None
+        target_url = None
+
+        if hasattr(page, 'key') and hasattr(page, 'url_path') and hasattr(page, 'title'):
+            target_page = page
+        elif callable(page):
+            target_page = getattr(self, '_navigation_pages_by_entry', {}).get(page)
+        elif isinstance(page, str):
+            page_str = page.strip()
+            if not page_str:
+                return
+            if page_str.startswith('http://') or page_str.startswith('https://'):
+                target_url = page_str
+            elif page_str.startswith('/#'):
+                target_hash = page_str[2:]
+            elif page_str.startswith('#'):
+                target_hash = page_str[1:]
+            else:
+                target_page = (
+                    getattr(self, '_navigation_pages_by_path', {}).get(page_str)
+                    or getattr(self, '_navigation_pages_by_title', {}).get(page_str)
+                    or getattr(self, '_navigation_pages_by_title', {}).get(page_str.lower())
+                )
+                if target_page is None and '/' in page_str:
+                    target_url = page_str
+                elif target_page is None:
+                    target_hash = page_str
+
+        if target_page is not None:
+            target_key = target_page.key
+            target_hash = target_page.url_path
+        elif target_hash and target_key is None:
+            resolved = getattr(self, '_navigation_pages_by_path', {}).get(target_hash)
+            target_key = resolved.key if resolved is not None else f"page_{target_hash}"
+
+        if target_key and getattr(self, '_navigation_states', None):
+            for nav_state in self._navigation_states:
+                nav_state.set(target_key)
+
+            code = (
+                "(function(){"
+                "window._pageScrollPositions=window._pageScrollPositions||{};"
+                "if(window._currentPageKey){window._pageScrollPositions[window._currentPageKey]=window.scrollY;}"
+                f"window._pendingPageKey='{target_key}';"
+                f"window._currentPageKey='{target_key}';"
+                f"window.location.hash='{target_hash}';"
+                "window.scrollTo(0, window._pageScrollPositions[window._currentPageKey] || 0);"
+                "})();"
+            )
+        else:
+            final_url = target_url
+            if final_url is None and target_hash is not None:
+                final_url = f"/#{target_hash}"
+            if final_url is None:
+                final_url = str(page)
+            code = f"window.location.href = '{final_url}';"
+
         if self.mode == 'ws':
             store = get_session_store()
-            if 'eval_queue' not in store: store['eval_queue'] = []
+            if 'eval_queue' not in store:
+                store['eval_queue'] = []
             store['eval_queue'].append(code)
         else:
-            # For lite mode, we could inject a script
             cid = self._get_next_cid("page_switch")
             def builder():
                 html = f'<script>{code}</script>'
