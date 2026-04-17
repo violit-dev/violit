@@ -298,9 +298,14 @@ class InputWidgetsMixin:
                 sel = 'checked' if opt == cv else ''
                 escaped_opt = html_lib.escape(str(opt), quote=True)
                 caption_html = ''
+                option_style = 'display:block;margin:0;'
                 if captions and i_opt < len(captions) and captions[i_opt]:
                     caption_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);font-weight:normal;">{html_lib.escape(str(captions[i_opt]))}</span>'
-                opts_html += f'<wa-radio value="{escaped_opt}" {sel}>{escaped_opt}{caption_html}</wa-radio>'
+                    if horizontal:
+                        option_style = 'display:inline-flex;align-items:flex-start;vertical-align:middle;margin:0;'
+                elif horizontal:
+                    option_style = 'display:inline-flex;align-items:center;vertical-align:middle;margin:0;'
+                opts_html += f'<wa-radio value="{escaped_opt}" style="{option_style}" {sel}>{escaped_opt}{caption_html}</wa-radio>'
             
             if self.mode == 'lite':
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" name="value"'
@@ -326,9 +331,11 @@ class InputWidgetsMixin:
             escaped_cv = html_lib.escape(str(cv), quote=True)
             disabled_attr = 'disabled' if disabled else ''
             help_attr = f'hint="{html_lib.escape(str(help), quote=True)}"' if help else ''
-            # Horizontal layout via fieldset attribute (Web Awesome) + CSS override
-            horiz_style = ' style="display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;"' if horizontal else ''
-            html = f'<wa-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div{horiz_style}>{opts_html}</div></wa-radio-group>{listener_script}'
+            # Keep the default layout vertical and only opt into horizontal rows when requested.
+            options_layout_style = 'display:flex;flex-direction:column;gap:0.5rem;'
+            if horizontal:
+                options_layout_style = 'display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;align-items:center;'
+            html = f'<wa-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div style="{options_layout_style}">{opts_html}</div></wa-radio-group>{listener_script}'
             
             _wd = self._get_widget_defaults("radio")
             _fc = merge_cls(_wd.get("cls", ""), cls)

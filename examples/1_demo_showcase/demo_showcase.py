@@ -255,7 +255,7 @@ def settings_page():
     app.button("Apply Theme", on_click=apply_theme)
         
     app.subheader("Animation")
-    anim = app.radio("Animation Mode", ["soft", "hard"])
+    anim = app.radio("Animation Mode", ["soft", "hard"], horizontal=True)
     
     def on_anim_change(v):
         app.set_animation_mode(anim.value)
