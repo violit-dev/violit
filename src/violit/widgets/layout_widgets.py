@@ -2,8 +2,24 @@
 
 from typing import Union, Callable, Optional, List
 from ..component import Component
-from ..context import rendering_ctx, fragment_ctx, layout_ctx
+from ..context import rendering_ctx, fragment_ctx, layout_ctx, session_ctx
 from ..style_utils import merge_cls, merge_style
+
+
+def _reset_dynamic_fragment_children(fragment_id: str):
+    """Clear runtime-only fragment children before a nested layout re-renders.
+
+    Reactive sub-renders recreate the child widgets for containers, tabs, columns,
+    and similar layout scopes. Without clearing the previous dynamic child list,
+    the same builders are appended repeatedly and the DOM appears duplicated.
+    """
+    if session_ctx.get() is None:
+        return
+
+    from ..state import get_session_store
+
+    store = get_session_store()
+    store['fragment_components'][fragment_id] = []
 
 
 class LayoutWidgetsMixin:
@@ -130,6 +146,7 @@ class LayoutWidgetsMixin:
                     return Component("div", id=self.container_id, content=inner_html, class_=_fc or None, style=_fs or None, **self.attrs)
                 
                 self.app._register_component(self.container_id, builder)
+                _reset_dynamic_fragment_children(self.container_id)
                 
                 # Now set fragment context
                 from ..context import fragment_ctx
@@ -195,6 +212,7 @@ class LayoutWidgetsMixin:
                     return Component("div", id=self.expander_id, content=html, class_=_fc or None, style=_fs or None)
                 
                 self.app._register_component(self.expander_id, builder)
+                _reset_dynamic_fragment_children(self.expander_id)
                 
                 # Now set fragment context for children
                 from ..context import fragment_ctx
@@ -524,6 +542,7 @@ class LayoutWidgetsMixin:
                         return Component("div", id=self.container_id, content=inner_html, class_="violit-list-container")
                 
                 self.app._register_component(self.container_id, builder)
+                _reset_dynamic_fragment_children(self.container_id)
                 
                 # Set fragment context
                 self.token = fragment_ctx.set(self.container_id)
@@ -599,6 +618,7 @@ class LayoutWidgetsMixin:
                     return Component("div", id=f"{self.popover_id}_wrap", content=html, class_=_fc or None, style=_fs or None)
                 
                 self.app._register_component(self.popover_id, builder)
+                _reset_dynamic_fragment_children(self.popover_id)
                 self.token = fragment_ctx.set(self.popover_id)
                 return self
                 
@@ -621,6 +641,7 @@ class ColumnObject:
         
     def __enter__(self):
         from ..context import fragment_ctx, rendering_ctx
+        _reset_dynamic_fragment_children(self.col_id)
         self.token = fragment_ctx.set(self.col_id)
         # We don't set rendering_ctx here because individual widgets inside will set their own
         return self
@@ -643,6 +664,7 @@ class TabObject:
         self.active = active
         
     def __enter__(self):
+        _reset_dynamic_fragment_children(self.tab_id)
         self.token = fragment_ctx.set(self.tab_id)
         return self
         
