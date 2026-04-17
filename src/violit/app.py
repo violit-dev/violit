@@ -3339,10 +3339,16 @@ HTML_TEMPLATE = r"""
             // Page scroll position memory: { pageKey: scrollY }
             window._pageScrollPositions = {};
             window._currentPageKey = null;
+            window._pendingScrollRestore = null;
             
             // Define sendAction IMMEDIATELY (before WebSocket connection)
             window.sendAction = (cid, val) => {
                 debugLog(`[sendAction] Called with cid=${cid}, val=${val}`);
+
+                window._pendingScrollRestore = {
+                    x: window.scrollX || 0,
+                    y: window.scrollY || window.pageYOffset || 0
+                };
                 
                 const payload = {
                     type: 'click',
@@ -3586,12 +3592,32 @@ HTML_TEMPLATE = r"""
                     // Apply updates immediately (no View Transition).
                     // CSS fade-in on .page-container handles the smooth entrance.
                     applyUpdates(msg.payload);
+
+                    // Preserve the user's viewport position for same-page reactive updates.
+                    if (!isNavigation && window._pendingScrollRestore) {
+                        const restore = window._pendingScrollRestore;
+                        const restoreScroll = () => {
+                            window.scrollTo(restore.x || 0, restore.y || 0);
+                        };
+
+                        requestAnimationFrame(() => {
+                            restoreScroll();
+                            requestAnimationFrame(() => {
+                                restoreScroll();
+                                setTimeout(restoreScroll, 80);
+                            });
+                        });
+
+                        debugLog(`[Scroll] Restored viewport to y=${restore.y}px after reactive update`);
+                        window._pendingScrollRestore = null;
+                    }
                     
                     // Page scroll position management after navigation
                     if (isNavigation && window._pendingPageKey) {
                         const targetKey = window._pendingPageKey;
                         window._currentPageKey = targetKey;
                         window._pendingPageKey = null;
+                        window._pendingScrollRestore = null;
                         
                         // Restore saved scroll position, or scroll to top for first visit
                         const savedScroll = window._pageScrollPositions[targetKey];
