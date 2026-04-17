@@ -240,11 +240,21 @@ class LayoutWidgetsMixin:
                 self.user_cls = user_cls
                 self.user_style = user_style
                 self.tab_objects = []
+                self.panel_names = [f"panel-{i}" for i in range(len(self.labels))]
+                self.default_panel = self.panel_names[0] if self.panel_names else ""
+                self.active_tab_state = self.app.state(self.default_panel, key=f"{self.tabs_id}__active_tab")
+                self.action_cid = f"{self.tabs_id}__active_tab_action"
                 
                 # Create tab objects immediately
                 for i, label in enumerate(self.labels):
                     tab_obj = TabObject(self.app, f"{self.tabs_id}_tab_{i}", label, i == 0)
                     self.tab_objects.append(tab_obj)
+
+                def tab_action(panel_name):
+                    if panel_name in self.panel_names:
+                        self.active_tab_state.set(panel_name)
+
+                self.app.static_actions[self.action_cid] = tab_action
                 
                 # Register tabs builder immediately
                 self._register_builder()
@@ -253,17 +263,23 @@ class LayoutWidgetsMixin:
                 def builder():
                     from ..state import get_session_store
                     store = get_session_store()
+                    store['actions'][self.action_cid] = self.app.static_actions[self.action_cid]
+
+                    active_panel = self.active_tab_state.value
+                    if active_panel not in self.panel_names:
+                        active_panel = self.default_panel
+                    group_id = f"{self.tabs_id}_group"
                     
                     # Build tab headers
                     headers = []
                     for i, label in enumerate(self.labels):
-                        active = "active" if i == 0 else ""
-                        headers.append(f'<wa-tab slot="nav" panel="panel-{i}" {active}>{label}</wa-tab>')
+                        panel_name = self.panel_names[i]
+                        headers.append(f'<wa-tab slot="nav" panel="{panel_name}">{label}</wa-tab>')
                     
                     # Build tab panels
                     panels = []
                     for i, tab_obj in enumerate(self.tab_objects):
-                        active = "active" if i == 0 else ""
+                        panel_name = self.panel_names[i]
                         # Render tab content
                         tab_htmls = []
                         # Check static
@@ -274,13 +290,64 @@ class LayoutWidgetsMixin:
                             tab_htmls.append(b().render())
                         
                         panel_content = "".join(tab_htmls)
-                        panels.append(f'<wa-tab-panel name="panel-{i}" {active}>{panel_content}</wa-tab-panel>')
+                        panels.append(f'<wa-tab-panel name="{panel_name}">{panel_content}</wa-tab-panel>')
+
+                    restore_script = f'''
+                    <script>
+                    (function() {{
+                        const group = document.getElementById('{group_id}');
+                        if (!group) return;
+
+                        const storageKey = 'vl_active_tab:{self.tabs_id}';
+                        const validPanels = new Set({self.panel_names!r});
+                        const defaultPanel = {self.default_panel!r};
+                        const serverPanel = {active_panel!r};
+                        const actionCid = {self.action_cid!r};
+
+                        const applyActivePanel = function(panelName) {{
+                            if (!panelName || !validPanels.has(panelName)) return false;
+                            group.setAttribute('active', panelName);
+                            requestAnimationFrame(function() {{
+                                group.setAttribute('active', panelName);
+                                if (typeof group.updateActiveTab === 'function') {{
+                                    group.updateActiveTab();
+                                }}
+                            }});
+                            return true;
+                        }};
+
+                        const syncServer = function(panelName) {{
+                            if (!panelName || panelName === serverPanel) return;
+                            if (typeof window.sendAction === 'function') {{
+                                window.sendAction(actionCid, panelName);
+                            }}
+                        }};
+
+                        const storedPanel = sessionStorage.getItem(storageKey);
+                        const initialPanel = validPanels.has(storedPanel) ? storedPanel : (validPanels.has(serverPanel) ? serverPanel : defaultPanel);
+                        applyActivePanel(initialPanel);
+                        sessionStorage.setItem(storageKey, initialPanel);
+                        syncServer(initialPanel);
+
+                        if (!group.dataset.vlTabPersistenceBound) {{
+                            group.dataset.vlTabPersistenceBound = 'true';
+                            group.addEventListener('wa-tab-show', function(event) {{
+                                const panelName = event.detail && event.detail.name;
+                                if (!validPanels.has(panelName)) return;
+                                sessionStorage.setItem(storageKey, panelName);
+                                syncServer(panelName);
+                            }});
+                        }}
+                    }})();
+                    </script>
+                    '''
                     
                     html = f'''
-                    <wa-tab-group>
+                    <wa-tab-group id="{group_id}" active="{active_panel}">
                         {"".join(headers)}
                         {"".join(panels)}
                     </wa-tab-group>
+                    {restore_script}
                     '''
                     _wd = self.app._get_widget_defaults("tabs")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)

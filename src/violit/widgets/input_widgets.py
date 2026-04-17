@@ -629,6 +629,11 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
+
+            text_value = "" if cv is None else str(cv)
+            content_lines = text_value.count("\n") + 1 if text_value else 1
+            auto_rows = max(4, min(12, content_lines + 1))
+            effective_rows = auto_rows
             
             if self.mode == 'lite':
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
@@ -636,15 +641,36 @@ class InputWidgetsMixin:
             else:
                 # WS mode: use addEventListener for Web Awesome custom events
                 attrs = {}
+                desired_json = json.dumps(cv, ensure_ascii=False)
                 listener_script = f'''
                 <script>
                 (function() {{
                     const el = document.getElementById('{cid}');
-                    if (el && !el.hasAttribute('data-ws-listener')) {{
-                        el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('input', function(e) {{
-                            window.sendAction('{cid}', el.value);
+                    const desiredValue = {desired_json};
+                    if (el) {{
+                        const syncTextarea = function() {{
+                            if (el.value !== desiredValue) el.value = desiredValue;
+                            if (typeof el.handleValueChange === 'function') el.handleValueChange();
+                            if (typeof el.setTextareaDimensions === 'function') el.setTextareaDimensions();
+                        }};
+
+                        syncTextarea();
+
+                        if (el.updateComplete) {{
+                            el.updateComplete.then(syncTextarea);
+                        }}
+
+                        requestAnimationFrame(function() {{
+                            syncTextarea();
+                            setTimeout(syncTextarea, 150);
                         }});
+
+                        if (!el.hasAttribute('data-ws-listener')) {{
+                            el.setAttribute('data-ws-listener', 'true');
+                            el.addEventListener('input', function(e) {{
+                                window.sendAction('{cid}', el.value);
+                            }});
+                        }}
                     }}
                 }})();
                 </script>
@@ -656,16 +682,26 @@ class InputWidgetsMixin:
                 if h_str.endswith("rows"):
                     # Explicit rows: "10rows" -> 10
                     try:
-                        textarea_props["rows"] = int(h_str.replace("rows", "").strip())
+                        effective_rows = int(h_str.replace("rows", "").strip())
+                        textarea_props["rows"] = effective_rows
                     except ValueError:
-                        textarea_props["rows"] = 3
+                        effective_rows = 4
+                        textarea_props["rows"] = effective_rows
                 else:
                     # Everything else: Treat as pixels (Streamlit default)
                     # "200", 200, "200px" -> 200px
                     val = h_str.replace("px", "").strip()
                     _style = merge_style(f"height: {val}px;", _style)
             else:
-                textarea_props["rows"] = 3
+                textarea_props["rows"] = effective_rows
+
+            # Web Awesome's auto resize can still collapse empty textareas to a single line
+            # before the component fully measures itself, especially in initially hidden tabs.
+            # Give the host element a minimum block size so multiline editors always look multiline.
+            min_height_rem = max(5.5, 1.35 * effective_rows + 1.6)
+            existing_inner_style = props.get("style", "")
+            textarea_style = merge_style(existing_inner_style, f"min-height: {min_height_rem:.2f}rem;")
+            textarea_props["style"] = textarea_style
 
             if max_chars is not None: textarea_props["maxlength"] = max_chars
             if placeholder: textarea_props["placeholder"] = placeholder

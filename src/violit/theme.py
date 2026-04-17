@@ -922,6 +922,14 @@ class Theme:
                     box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.08) !important;
                     outline: none;
                 }
+                wa-textarea::part(form-control-input) {
+                    min-height: 6.25rem !important;
+                }
+                wa-textarea::part(textarea) {
+                    min-height: 6.25rem !important;
+                    line-height: 1.5 !important;
+                    box-sizing: border-box !important;
+                }
 
                 /* --- Typography: sharp deep purple-black tone --- */
                 h1, h2, h3, h4, h5, h6 {

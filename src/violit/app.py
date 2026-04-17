@@ -2959,6 +2959,14 @@ HTML_TEMPLATE = r"""
             display: block;
             margin-bottom: 1rem;
         }
+        wa-textarea::part(form-control-input) {
+            min-height: 6.25rem;
+        }
+        wa-textarea::part(textarea) {
+            min-height: 6.25rem;
+            line-height: 1.5;
+            box-sizing: border-box;
+        }
         wa-callout {
             display: block;
             margin-bottom: 1.25rem;
