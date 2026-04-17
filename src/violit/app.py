@@ -2446,8 +2446,17 @@ class App(
                         child.wait(timeout=2)
                     except subprocess.TimeoutExpired:
                         _kill_process(child)
-                raise
+                print("INFO:     Stopping reloader process")
+                return
             
+        # On Windows, uvicorn's native reload path is prone to duplicate bind
+        # behavior when user scripts call app.run() at module scope. The existing
+        # subprocess-based watcher is more reliable there.
+        if sys.platform == 'win32':
+            self.debug_print("[HOT RELOAD] Windows detected; using subprocess-based reload watcher.")
+            _run_subprocess_reload(file_path or sys.argv[0])
+            return
+
         if app_var_name and module_string:
             uvicorn_target = f"{module_string}:{app_var_name}.fastapi"
             self.debug_print(f"[HOT RELOAD] Delegating to uvicorn -> {uvicorn_target}")
@@ -2461,8 +2470,10 @@ class App(
             if reload_dir not in sys.path:
                 sys.path.insert(0, reload_dir)
             
-            # Must set VIOLIT_WORKER so that the child workers don't hit this block again
+            # Mark uvicorn reload import/worker processes so module-level app.run()
+            # can safely no-op when the script is imported instead of executed.
             os.environ["VIOLIT_WORKER"] = "1"
+            os.environ["VIOLIT_UVICORN_RELOAD"] = "1"
             
             # Suppress uvicorn's default "Uvicorn running on http://0.0.0.0:..." message
             # so only our user-friendly localhost URL is shown
@@ -2696,6 +2707,13 @@ class App(
             args.port = port
         if args.on_top:
             self.on_top = True
+
+        # Uvicorn hot reload may import or re-execute the user script in child
+        # processes. If a script calls app.run() at module scope, those children
+        # must not start another server themselves.
+        if os.environ.get("VIOLIT_UVICORN_RELOAD"):
+            self.debug_print("[HOT RELOAD] Uvicorn reload child/import detected; skipping nested app.run()")
+            return
 
         # [Logging Filter] Reduce noise by filtering out polling requests
         try:
