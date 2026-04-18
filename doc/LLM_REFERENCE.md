@@ -212,6 +212,8 @@ with app.expander("Details", expanded=False):
     app.text("Hidden content")
 
 # Sidebar
+app.configure_sidebar(width=320, min_width=240, max_width=520, resizable=True)
+
 with app.sidebar:
     app.text("Sidebar content")
 ```

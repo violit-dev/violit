@@ -448,6 +448,11 @@ class App(
         else:
             self.widget_gap = widget_gap
 
+        self._sidebar_width = self._normalize_css_size('300px', fallback='300px')
+        self._sidebar_min_width = self._normalize_css_size('220px', fallback='220px')
+        self._sidebar_max_width = self._normalize_css_size('560px', fallback='560px')
+        self._sidebar_resizable = False
+
         
         # Static definitions
         from .state import STATIC_STORE
@@ -567,6 +572,36 @@ class App(
             ''')
         """
         self._user_css.append(css)
+
+    def _normalize_css_size(self, value, fallback='300px') -> str:
+        """Normalize numeric or string sizes to CSS-compatible values."""
+        if value is None:
+            return fallback
+        if isinstance(value, (int, float)):
+            return f"{value}px"
+        size = str(value).strip()
+        return size or fallback
+
+    def configure_sidebar(self, width=None, min_width=None, max_width=None, resizable=None):
+        """Configure sidebar sizing and optional desktop drag-resize behavior.
+
+        Args:
+            width: Default sidebar width. Numbers are treated as pixels.
+            min_width: Minimum sidebar width when resized.
+            max_width: Maximum sidebar width when resized.
+            resizable: Enable desktop drag resizing.
+
+        Example:
+            app.configure_sidebar(width=340, min_width=240, max_width=640, resizable=True)
+        """
+        if width is not None:
+            self._sidebar_width = self._normalize_css_size(width, fallback=self._sidebar_width)
+        if min_width is not None:
+            self._sidebar_min_width = self._normalize_css_size(min_width, fallback=self._sidebar_min_width)
+        if max_width is not None:
+            self._sidebar_max_width = self._normalize_css_size(max_width, fallback=self._sidebar_max_width)
+        if resizable is not None:
+            self._sidebar_resizable = bool(resizable)
 
     def _get_widget_defaults(self, widget_type: str) -> Dict[str, str]:
         """Get default cls/style for a widget type (internal helper)."""
@@ -2112,7 +2147,8 @@ class App(
             root_style = "visibility:hidden;opacity:0;transition:opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1);" if self.show_splash else ""
             html_class = f"{t.theme_class} {'vl-splash-active' if self.show_splash else ''}".strip()
             body_class = "vl-splash-active" if self.show_splash else ""
-            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%HTML_CLASS%", html_class).replace("%BODY_CLASS%", body_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css).replace("%ROOT_STYLE%", root_style)
+            sidebar_resizer_style = "" if (self._sidebar_resizable and (sidebar_c or self.static_sidebar_order)) else "display: none;"
+            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%SIDEBAR_RESIZER_STYLE%", sidebar_resizer_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%HTML_CLASS%", html_class).replace("%BODY_CLASS%", body_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%SIDEBAR_WIDTH%", self._sidebar_width).replace("%SIDEBAR_MIN_WIDTH%", self._sidebar_min_width).replace("%SIDEBAR_MAX_WIDTH%", self._sidebar_max_width).replace("%SIDEBAR_RESIZABLE%", "true" if self._sidebar_resizable else "false").replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css).replace("%ROOT_STYLE%", root_style)
             return HTMLResponse(html)
 
         @self.fastapi.post("/action/{cid}")
@@ -2897,7 +2933,10 @@ HTML_TEMPLATE = r"""
         *, *::before, *::after { box-sizing: border-box; }
         :root { 
             %CSS_VARS%
-            --sidebar-width: 300px;
+            --sidebar-width: %SIDEBAR_WIDTH%;
+            --sidebar-min-width: %SIDEBAR_MIN_WIDTH%;
+            --sidebar-max-width: %SIDEBAR_MAX_WIDTH%;
+            --vl-sidebar-width: var(--sidebar-width);
         }
            wa-callout { --wa-color-brand-fill-loud: var(--vl-primary); }
            wa-callout::part(base) { border: 1px solid var(--vl-border); }
@@ -2928,7 +2967,7 @@ HTML_TEMPLATE = r"""
             position: fixed;
             top: 0;
             left: 0;
-            width: var(--sidebar-width);
+            width: var(--vl-sidebar-width);
             height: 100vh;
             background: var(--vl-bg-card);
             border-right: 1px solid var(--vl-border);
@@ -2943,10 +2982,47 @@ HTML_TEMPLATE = r"""
             transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, opacity 0.3s ease;
         }
         #sidebar.collapsed { width: 0 !important; padding: 2rem 0 !important; border-right: none !important; opacity: 0 !important; pointer-events: none; }
+        #sidebar-resizer {
+            position: fixed;
+            top: 0;
+            left: var(--vl-sidebar-width);
+            width: 14px;
+            height: 100vh;
+            transform: translateX(-50%);
+            cursor: col-resize;
+            z-index: 1101;
+            background: transparent;
+            touch-action: none;
+            transition: opacity 0.2s ease;
+        }
+        #sidebar-resizer::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            width: 2px;
+            margin: 0 auto;
+            background: color-mix(in srgb, var(--vl-border), var(--vl-primary) 22%);
+            opacity: 0.55;
+            transition: background 0.2s ease, opacity 0.2s ease;
+        }
+        #sidebar-resizer:hover::after,
+        body.sidebar-resizing #sidebar-resizer::after {
+            background: var(--vl-primary);
+            opacity: 1;
+        }
+        #sidebar.collapsed + #sidebar-resizer,
+        #sidebar-resizer[style*='display: none'] {
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.sidebar-resizing {
+            cursor: col-resize;
+            user-select: none;
+        }
         
         #main {
             flex: 1;
-            margin-left: var(--sidebar-width);
+            margin-left: var(--vl-sidebar-width);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2955,7 +3031,7 @@ HTML_TEMPLATE = r"""
         }
         #main.sidebar-collapsed { margin-left: 0; }
         /* Chat input container positioning - respects sidebar */
-        .chat-input-container { left: var(--sidebar-width) !important; transition: left 0.3s ease; }
+        .chat-input-container { left: var(--vl-sidebar-width) !important; transition: left 0.3s ease; }
         #sidebar.collapsed ~ #main .chat-input-container,
         #main.sidebar-collapsed .chat-input-container { left: 0 !important; }
         
@@ -3097,6 +3173,9 @@ HTML_TEMPLATE = r"""
                 transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease !important;
                 z-index: 2000;
             }
+            #sidebar-resizer {
+                display: none !important;
+            }
             #sidebar.mobile-open {
                 transform: translateX(0) !important;
                 box-shadow: 4px 0 24px rgba(0,0,0,0.18);
@@ -3211,6 +3290,7 @@ HTML_TEMPLATE = r"""
         <div id="sidebar" style="%SIDEBAR_STYLE%">
             %SIDEBAR_CONTENT%
         </div>
+        <div id="sidebar-resizer" style="%SIDEBAR_RESIZER_STYLE%" aria-hidden="true"></div>
     <div id="main" class="%MAIN_CLASS%">
         <div id="header">
              <wa-button variant="neutral" appearance="plain" onclick="toggleSidebar()"><wa-icon name="list" style="pointer-events: none;"></wa-icon></wa-button>
@@ -3225,6 +3305,8 @@ HTML_TEMPLATE = r"""
 
         // Sidebar navigation is handled via direct onclick on each wa-button.
         // No delegated listener needed.
+        window._vlSidebarResizable = %SIDEBAR_RESIZABLE%;
+        window._vlSidebarStorageKey = 'violit:sidebar-width:' + window.location.pathname;
         
         // Debug logging helper
         const debugLog = (...args) => {
@@ -3251,6 +3333,88 @@ HTML_TEMPLATE = r"""
             if (container.querySelectorAll) {
                 container.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.purge(p));
             }
+        }
+
+        function resolveCssSizeToPx(value) {
+            if (!value) return 0;
+            if (typeof value === 'number') return value;
+            const probe = document.createElement('div');
+            probe.style.position = 'absolute';
+            probe.style.visibility = 'hidden';
+            probe.style.width = value;
+            document.body.appendChild(probe);
+            const px = probe.getBoundingClientRect().width;
+            probe.remove();
+            return px;
+        }
+
+        function applySidebarWidth(widthValue, persist = true) {
+            const root = document.getElementById('root');
+            if (!root) return;
+            root.style.setProperty('--vl-sidebar-width', widthValue);
+            document.documentElement.style.setProperty('--vl-sidebar-width', widthValue);
+            if (persist && window._vlSidebarResizable) {
+                try {
+                    localStorage.setItem(window._vlSidebarStorageKey, widthValue);
+                } catch (err) {
+                    debugLog('Failed to persist sidebar width', err);
+                }
+            }
+        }
+
+        function syncSidebarWidthFromStorage() {
+            if (!window._vlSidebarResizable) return;
+            try {
+                const savedWidth = localStorage.getItem(window._vlSidebarStorageKey);
+                if (savedWidth) {
+                    applySidebarWidth(savedWidth, false);
+                }
+            } catch (err) {
+                debugLog('Failed to restore sidebar width', err);
+            }
+        }
+
+        function setupSidebarResizer() {
+            if (!window._vlSidebarResizable) return;
+            const resizer = document.getElementById('sidebar-resizer');
+            const sidebar = document.getElementById('sidebar');
+            if (!resizer || !sidebar) return;
+
+            let dragState = null;
+
+            const endDrag = () => {
+                if (!dragState) return;
+                dragState = null;
+                document.body.classList.remove('sidebar-resizing');
+                window.removeEventListener('pointermove', onDrag);
+                window.removeEventListener('pointerup', endDrag);
+                window.removeEventListener('pointercancel', endDrag);
+            };
+
+            const onDrag = (event) => {
+                if (!dragState || window.innerWidth <= 768) return;
+                const nextWidth = Math.min(dragState.maxWidth, Math.max(dragState.minWidth, dragState.startWidth + (event.clientX - dragState.startX)));
+                applySidebarWidth(`${Math.round(nextWidth)}px`);
+            };
+
+            resizer.addEventListener('pointerdown', (event) => {
+                if (window.innerWidth <= 768 || sidebar.classList.contains('collapsed')) return;
+                const computed = getComputedStyle(document.documentElement);
+                const minWidth = resolveCssSizeToPx(computed.getPropertyValue('--sidebar-min-width').trim()) || 220;
+                const maxWidth = resolveCssSizeToPx(computed.getPropertyValue('--sidebar-max-width').trim()) || 560;
+                dragState = {
+                    startX: event.clientX,
+                    startWidth: sidebar.getBoundingClientRect().width,
+                    minWidth,
+                    maxWidth,
+                };
+                document.body.classList.add('sidebar-resizing');
+                resizer.setPointerCapture(event.pointerId);
+                window.addEventListener('pointermove', onDrag);
+                window.addEventListener('pointerup', endDrag);
+                window.addEventListener('pointercancel', endDrag);
+                event.preventDefault();
+            });
         }
 
         // [FIX] Plotly Auto-Resize Logic
@@ -3320,7 +3484,11 @@ HTML_TEMPLATE = r"""
         }
 
         // Initialize Resizer
-        document.addEventListener('DOMContentLoaded', setupPlotlyResizer);
+        document.addEventListener('DOMContentLoaded', function() {
+            syncSidebarWidthFromStorage();
+            setupSidebarResizer();
+            setupPlotlyResizer();
+        });
 
         if (mode === 'ws') {
             // Interval infrastructure
@@ -3780,10 +3948,6 @@ HTML_TEMPLATE = r"""
                 // Desktop: original collapse behavior
                 sb.classList.toggle('collapsed');
                 main.classList.toggle('sidebar-collapsed');
-                const chatInput = document.querySelector('.chat-input-container');
-                if (chatInput) {
-                    chatInput.style.left = sb.classList.contains('collapsed') ? '0' : '300px';
-                }
             }
         }
         
