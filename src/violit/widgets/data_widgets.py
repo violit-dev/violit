@@ -254,7 +254,7 @@ class DataWidgetsMixin:
         self._register_component(cid, builder)
 
     def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None,
-                    disabled=False, hide_index=False, column_order=None, use_container_width=True,
+                    on_row_click=None, disabled=False, hide_index=False, column_order=None, use_container_width=True,
                     column_config=None, validator=None, grid_options=None,
                     theme: str = "auto", theme_colors: Optional[dict] = None,
                     cls: str = "", style: str = "", **props):
@@ -277,6 +277,21 @@ class DataWidgetsMixin:
                 on_change(updated_df, payload)
             else:
                 on_change(updated_df)
+
+        def _invoke_on_row_click(payload):
+            if not on_row_click:
+                return
+
+            try:
+                param_count = len(inspect.signature(on_row_click).parameters)
+            except (TypeError, ValueError):
+                param_count = 1
+
+            row_data = payload.get("rowData", {}) if isinstance(payload, dict) else payload
+            if param_count >= 2:
+                on_row_click(row_data, payload)
+            else:
+                on_row_click(row_data)
 
         def _normalize_validation_result(result, fallback_df):
             valid = True
@@ -312,6 +327,12 @@ class DataWidgetsMixin:
                 payload = json.loads(v) if isinstance(v, str) else v
                 previous_data = [dict(row) for row in (s.value or [])]
                 event_payload = payload if isinstance(payload, dict) else {"eventType": "full_sync", "allData": payload}
+                event_type = event_payload.get("eventType")
+
+                if event_type == "row_click":
+                    _invoke_on_row_click(event_payload)
+                    return
+
                 new_data = event_payload.get("allData", previous_data)
 
                 if not isinstance(new_data, list):
@@ -543,13 +564,36 @@ class DataWidgetsMixin:
                 }}
 
                 function initEditor() {{
+                    const rowClickEnabled = {json.dumps(bool(on_row_click))};
+                    const mergedGridOptions = {{ ...extraGridOptions }};
+
+                    if (rowClickEnabled) {{
+                        if (mergedGridOptions.singleClickEdit === undefined) {{
+                            mergedGridOptions.singleClickEdit = false;
+                        }}
+                        if (mergedGridOptions.rowSelection === undefined) {{
+                            mergedGridOptions.rowSelection = 'single';
+                        }}
+                    }}
+
                     const gridOptions = {{
                         columnDefs: buildColumnDefs(),
                         rowData: initialRowData,
                         defaultColDef: {{ flex: 1, minWidth: 100, resizable: true, editable: {json.dumps(editable)} }},
                         suppressScrollOnNewData: true,
-                        singleClickEdit: true,
+                        singleClickEdit: mergedGridOptions.singleClickEdit ?? true,
                         stopEditingWhenCellsLoseFocus: true,
+                        onRowClicked: rowClickEnabled ? (params) => {{
+                            const allData = [];
+                            params.api.forEachNode(node => allData.push(node.data));
+                            const payload = {{
+                                eventType: 'row_click',
+                                rowIndex: params.rowIndex,
+                                rowData: params.data,
+                                allData
+                            }};
+                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
+                        }} : undefined,
                         onCellValueChanged: (params) => {{
                             if (params.oldValue === params.newValue) {{
                                 return;
@@ -571,7 +615,7 @@ class DataWidgetsMixin:
                             // Store API when grid is ready
                             window['gridApi_{cid}'] = params.api;
                         }},
-                        ...extraGridOptions
+                        ...mergedGridOptions
                     }};
                     const el = document.querySelector('#{cid}');
                     if (el && window.agGrid) {{
