@@ -303,6 +303,7 @@ class LayoutWidgetsMixin:
                         const defaultPanel = {self.default_panel!r};
                         const serverPanel = {active_panel!r};
                         const actionCid = {self.action_cid!r};
+                        const shouldSyncServer = group.dataset.vlSyncServer === 'true';
 
                         const applyActivePanel = function(panelName) {{
                             if (!panelName || !validPanels.has(panelName)) return false;
@@ -317,6 +318,7 @@ class LayoutWidgetsMixin:
                         }};
 
                         const syncServer = function(panelName) {{
+                            if (!shouldSyncServer) return;
                             if (!panelName || panelName === serverPanel) return;
                             if (typeof window.sendAction === 'function') {{
                                 window.sendAction(actionCid, panelName);

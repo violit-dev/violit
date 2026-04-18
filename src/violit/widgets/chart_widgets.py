@@ -16,54 +16,199 @@ _PLOTLY_RENDER_SCRIPT = """
 <script>(function(){{
     var d = {fj};
     var cid = '{cid}';
-    var cfg = {{responsive: true, displayModeBar: false}};
+    var cfg = {{responsive: false, displayModeBar: false}};
+    var explicitHeight = d.layout && d.layout.height != null ? Math.round(d.layout.height) : null;
 
     if (!window._vlPlotlyInited) window._vlPlotlyInited = new Set();
+    if (!window._vlPlotlyStates) window._vlPlotlyStates = {{}};
+    if (!window._vlPlotlyResizeHandlers) window._vlPlotlyResizeHandlers = {{}};
 
-    function _vlDraw() {{
-        var el = document.getElementById(cid);
-        if (!el || !window.Plotly) return;
-        d.layout.autosize = true;
-        delete d.layout.width;
-        delete d.layout.height;
-        if (window._vlPlotlyInited.has(cid)) {{
-            Plotly.react(cid, d.data, d.layout, cfg);
-        }} else {{
-            window._vlPlotlyInited.add(cid);
-            Plotly.newPlot(cid, d.data, d.layout, cfg);
+    var state = window._vlPlotlyStates[cid] || (window._vlPlotlyStates[cid] = {{
+        lastWidth: 0,
+        lastHeight: 0,
+        resizeTimer: null,
+        waiting: false,
+        resizeObserver: null,
+        rendering: false
+    }});
+
+    function _vlGetEl() {{
+        return document.getElementById(cid);
+    }}
+
+    function _vlIsVisible(el) {{
+        return !!(el && el.offsetParent !== null);
+    }}
+
+    function _vlMeasure(el) {{
+        var rect = el.getBoundingClientRect();
+        var width = Math.round(rect.width || el.clientWidth || 0);
+        var height = explicitHeight != null ? explicitHeight : Math.round(rect.height || el.clientHeight || 0);
+        return {{ width: width, height: height }};
+    }}
+
+    function _vlApplyLayout(size) {{
+        d.layout = d.layout || {{}};
+        d.layout.autosize = false;
+        d.layout.width = size.width;
+        if (size.height > 10) {{
+            d.layout.height = size.height;
+        }} else if (explicitHeight != null) {{
+            d.layout.height = explicitHeight;
         }}
     }}
 
-    function _vlSchedule() {{
-        requestAnimationFrame(_vlDraw);
+    function _vlCommitSize(size) {{
+        state.lastWidth = size.width;
+        state.lastHeight = size.height > 10 ? size.height : (explicitHeight || 0);
     }}
 
-    function initPlot() {{
-        var el = document.getElementById(cid);
-        if (!el) return;
+    function _vlResizeExisting() {{
+        var el = _vlGetEl();
+        if (!el || !_vlIsVisible(el) || !window.Plotly || !window._vlPlotlyInited.has(cid) || !el.querySelector('.plot-container')) return;
 
-        if (window._vlPlotlyInited.has(cid)) {{
-            _vlSchedule();
+        var size = _vlMeasure(el);
+        var nextHeight = size.height > 10 ? size.height : (explicitHeight || 0);
+        if (size.width < 10) return;
+        if (Math.abs(state.lastWidth - size.width) < 2 && Math.abs(state.lastHeight - nextHeight) < 2) return;
+
+        _vlCommitSize(size);
+        if (window.Plotly.relayout) {{
+            Plotly.relayout(el, {{ autosize: false, width: size.width, height: nextHeight }});
+        }} else if (window.Plotly.Plots && window.Plotly.Plots.resize) {{
+            Plotly.Plots.resize(el);
+        }}
+    }}
+
+    function _vlDraw(force) {{
+        var el = _vlGetEl();
+        if (!el || !_vlIsVisible(el) || !window.Plotly) return;
+        if (state.rendering) return;
+
+        var size = _vlMeasure(el);
+        var nextHeight = size.height > 10 ? size.height : (explicitHeight || 0);
+        if (size.width < 10) return;
+
+        if (!force && window._vlPlotlyInited.has(cid) && el.querySelector('.plot-container') && Math.abs(state.lastWidth - size.width) < 2 && Math.abs(state.lastHeight - nextHeight) < 2) {{
             return;
         }}
 
-        if (el.clientWidth < 10) {{
-            var io = new IntersectionObserver(function(entries) {{
-                if (entries[0].isIntersecting && entries[0].boundingClientRect.width > 10) {{
-                    io.disconnect();
-                    _vlSchedule();
-                }}
-            }});
-            io.observe(el);
-        }} else {{
-            _vlSchedule();
+        _vlApplyLayout(size);
+        state.rendering = true;
+        var renderResult = window._vlPlotlyInited.has(cid)
+            ? Plotly.react(el, d.data, d.layout, cfg)
+            : Plotly.newPlot(el, d.data, d.layout, cfg);
+
+        Promise.resolve(renderResult).then(function() {{
+            window._vlPlotlyInited.add(cid);
+            _vlCommitSize(size);
+        }}).finally(function() {{
+            state.rendering = false;
+        }});
+    }}
+
+    function _vlWaitForStableWidth(callback) {{
+        if (state.waiting) return;
+        state.waiting = true;
+
+        var lastWidth = 0;
+        var stableFrames = 0;
+
+        function step() {{
+            var el = _vlGetEl();
+            if (!el || !window.Plotly) {{
+                state.waiting = false;
+                return;
+            }}
+            if (!_vlIsVisible(el)) {{
+                requestAnimationFrame(step);
+                return;
+            }}
+
+            var width = Math.round(el.getBoundingClientRect().width || el.clientWidth || 0);
+            if (width < 10) {{
+                requestAnimationFrame(step);
+                return;
+            }}
+
+            if (Math.abs(width - lastWidth) <= 1) {{
+                stableFrames += 1;
+            }} else {{
+                stableFrames = 1;
+                lastWidth = width;
+            }}
+
+            if (stableFrames >= 3) {{
+                state.waiting = false;
+                callback();
+                return;
+            }}
+
+            requestAnimationFrame(step);
         }}
+
+        requestAnimationFrame(step);
+    }}
+
+    function _vlScheduleRender(force) {{
+        _vlWaitForStableWidth(function() {{
+            _vlDraw(!!force);
+        }});
+    }}
+
+    function _vlScheduleResize(force) {{
+        clearTimeout(state.resizeTimer);
+        state.resizeTimer = setTimeout(function() {{
+            if (state.rendering) {{
+                _vlScheduleResize(force);
+                return;
+            }}
+            var el = _vlGetEl();
+            if (el && window._vlPlotlyInited.has(cid) && el.querySelector('.plot-container')) {{
+                _vlResizeExisting();
+            }} else {{
+                _vlScheduleRender(force);
+            }}
+        }}, 80);
+    }}
+
+    function _vlBindResizeObserver() {{
+        var el = _vlGetEl();
+        if (!el || !('ResizeObserver' in window)) return;
+
+        if (state.resizeObserver) state.resizeObserver.disconnect();
+        state.resizeObserver = new ResizeObserver(function(entries) {{
+            var entry = entries && entries[0];
+            if (!entry || !_vlIsVisible(el)) return;
+
+            var width = Math.round(entry.contentRect.width || 0);
+            var height = explicitHeight != null ? explicitHeight : Math.round(entry.contentRect.height || 0);
+            if (width < 10) return;
+            if (Math.abs(state.lastWidth - width) < 2 && Math.abs(state.lastHeight - height) < 2) return;
+
+            _vlScheduleResize(true);
+        }});
+        state.resizeObserver.observe(el);
+    }}
+
+    window._vlPlotlyResizeHandlers[cid] = function(force) {{
+        if (!_vlGetEl()) return;
+        _vlScheduleResize(!!force);
+    }};
+
+    function initPlot() {{
+        var el = _vlGetEl();
+        if (!el) return;
+
+        _vlBindResizeObserver();
+        _vlScheduleRender(!window._vlPlotlyInited.has(cid));
+
     }}
 
     // Wait for Plotly library to load (lazy loaded)
     window._vlLoadLib('Plotly', function() {{
         if (document.readyState === 'loading') {{
-            document.addEventListener('DOMContentLoaded', initPlot);
+            document.addEventListener('DOMContentLoaded', initPlot, {{ once: true }});
         }} else {{
             initPlot();
         }}

@@ -3423,7 +3423,35 @@ HTML_TEMPLATE = r"""
         // 2. Tab switches (visibility changes)
         // 3. Container size changes (sidebar toggle, etc)
         function setupPlotlyResizer() {
-            if (!window.Plotly) return;
+            if (!window.Plotly || window._vlPlotlyResizerBound) return;
+            window._vlPlotlyResizerBound = true;
+
+            const resizeTimers = new WeakMap();
+            const sizeCache = new WeakMap();
+
+            const requestPlotResize = (el, force = false, delay = 80) => {
+                if (!el) return;
+                const pending = resizeTimers.get(el);
+                if (pending) {
+                    clearTimeout(pending);
+                }
+
+                const timer = setTimeout(() => {
+                    resizeTimers.delete(el);
+                    if (el.offsetParent === null) return;
+
+                    if (typeof window._vlPlotlyRequestResize === 'function' && el.id) {
+                        window._vlPlotlyRequestResize(el.id, force);
+                        return;
+                    }
+
+                    if (window.Plotly && el.querySelector('.plot-container')) {
+                        Plotly.Plots.resize(el);
+                    }
+                }, delay);
+
+                resizeTimers.set(el, timer);
+            };
 
             // 1. Resize on window resize (with debounce for performance)
             let resizeTimer;
@@ -3431,8 +3459,8 @@ HTML_TEMPLATE = r"""
                 clearTimeout(resizeTimer);
                 resizeTimer = setTimeout(() => {
                     document.querySelectorAll('.js-plotly-plot').forEach(el => {
-                        if (el.offsetParent !== null && window.Plotly) {
-                            Plotly.Plots.resize(el);
+                        if (el.offsetParent !== null) {
+                            requestPlotResize(el, true, 60);
                         }
                     });
                 }, 150);
@@ -3446,8 +3474,8 @@ HTML_TEMPLATE = r"""
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                         document.querySelectorAll('.js-plotly-plot').forEach(el => {
-                            if (el.offsetParent !== null && el.querySelector('.plot-container')) {
-                                Plotly.Plots.resize(el);
+                            if (el.offsetParent !== null) {
+                                requestPlotResize(el, true, 40);
                             }
                         });
                     });
@@ -3458,9 +3486,25 @@ HTML_TEMPLATE = r"""
             const ro = new ResizeObserver(entries => {
                 for (let entry of entries) {
                     const el = entry.target;
-                    if (el.classList.contains('js-plotly-plot') && el.offsetParent !== null) {
-                        Plotly.Plots.resize(el);
+                    if (!el.classList.contains('js-plotly-plot') || el.offsetParent === null) {
+                        continue;
                     }
+
+                    const nextSize = {
+                        width: Math.round(entry.contentRect.width || 0),
+                        height: Math.round(entry.contentRect.height || 0),
+                    };
+                    if (nextSize.width < 10) {
+                        continue;
+                    }
+
+                    const prevSize = sizeCache.get(el);
+                    sizeCache.set(el, nextSize);
+                    if (prevSize && Math.abs(prevSize.width - nextSize.width) < 2 && Math.abs(prevSize.height - nextSize.height) < 2) {
+                        continue;
+                    }
+
+                    requestPlotResize(el, true, 60);
                 }
             });
 
@@ -3487,7 +3531,7 @@ HTML_TEMPLATE = r"""
         document.addEventListener('DOMContentLoaded', function() {
             syncSidebarWidthFromStorage();
             setupSidebarResizer();
-            setupPlotlyResizer();
+            window._vlLoadLib('Plotly', setupPlotlyResizer);
         });
 
         if (mode === 'ws') {
@@ -3753,6 +3797,48 @@ HTML_TEMPLATE = r"""
                                             } catch (e) {
                                                 console.error('Failed to parse AG Grid data:', e);
                                             }
+                                        }
+                                    }
+                                }
+
+                                // Tabs: when only the active panel changed, preserve the existing DOM
+                                // so nested chart/widget instances don't get torn down and redrawn.
+                                if (!smartUpdated && widgetType === 'tabs') {
+                                    const temp = document.createElement('div');
+                                    temp.innerHTML = item.html;
+                                    const nextGroup = temp.querySelector('wa-tab-group');
+                                    const currentGroup = el.tagName && el.tagName.toLowerCase() === 'wa-tab-group'
+                                        ? el
+                                        : el.querySelector('wa-tab-group');
+
+                                    if (currentGroup && nextGroup) {
+                                        const currentPanels = Array.from(currentGroup.querySelectorAll(':scope > wa-tab-panel'));
+                                        const nextPanels = Array.from(nextGroup.querySelectorAll(':scope > wa-tab-panel'));
+                                        const currentTabs = Array.from(currentGroup.querySelectorAll(':scope > wa-tab[slot="nav"]'));
+                                        const nextTabs = Array.from(nextGroup.querySelectorAll(':scope > wa-tab[slot="nav"]'));
+
+                                        const samePanelMarkup = currentPanels.length === nextPanels.length && currentPanels.every((panel, index) => {
+                                            const nextPanel = nextPanels[index];
+                                            return !!nextPanel && panel.getAttribute('name') === nextPanel.getAttribute('name') && panel.innerHTML === nextPanel.innerHTML;
+                                        });
+
+                                        const sameTabMarkup = currentTabs.length === nextTabs.length && currentTabs.every((tab, index) => {
+                                            const nextTab = nextTabs[index];
+                                            return !!nextTab && tab.getAttribute('panel') === nextTab.getAttribute('panel') && tab.textContent === nextTab.textContent;
+                                        });
+
+                                        if (samePanelMarkup && sameTabMarkup) {
+                                            const nextActive = nextGroup.getAttribute('active');
+                                            if (nextActive) {
+                                                currentGroup.setAttribute('active', nextActive);
+                                                requestAnimationFrame(() => {
+                                                    currentGroup.setAttribute('active', nextActive);
+                                                    if (typeof currentGroup.updateActiveTab === 'function') {
+                                                        currentGroup.updateActiveTab();
+                                                    }
+                                                });
+                                            }
+                                            smartUpdated = true;
                                         }
                                     }
                                 }
