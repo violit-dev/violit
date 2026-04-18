@@ -3174,6 +3174,23 @@ HTML_TEMPLATE = r"""
                 -webkit-overflow-scrolling: touch;
                 max-width: 100%;
             }
+
+            .vl-ag-grid {
+                border: 1px solid var(--ag-border-color, var(--vl-border));
+                border-radius: var(--vl-radius);
+                overflow: hidden;
+                background: var(--ag-background-color, var(--vl-bg-card));
+                color: var(--ag-foreground-color, var(--vl-text));
+            }
+
+            .vl-ag-grid .ag-root-wrapper,
+            .vl-ag-grid .ag-header,
+            .vl-ag-grid .ag-row,
+            .vl-ag-grid .ag-cell,
+            .vl-ag-grid .ag-input-field-input,
+            .vl-ag-grid .ag-picker-field-wrapper {
+                transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+            }
             
             /* Ensure minimum readable font size for small text */
             .page-container p, .page-container span, .page-container div {

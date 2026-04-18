@@ -11,10 +11,74 @@ from ..style_utils import merge_cls, merge_style, resolve_value
 
 class DataWidgetsMixin:
     """Data display widgets (dataframe, table, data_editor, metric, json)"""
+
+    @staticmethod
+    def _build_ag_grid_theme_style(theme: str = "auto", theme_colors: Optional[dict] = None) -> str:
+        mode = (theme or "auto").lower()
+        if mode == "dark":
+            base_background = "#16181d"
+            base_surface = "#20242b"
+            base_border = "#3a404c"
+            base_text = "#f3f4f6"
+            base_muted = "#a1a1aa"
+            base_accent = "var(--vl-primary)"
+            row_hover = "color-mix(in srgb, #20242b, white 8%)"
+            selected_row = "color-mix(in srgb, var(--vl-primary), #20242b 78%)"
+        elif mode == "light":
+            base_background = "#ffffff"
+            base_surface = "#f8fafc"
+            base_border = "#d7deea"
+            base_text = "#111827"
+            base_muted = "#6b7280"
+            base_accent = "var(--vl-primary)"
+            row_hover = "color-mix(in srgb, #f8fafc, var(--vl-primary) 7%)"
+            selected_row = "color-mix(in srgb, var(--vl-primary), white 84%)"
+        else:
+            base_background = "var(--vl-bg-card)"
+            base_surface = "color-mix(in srgb, var(--vl-bg-card), var(--vl-text) 3%)"
+            base_border = "var(--vl-border)"
+            base_text = "var(--vl-text)"
+            base_muted = "var(--vl-text-muted)"
+            base_accent = "var(--vl-primary)"
+            row_hover = "color-mix(in srgb, var(--vl-bg-card), var(--vl-primary) 7%)"
+            selected_row = "color-mix(in srgb, var(--vl-primary), var(--vl-bg-card) 82%)"
+
+        color_map = {
+            "background": base_background,
+            "surface": base_surface,
+            "border": base_border,
+            "text": base_text,
+            "muted": base_muted,
+            "accent": base_accent,
+            "row_hover": row_hover,
+            "selected_row": selected_row,
+        }
+        if theme_colors:
+            color_map.update({k: v for k, v in theme_colors.items() if v is not None})
+
+        return "; ".join([
+            f"--ag-background-color: {color_map['background']}",
+            f"--ag-foreground-color: {color_map['text']}",
+            f"--ag-header-background-color: {color_map['surface']}",
+            f"--ag-header-foreground-color: {color_map['text']}",
+            f"--ag-odd-row-background-color: {color_map['surface']}",
+            f"--ag-border-color: {color_map['border']}",
+            f"--ag-secondary-border-color: {color_map['border']}",
+            f"--ag-row-hover-color: {color_map['row_hover']}",
+            f"--ag-selected-row-background-color: {color_map['selected_row']}",
+            f"--ag-input-focus-border-color: {color_map['accent']}",
+            f"--ag-checkbox-checked-color: {color_map['accent']}",
+            f"--ag-range-selection-border-color: {color_map['accent']}",
+            f"--ag-font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            "--ag-font-size: 0.95rem",
+            "--ag-grid-size: 8px",
+            "--ag-list-item-height: 36px",
+        ])
     
     def dataframe(self, df: Union['pd.DataFrame', Callable, State], height=400, 
                   column_defs=None, grid_options=None, on_cell_clicked=None,
                   use_container_width=True, hide_index=False, column_order=None,
+                  theme: str = "auto", theme_colors: Optional[dict] = None,
                   cls: str = "", style: str = "", **props):
         """Display interactive dataframe with AG Grid"""
         cid = self._get_next_cid("df")
@@ -73,8 +137,9 @@ class DataWidgetsMixin:
                 }},
                 '''
             
+            grid_style = self._build_ag_grid_theme_style(theme=theme, theme_colors=theme_colors)
             html = f'''
-            <div id="{cid}" style="height: {height}px; width: 100%;" class="ag-theme-alpine-dark"></div>
+            <div id="{cid}" style="height: {height}px; width: 100%; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
             <script>(function(){{
                 function initGrid() {{
                     const opt = {{ 
@@ -160,6 +225,7 @@ class DataWidgetsMixin:
     def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None,
                     disabled=False, hide_index=False, column_order=None, use_container_width=True,
                     column_config=None, validator=None, grid_options=None,
+                    theme: str = "auto", theme_colors: Optional[dict] = None,
                     cls: str = "", style: str = "", **props):
         """Interactive data editor with optional column config and validation."""
         import pandas as pd
@@ -298,9 +364,10 @@ class DataWidgetsMixin:
             </wa-button>
             '''
             
+            grid_style = self._build_ag_grid_theme_style(theme=theme, theme_colors=theme_colors)
             html = f'''
             <div>
-                <div id="{cid}" style="height: {height}px; width: 100%;" class="ag-theme-alpine-dark"></div>
+                <div id="{cid}" style="height: {height}px; width: 100%; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
                 {add_row_btn}
             </div>
             <script>(function(){{
