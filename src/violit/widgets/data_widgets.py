@@ -315,7 +315,7 @@ class DataWidgetsMixin:
                     const currentValue = input.value || '';
                     requestAnimationFrame(() => {{
                         input.focus();
-                        if (typeof input.setSelectionRange === 'function') {{
+                        if (input.type !== 'number' && typeof input.setSelectionRange === 'function') {{
                             const length = currentValue.length;
                             input.setSelectionRange(length, length);
                         }}
