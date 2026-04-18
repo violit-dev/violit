@@ -1,6 +1,7 @@
 """Data Widgets Mixin for Violit"""
 
 from typing import Union, Callable, Optional, Any
+import inspect
 import json
 from ..component import Component
 from ..context import rendering_ctx
@@ -158,20 +159,93 @@ class DataWidgetsMixin:
 
     def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None,
                     disabled=False, hide_index=False, column_order=None, use_container_width=True,
+                    column_config=None, validator=None, grid_options=None,
                     cls: str = "", style: str = "", **props):
-        """Interactive data editor (simplified version)"""
+        """Interactive data editor with optional column config and validation."""
         import pandas as pd
         cid = self._get_next_cid("data_editor")
         
         state_key = key or f"data_editor:{cid}"
         s = self.state(df.to_dict('records'), key=state_key)
+
+        def _invoke_on_change(updated_df, payload):
+            if not on_change:
+                return
+            try:
+                param_count = len(inspect.signature(on_change).parameters)
+            except (TypeError, ValueError):
+                param_count = 1
+
+            if param_count >= 2:
+                on_change(updated_df, payload)
+            else:
+                on_change(updated_df)
+
+        def _normalize_validation_result(result, fallback_df):
+            valid = True
+            message = None
+            normalized_df = fallback_df
+
+            if isinstance(result, dict):
+                valid = result.get("ok", True)
+                message = result.get("message")
+                if "df" in result:
+                    normalized_df = result["df"]
+                elif "data" in result:
+                    normalized_df = pd.DataFrame(result["data"])
+            elif isinstance(result, tuple):
+                valid = bool(result[0])
+                if len(result) > 1:
+                    message = result[1]
+                if len(result) > 2:
+                    normalized_df = result[2]
+            elif isinstance(result, str):
+                valid = False
+                message = result
+            elif result is False:
+                valid = False
+
+            if isinstance(normalized_df, list):
+                normalized_df = pd.DataFrame(normalized_df)
+
+            return valid, message, normalized_df
         
         def action(v):
             try:
-                new_data = json.loads(v) if isinstance(v, str) else v
+                payload = json.loads(v) if isinstance(v, str) else v
+                previous_data = [dict(row) for row in (s.value or [])]
+                event_payload = payload if isinstance(payload, dict) else {"eventType": "full_sync", "allData": payload}
+                new_data = event_payload.get("allData", previous_data)
+
+                if not isinstance(new_data, list):
+                    return
+
+                candidate_df = pd.DataFrame(new_data)
+
+                if validator:
+                    try:
+                        validation_result = validator(event_payload, candidate_df.copy())
+                    except Exception as exc:
+                        validation_result = {"ok": False, "message": str(exc)}
+
+                    valid, message, normalized_df = _normalize_validation_result(validation_result, candidate_df)
+                    if not valid:
+                        s.set(previous_data)
+                        if message:
+                            self.toast(message, variant="danger", icon="triangle-exclamation")
+                        return
+                    candidate_df = normalized_df if isinstance(normalized_df, pd.DataFrame) else pd.DataFrame(normalized_df)
+                    new_data = candidate_df.to_dict('records')
+
                 s.set(new_data)
-                if on_change: on_change(pd.DataFrame(new_data))
-            except: pass
+
+                try:
+                    _invoke_on_change(pd.DataFrame(new_data), event_payload)
+                except Exception as exc:
+                    s.set(previous_data)
+                    self.toast(str(exc), variant="danger", icon="triangle-exclamation")
+            except Exception:
+                pass
         
         def builder():
             # Subscribe to own state - client-side will handle smart updates
@@ -184,7 +258,39 @@ class DataWidgetsMixin:
             if column_order:
                 _cols_list = [c for c in column_order if c in _cols_list]
             editable = not disabled
-            cols = [{"field": c, "sortable": True, "filter": True, "editable": editable} for c in _cols_list]
+            configured_columns = column_config or {}
+            cols = []
+            for column_name in _cols_list:
+                current_config = dict(configured_columns.get(column_name, {}))
+                column_editable = current_config.pop("editable", editable)
+                if current_config.pop("readonly", False):
+                    column_editable = False
+
+                editor_type = current_config.pop("type", current_config.pop("editor", "text"))
+                editor_options = current_config.pop("options", current_config.pop("values", None))
+                number_min = current_config.pop("min", None)
+                number_max = current_config.pop("max", None)
+                number_step = current_config.pop("step", None)
+                column_def = {
+                    "field": column_name,
+                    "sortable": True,
+                    "filter": True,
+                    "editable": column_editable,
+                    "__editorType": editor_type,
+                    "__options": editor_options,
+                    "__numberMin": number_min,
+                    "__numberMax": number_max,
+                    "__numberStep": number_step,
+                }
+                column_def.update(current_config)
+                cols.append(column_def)
+
+            extra_options = {}
+            if grid_options:
+                extra_options.update(grid_options)
+            if props:
+                extra_options.update(props)
+
             add_row_btn = '' if num_rows == "fixed" else f'''
             <wa-button size="small" appearance="outlined" with-start style="margin-top:0.5rem;" onclick="addDataRow_{cid}()">
                 <wa-icon slot="start" name="circle-plus"></wa-icon>
@@ -198,20 +304,175 @@ class DataWidgetsMixin:
                 {add_row_btn}
             </div>
             <script>(function(){{
+                const rawColumnDefs = {json.dumps(cols, default=str)};
+                const initialRowData = {json.dumps(data, default=str)};
+                const extraGridOptions = {json.dumps(extra_options, default=str)};
+
+                function moveCaretToEnd(input) {{
+                    if (!input) {{
+                        return;
+                    }}
+                    const currentValue = input.value || '';
+                    requestAnimationFrame(() => {{
+                        input.focus();
+                        if (typeof input.setSelectionRange === 'function') {{
+                            const length = currentValue.length;
+                            input.setSelectionRange(length, length);
+                        }}
+                    }});
+                }}
+
+                class TextCellEditor {{
+                    init(params) {{
+                        this.eInput = document.createElement('input');
+                        this.eInput.type = 'text';
+                        this.eInput.className = 'ag-input-field-input ag-text-field-input';
+                        this.eInput.style.width = '100%';
+                        this.eInput.value = params.value ?? '';
+                    }}
+                    getGui() {{
+                        return this.eInput;
+                    }}
+                    afterGuiAttached() {{
+                        moveCaretToEnd(this.eInput);
+                    }}
+                    getValue() {{
+                        return this.eInput.value;
+                    }}
+                    destroy() {{}}
+                    isPopup() {{
+                        return false;
+                    }}
+                }}
+
+                class NumberCellEditor {{
+                    init(params) {{
+                        this.eInput = document.createElement('input');
+                        this.eInput.type = 'number';
+                        this.eInput.className = 'ag-input-field-input ag-text-field-input';
+                        this.eInput.style.width = '100%';
+                        if (params?.column?.colDef?.cellEditorParams) {{
+                            const editorParams = params.column.colDef.cellEditorParams;
+                            if (editorParams.min !== undefined && editorParams.min !== null) {{
+                                this.eInput.min = editorParams.min;
+                            }}
+                            if (editorParams.max !== undefined && editorParams.max !== null) {{
+                                this.eInput.max = editorParams.max;
+                            }}
+                            if (editorParams.step !== undefined && editorParams.step !== null) {{
+                                this.eInput.step = editorParams.step;
+                            }}
+                        }}
+                        this.eInput.value = params.value ?? '';
+                    }}
+                    getGui() {{
+                        return this.eInput;
+                    }}
+                    afterGuiAttached() {{
+                        moveCaretToEnd(this.eInput);
+                    }}
+                    getValue() {{
+                        if (this.eInput.value === '') {{
+                            return '';
+                        }}
+                        return Number(this.eInput.value);
+                    }}
+                    destroy() {{}}
+                    isPopup() {{
+                        return false;
+                    }}
+                }}
+
+                class DateCellEditor {{
+                    init(params) {{
+                        this.eInput = document.createElement('input');
+                        this.eInput.type = 'date';
+                        this.eInput.className = 'ag-input-field-input ag-text-field-input';
+                        this.eInput.style.width = '100%';
+                        this.eInput.value = params.value || '';
+                    }}
+                    getGui() {{
+                        return this.eInput;
+                    }}
+                    afterGuiAttached() {{
+                        moveCaretToEnd(this.eInput);
+                    }}
+                    getValue() {{
+                        return this.eInput.value;
+                    }}
+                    destroy() {{}}
+                    isPopup() {{
+                        return false;
+                    }}
+                }}
+
+                function buildColumnDefs() {{
+                    return rawColumnDefs.map((col) => {{
+                        const def = {{ ...col }};
+                        const editorType = def.__editorType || 'text';
+                        const options = def.__options || [];
+                        const numberMin = def.__numberMin;
+                        const numberMax = def.__numberMax;
+                        const numberStep = def.__numberStep;
+                        delete def.__editorType;
+                        delete def.__options;
+                        delete def.__numberMin;
+                        delete def.__numberMax;
+                        delete def.__numberStep;
+
+                        if (editorType === 'number') {{
+                            def.cellEditor = NumberCellEditor;
+                            def.cellEditorParams = {{
+                                min: numberMin,
+                                max: numberMax,
+                                step: numberStep
+                            }};
+                        }} else if (editorType === 'select') {{
+                            def.cellEditor = 'agSelectCellEditor';
+                            def.cellEditorParams = {{ values: options }};
+                        }} else if (editorType === 'checkbox' || editorType === 'boolean') {{
+                            def.cellRenderer = 'agCheckboxCellRenderer';
+                            def.cellEditor = 'agCheckboxCellEditor';
+                            def.cellDataType = 'boolean';
+                        }} else if (editorType === 'date') {{
+                            def.cellEditor = DateCellEditor;
+                        }} else {{
+                            def.cellEditor = TextCellEditor;
+                        }}
+
+                        return def;
+                    }});
+                }}
+
                 function initEditor() {{
                     const gridOptions = {{
-                        columnDefs: {json.dumps(cols, default=str)},
-                        rowData: {json.dumps(data, default=str)},
-                        defaultColDef: {{ flex: 1, minWidth: 100, resizable: true, editable: true }},
+                        columnDefs: buildColumnDefs(),
+                        rowData: initialRowData,
+                        defaultColDef: {{ flex: 1, minWidth: 100, resizable: true, editable: {json.dumps(editable)} }},
+                        singleClickEdit: true,
+                        stopEditingWhenCellsLoseFocus: true,
                         onCellValueChanged: (params) => {{
+                            if (params.oldValue === params.newValue) {{
+                                return;
+                            }}
                             const allData = [];
                             params.api.forEachNode(node => allData.push(node.data));
-                            {f"sendAction('{cid}', allData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(allData)}} , swap: 'none'}});"}
+                            const payload = {{
+                                eventType: 'cell_change',
+                                field: params.colDef.field,
+                                rowIndex: params.rowIndex,
+                                oldValue: params.oldValue,
+                                newValue: params.newValue,
+                                rowData: params.data,
+                                allData
+                            }};
+                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
                         }},
                         onGridReady: (params) => {{
                             // Store API when grid is ready
                             window['gridApi_{cid}'] = params.api;
-                        }}
+                        }},
+                        ...extraGridOptions
                     }};
                     const el = document.querySelector('#{cid}');
                     if (el && window.agGrid) {{
@@ -225,21 +486,32 @@ class DataWidgetsMixin:
                         if (api && api.applyTransaction) {{
                             // Add empty row with all column fields
                             const newRow = {{}};
-                            {json.dumps([c for c in df.columns])}.forEach(col => newRow[col] = '');
+                            rawColumnDefs.forEach((col) => {{
+                                if (Object.prototype.hasOwnProperty.call(col, 'defaultValue')) {{
+                                    newRow[col.field] = col.defaultValue;
+                                }} else if (col.__editorType === 'checkbox' || col.__editorType === 'boolean') {{
+                                    newRow[col.field] = false;
+                                }} else {{
+                                    newRow[col.field] = '';
+                                }}
+                            }});
                             api.applyTransaction({{add: [newRow]}});
                             // Trigger data update to sync with backend
                             const allData = [];
                             api.forEachNode(node => allData.push(node.data));
-                            {f"sendAction('{cid}', allData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(allData)}} , swap: 'none'}});"}
+                            const payload = {{ eventType: 'row_added', rowData: newRow, allData }};
+                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
                         }}
                     }};
                 }}
 
-                if (document.readyState === 'loading') {{
-                    document.addEventListener('DOMContentLoaded', initEditor);
-                }} else {{
-                    initEditor();
-                }}
+                window._vlLoadLib('agGrid', function() {{
+                    if (document.readyState === 'loading') {{
+                        document.addEventListener('DOMContentLoaded', initEditor);
+                    }} else {{
+                        initEditor();
+                    }}
+                }});
             }})();</script>
             '''
             _wd = self._get_widget_defaults("data_editor")
