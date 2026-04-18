@@ -3602,6 +3602,97 @@ HTML_TEMPLATE = r"""
             window._pageScrollPositions = {};
             window._currentPageKey = null;
             window._pendingScrollRestore = null;
+
+            window._vlFindAgGridViewport = (root) => {
+                const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+                const candidates = Array.from(scope.querySelectorAll('.ag-center-cols-viewport, .ag-body-viewport'));
+                if (!candidates.length) {
+                    return null;
+                }
+                return candidates.find((candidate) => {
+                    return candidate.scrollTop > 0 || candidate.scrollLeft > 0 || candidate.scrollHeight > candidate.clientHeight || candidate.scrollWidth > candidate.clientWidth;
+                }) || candidates[0];
+            };
+
+            window._vlCaptureAgGridScroll = (root) => {
+                const viewport = window._vlFindAgGridViewport(root);
+                if (!viewport) {
+                    return null;
+                }
+                return {
+                    top: viewport.scrollTop || 0,
+                    left: viewport.scrollLeft || 0
+                };
+            };
+
+            window._vlHideAgGridDuringScrollRestore = (root, state) => {
+                if (!root || !state || ((state.top || 0) === 0 && (state.left || 0) === 0)) {
+                    return () => {};
+                }
+
+                const previousVisibility = root.style.visibility;
+                root.style.visibility = 'hidden';
+
+                return () => {
+                    root.style.visibility = previousVisibility;
+                };
+            };
+
+            window._vlRestoreAgGridScroll = (root, state, onDone) => {
+                if (!state) {
+                    if (typeof onDone === 'function') {
+                        onDone();
+                    }
+                    return;
+                }
+
+                let attempts = 0;
+                const maxAttempts = 12;
+                let finished = false;
+
+                const finish = () => {
+                    if (finished) {
+                        return;
+                    }
+                    finished = true;
+                    if (typeof onDone === 'function') {
+                        onDone();
+                    }
+                };
+
+                const restore = () => {
+                    const viewport = window._vlFindAgGridViewport(root);
+                    if (!viewport) {
+                        if (attempts < maxAttempts) {
+                            attempts += 1;
+                            requestAnimationFrame(restore);
+                        } else {
+                            finish();
+                        }
+                        return;
+                    }
+
+                    viewport.scrollTop = state.top || 0;
+                    viewport.scrollLeft = state.left || 0;
+
+                    if (attempts < 2) {
+                        attempts += 1;
+                        requestAnimationFrame(restore);
+                        return;
+                    }
+
+                    setTimeout(() => {
+                        const finalViewport = window._vlFindAgGridViewport(root);
+                        if (finalViewport) {
+                            finalViewport.scrollTop = state.top || 0;
+                            finalViewport.scrollLeft = state.left || 0;
+                        }
+                        finish();
+                    }, 80);
+                };
+
+                restore();
+            };
             
             // Define sendAction IMMEDIATELY (before WebSocket connection)
             window.sendAction = (cid, val) => {
@@ -3781,18 +3872,27 @@ HTML_TEMPLATE = r"""
                                     }
                                 }
                                 
-                                // Data Editor: Update AG Grid data only
-                                if (widgetType === 'data' && item.id.includes('editor')) {
-                                    // item.id is like "data_editor_xxx_wrapper", extract base cid
+                                // AG Grid-backed widgets: update rowData without replacing the whole DOM.
+                                // This avoids the destroy/recreate flash that happens when dataframe widgets
+                                // are rerendered reactively after a click.
+                                if (widgetType === 'df' || (widgetType === 'data' && item.id.includes('editor'))) {
                                     const baseCid = item.id.replace('_wrapper', '');
                                     const gridApi = window['gridApi_' + baseCid];
                                     if (gridApi) {
-                                        // Extract rowData from new HTML
                                         const match = item.html.match(/rowData:\s*(\[.*?\])/s);
                                         if (match) {
                                             try {
                                                 const newData = JSON.parse(match[1]);
-                                                gridApi.setRowData(newData);
+                                                const gridRoot = document.getElementById(baseCid) || el.querySelector(`#${baseCid}`) || el;
+                                                const agGridScrollState = window._vlCaptureAgGridScroll(gridRoot);
+
+                                                if (typeof gridApi.setGridOption === 'function') {
+                                                    gridApi.setGridOption('rowData', newData);
+                                                } else if (typeof gridApi.setRowData === 'function') {
+                                                    gridApi.setRowData(newData);
+                                                }
+
+                                                window._vlRestoreAgGridScroll(gridRoot, agGridScrollState);
                                                 smartUpdated = true;
                                             } catch (e) {
                                                 console.error('Failed to parse AG Grid data:', e);
@@ -3845,6 +3945,7 @@ HTML_TEMPLATE = r"""
                                 
                                 // Default: Full DOM replacement
                                 if (!smartUpdated) {
+                                    const agGridScrollState = window._vlCaptureAgGridScroll(el);
                                     purgePlotly(el);
                                     el.outerHTML = item.html;
                                     
@@ -3852,6 +3953,8 @@ HTML_TEMPLATE = r"""
                                     // When replacing outerHTML with same ID, browser might optimize away the animation.
                                     // We force a reflow to ensure the fade-in plays.
                                     const newEl = document.getElementById(item.id);
+                                    const revealGrid = window._vlHideAgGridDuringScrollRestore(newEl, agGridScrollState);
+                                    window._vlRestoreAgGridScroll(newEl, agGridScrollState, revealGrid);
                                     if (isNavigation && newEl && newEl.classList.contains('page-container') && document.body.classList.contains('anim-soft')) {
                                         newEl.style.animation = 'none';
                                         void newEl.offsetWidth; // Trigger reflow

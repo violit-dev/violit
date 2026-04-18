@@ -139,6 +139,36 @@ class DataWidgetsMixin:
             
             grid_style = self._build_ag_grid_theme_style(theme=theme, theme_colors=theme_colors)
             html = f'''
+            <style>
+                #{cid}.vl-ag-grid .ag-body-viewport,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport {{
+                    -ms-overflow-style: auto !important;
+                    scrollbar-width: thin !important;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar {{
+                    display: block !important;
+                    width: 10px !important;
+                    height: 10px !important;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-track,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-track {{
+                    background: transparent;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb {{
+                    background: color-mix(in srgb, var(--vl-text-muted), transparent 30%);
+                    border-radius: 999px;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb:hover,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb:hover {{
+                    background: color-mix(in srgb, var(--vl-primary), transparent 20%);
+                }}
+            </style>
             <div id="{cid}" style="height: {height}px; width: 100%; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
             <script>(function(){{
                 function initGrid() {{
@@ -146,6 +176,7 @@ class DataWidgetsMixin:
                         columnDefs: {json.dumps(cols, default=str)}, 
                         rowData: {json.dumps(data, default=str)},
                         defaultColDef: {{flex: 1, minWidth: 100, resizable: true}},
+                        suppressScrollOnNewData: true,
                         {cell_click_handler}
                         ...{json.dumps(extra_options)}
                     }};
@@ -516,6 +547,7 @@ class DataWidgetsMixin:
                         columnDefs: buildColumnDefs(),
                         rowData: initialRowData,
                         defaultColDef: {{ flex: 1, minWidth: 100, resizable: true, editable: {json.dumps(editable)} }},
+                        suppressScrollOnNewData: true,
                         singleClickEdit: true,
                         stopEditingWhenCellsLoseFocus: true,
                         onCellValueChanged: (params) => {{
@@ -580,6 +612,36 @@ class DataWidgetsMixin:
                     }}
                 }});
             }})();</script>
+            <style>
+                #{cid}.vl-ag-grid .ag-body-viewport,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport {{
+                    -ms-overflow-style: auto !important;
+                    scrollbar-width: thin !important;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar {{
+                    display: block !important;
+                    width: 10px !important;
+                    height: 10px !important;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-track,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-track {{
+                    background: transparent;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb {{
+                    background: color-mix(in srgb, var(--vl-text-muted), transparent 30%);
+                    border-radius: 999px;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb:hover,
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb:hover {{
+                    background: color-mix(in srgb, var(--vl-primary), transparent 20%);
+                }}
+            </style>
             '''
             _wd = self._get_widget_defaults("data_editor")
             _fc = merge_cls(_wd.get("cls", ""), cls)
