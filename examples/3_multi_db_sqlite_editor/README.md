@@ -11,14 +11,14 @@ What it demonstrates:
 Run it:
 
 ```bash
-python app.py
+python demo_multi_db_sqlite_editor.py
 ```
 
 Optional:
 
 ```bash
-python app.py --port 8014
-python app.py --native
+python demo_multi_db_sqlite_editor.py --port 8014
+python demo_multi_db_sqlite_editor.py --native
 ```
 
 Notes:
