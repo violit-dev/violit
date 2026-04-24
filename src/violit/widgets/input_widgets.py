@@ -38,6 +38,23 @@ class UploadedFile(io.BytesIO):
 class InputWidgetsMixin:
 
     @staticmethod
+    def _uno_part_bridge_script(target_selector: str) -> str:
+        escaped_selector = json.dumps(target_selector)
+        return f'''<script>(function() {{
+            let attempts = 0;
+            const run = function() {{
+                attempts += 1;
+                const hosts = Array.from(document.querySelectorAll({escaped_selector}));
+                if (hosts.length && hosts.every((el) => el.shadowRoot) && window.applyUnoPartStyles) {{
+                    hosts.forEach((el) => window.applyUnoPartStyles(el));
+                    return;
+                }}
+                if (attempts < 20) setTimeout(run, 80);
+            }};
+            run();
+        }})();</script>'''
+
+    @staticmethod
     def _label_vis_attrs(label_visibility):
         """Return (label_style, wrapper_style) for Streamlit label_visibility compat."""
         if label_visibility == "hidden":
@@ -217,6 +234,7 @@ class InputWidgetsMixin:
             help: Tooltip / help text
         """
         cid = self._get_next_cid("checkbox")
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"checkbox:{label}"
         s = self.state(value, key=state_key)
@@ -257,10 +275,15 @@ class InputWidgetsMixin:
             
             disabled_attr = 'disabled' if disabled else ''
             help_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
-            html = f'<wa-checkbox id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</wa-checkbox>{listener_script}'
             _wd = self._get_widget_defaults("checkbox")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("checkbox", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("checkbox", cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
+            part_bridge_script = self._uno_part_bridge_script(f'wa-checkbox#{cid}[data-vl-part-cls]') if _part_cls else ''
+            html = f'<wa-checkbox id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</wa-checkbox>{listener_script}{part_bridge_script}'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s
@@ -279,6 +302,7 @@ class InputWidgetsMixin:
             help: Tooltip / help text
         """
         cid = self._get_next_cid("radio_group")
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"radio:{label}"
         default_val = options[index] if options else None
@@ -292,6 +316,15 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
+
+            _wd = self._get_widget_defaults("radio")
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("radio", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("radio", cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
+            _fs = merge_style(_wd.get("style", ""), style)
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            radio_part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
+            part_bridge_script = self._uno_part_bridge_script(f'wa-radio-group#{cid} wa-radio[data-vl-part-cls]') if _part_cls else ''
             
             opts_html = ""
             for i_opt, opt in enumerate(options):
@@ -305,7 +338,7 @@ class InputWidgetsMixin:
                         option_style = 'display:inline-flex;align-items:flex-start;vertical-align:middle;margin:0;'
                 elif horizontal:
                     option_style = 'display:inline-flex;align-items:center;vertical-align:middle;margin:0;'
-                opts_html += f'<wa-radio value="{escaped_opt}" style="{option_style}" {sel}>{escaped_opt}{caption_html}</wa-radio>'
+                opts_html += f'<wa-radio value="{escaped_opt}" style="{option_style}"{radio_part_attr} {sel}>{escaped_opt}{caption_html}</wa-radio>'
             
             if self.mode == 'lite':
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" name="value"'
@@ -335,11 +368,7 @@ class InputWidgetsMixin:
             options_layout_style = 'display:flex;flex-direction:column;gap:0.5rem;'
             if horizontal:
                 options_layout_style = 'display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;align-items:center;'
-            html = f'<wa-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div style="{options_layout_style}">{opts_html}</div></wa-radio-group>{listener_script}'
-            
-            _wd = self._get_widget_defaults("radio")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
-            _fs = merge_style(_wd.get("style", ""), style)
+            html = f'<wa-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div style="{options_layout_style}">{opts_html}</div></wa-radio-group>{listener_script}{part_bridge_script}'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
             
         self._register_component(cid, builder, action=action)
@@ -500,6 +529,7 @@ class InputWidgetsMixin:
             help: Tooltip / help text
         """
         cid = self._get_next_cid("multiselect")
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"multiselect:{label}"
         default_val = default or []
@@ -568,8 +598,11 @@ class InputWidgetsMixin:
                 '''
 
             _wd = self._get_widget_defaults("multiselect")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("multiselect", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("multiselect", cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             # wa-select: cls/style applied via wrapper since this is a Web Awesome component
             # label escaping handled by Component.render(); opts_html is raw so manually escaped above
             _ms_extra = {}
@@ -577,8 +610,12 @@ class InputWidgetsMixin:
             if disabled: _ms_extra['disabled'] = True
             if help: _ms_extra['hint'] = help
             if max_selections: _ms_extra['max-options-visible'] = max_selections
+            if _part_cls:
+                _ms_extra["data_vl_part_cls"] = serialize_part_cls(_part_cls)
             inner = Component("wa-select", id=cid, label=label, content=opts_html, multiple=True, with_clear=True, appearance="outlined", **_ms_extra)
             inner_html = inner.render() + listener_script
+            if _part_cls:
+                inner_html += self._uno_part_bridge_script(f'wa-select#{cid}[data-vl-part-cls]')
             if _fc or _fs:
                 return Component(None, id=f"{cid}_wrap", content=wrap_html(inner_html, _fc, _fs))
             return Component(None, id=cid, content=inner_html)
@@ -784,6 +821,7 @@ class InputWidgetsMixin:
             help: Tooltip / help text
         """
         cid = self._get_next_cid("number")
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"number:{label}"
         s = self.state(value, key=state_key)
@@ -836,8 +874,15 @@ class InputWidgetsMixin:
             html += f'></wa-input>{listener_script}'
             
             _wd = self._get_widget_defaults("number_input")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("number_input", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("number_input", cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            if _part_cls:
+                part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
+                html = html.replace(f'<wa-input id="{cid}"', f'<wa-input id="{cid}"{part_attr}', 1)
+                html += self._uno_part_bridge_script(f'wa-input#{cid}[data-vl-part-cls]')
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         
         self._register_component(cid, builder, action=action)
@@ -1017,6 +1062,7 @@ class InputWidgetsMixin:
             help: Tooltip / help text
         """
         cid = self._get_next_cid("toggle")
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"toggle:{label}"
         s = self.state(value, key=state_key)
@@ -1057,10 +1103,15 @@ class InputWidgetsMixin:
             
             disabled_attr = 'disabled' if disabled else ''
             help_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
-            html = f'<wa-switch id="{cid}" {checked_attr} {disabled_attr} {attrs_str} {props_str}>{label}{help_html}</wa-switch>{listener_script}'
             _wd = self._get_widget_defaults("toggle")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("toggle", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("toggle", cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
+            part_bridge_script = self._uno_part_bridge_script(f'wa-switch#{cid}[data-vl-part-cls]') if _part_cls else ''
+            html = f'<wa-switch id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{label}{help_html}</wa-switch>{listener_script}{part_bridge_script}'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s

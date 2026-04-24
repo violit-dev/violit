@@ -3526,6 +3526,297 @@ HTML_TEMPLATE = r"""
             });
         }
 
+        function splitUnoTokens(className) {
+            if (!className) return [];
+
+            const tokens = [];
+            let current = '';
+            let bracketDepth = 0;
+            let parenDepth = 0;
+            let quoteChar = null;
+            let escapeNext = false;
+
+            for (const char of String(className).trim()) {
+                if (escapeNext) {
+                    current += char;
+                    escapeNext = false;
+                    continue;
+                }
+
+                if (char === '\\') {
+                    current += char;
+                    escapeNext = true;
+                    continue;
+                }
+
+                if (quoteChar) {
+                    current += char;
+                    if (char === quoteChar) quoteChar = null;
+                    continue;
+                }
+
+                if (char === '"' || char === "'") {
+                    current += char;
+                    quoteChar = char;
+                    continue;
+                }
+
+                if (char === '[') {
+                    bracketDepth += 1;
+                    current += char;
+                    continue;
+                }
+
+                if (char === ']') {
+                    bracketDepth = Math.max(0, bracketDepth - 1);
+                    current += char;
+                    continue;
+                }
+
+                if (char === '(') {
+                    parenDepth += 1;
+                    current += char;
+                    continue;
+                }
+
+                if (char === ')') {
+                    parenDepth = Math.max(0, parenDepth - 1);
+                    current += char;
+                    continue;
+                }
+
+                if (/\s/.test(char) && bracketDepth === 0 && parenDepth === 0) {
+                    const token = current.trim();
+                    if (token) tokens.push(token);
+                    current = '';
+                    continue;
+                }
+
+                current += char;
+            }
+
+            const finalToken = current.trim();
+            if (finalToken) tokens.push(finalToken);
+            return tokens;
+        }
+
+        function expandHostStateSelectors(selector, partSelector) {
+            const variants = [selector];
+            const mappings = [
+                {
+                    needle: `${partSelector}:hover`,
+                    replacements: [`:host(:hover) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:active`,
+                    replacements: [`:host(:active) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:focus-visible`,
+                    replacements: [`:host(:focus-within) ${partSelector}`, `:host(:state(focused)) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:focus-within`,
+                    replacements: [`:host(:focus-within) ${partSelector}`, `:host(:state(focused)) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:focus`,
+                    replacements: [`:host(:focus-within) ${partSelector}`, `:host(:state(focused)) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:disabled`,
+                    replacements: [`:host([disabled]) ${partSelector}`, `:host(:state(disabled)) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:checked`,
+                    replacements: [`:host([checked]) ${partSelector}`, `:host(:state(checked)) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:indeterminate`,
+                    replacements: [`:host([indeterminate]) ${partSelector}`, `:host(:state(indeterminate)) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:invalid`,
+                    replacements: [`:host(:state(user-invalid)) ${partSelector}`],
+                },
+                {
+                    needle: `${partSelector}:valid`,
+                    replacements: [`:host(:state(user-valid)) ${partSelector}`],
+                },
+            ];
+
+            mappings.forEach(({ needle, replacements }) => {
+                if (!selector.includes(needle)) return;
+                replacements.forEach((replacement) => {
+                    variants.push(selector.split(needle).join(replacement));
+                });
+            });
+
+            if (selector === partSelector || selector.startsWith(`${partSelector}[`) || selector.startsWith(`${partSelector}.`)) {
+                variants.push(`:host([checked]) ${partSelector}`);
+                variants.push(`:host(:state(checked)) ${partSelector}`);
+                variants.push(`:host([disabled]) ${partSelector}`);
+                variants.push(`:host(:state(disabled)) ${partSelector}`);
+                variants.push(`:host(:focus-within) ${partSelector}`);
+                variants.push(`:host(:state(focused)) ${partSelector}`);
+            }
+
+            return Array.from(new Set(variants));
+        }
+
+        function transformUnoSelectorForPart(selector, classSelector, partSelector) {
+            if (!selector || !selector.includes(classSelector)) return [];
+            const rewritten = selector.split(classSelector).join(partSelector).trim();
+            if (!rewritten) return [];
+            const expanded = expandHostStateSelectors(rewritten, partSelector);
+            return Array.from(new Set(expanded.flatMap((item) => {
+                const normalized = String(item || '').trim();
+                if (!normalized) return [];
+                if (normalized.includes(':host')) return [normalized];
+                return [normalized, `:host ${normalized}`];
+            })));
+        }
+
+        function serializeImportantStyleDeclaration(styleDecl) {
+            if (!styleDecl) return '';
+            return Array.from(styleDecl)
+                .map((prop) => {
+                    const value = styleDecl.getPropertyValue(prop);
+                    if (!value) return '';
+                    return `${prop}:${value.trim()} !important;`;
+                })
+                .filter(Boolean)
+                .join('');
+        }
+
+        function collectDeclaredProperties(cssText) {
+            const props = new Set();
+            if (!cssText) return props;
+            const matches = String(cssText).matchAll(/([a-zA-Z-]+)\s*:/g);
+            for (const match of matches) {
+                const prop = match[1] && match[1].trim().toLowerCase();
+                if (prop) props.add(prop);
+            }
+            return props;
+        }
+
+        function isPropCoveredByGeneratedCss(prop, declaredProps) {
+            const normalized = String(prop || '').trim().toLowerCase();
+            if (!normalized) return false;
+            if (declaredProps.has(normalized)) return true;
+
+            if (normalized === 'background' || normalized.startsWith('background-')) {
+                return declaredProps.has('background') || declaredProps.has('background-color') || declaredProps.has('background-image');
+            }
+
+            if (normalized === 'border' || normalized.startsWith('border-')) {
+                return declaredProps.has('border')
+                    || declaredProps.has('border-color')
+                    || declaredProps.has('border-width')
+                    || declaredProps.has('border-style')
+                    || declaredProps.has('border-radius');
+            }
+
+            if (normalized.startsWith('padding-') || normalized === 'padding') {
+                return declaredProps.has('padding')
+                    || declaredProps.has('padding-top')
+                    || declaredProps.has('padding-right')
+                    || declaredProps.has('padding-bottom')
+                    || declaredProps.has('padding-left');
+            }
+
+            if (normalized.startsWith('color')) {
+                return declaredProps.has('color');
+            }
+
+            return false;
+        }
+
+        function serializeUnoRuleForPart(rule, classSelector, partSelector) {
+            if (!rule) return '';
+
+            if (rule.type === CSSRule.STYLE_RULE) {
+                const selectors = rule.selectorText
+                    .split(',')
+                    .map((selector) => selector.trim())
+                    .flatMap((selector) => transformUnoSelectorForPart(selector, classSelector, partSelector));
+
+                if (!selectors.length) return '';
+                const declarationText = serializeImportantStyleDeclaration(rule.style);
+                if (!declarationText) return '';
+                return `${Array.from(new Set(selectors)).join(',')}{${declarationText}}`;
+            }
+
+            if (rule.type === CSSRule.MEDIA_RULE) {
+                const inner = Array.from(rule.cssRules || [])
+                    .map((childRule) => serializeUnoRuleForPart(childRule, classSelector, partSelector))
+                    .join('');
+                return inner ? `@media ${rule.conditionText}{${inner}}` : '';
+            }
+
+            if (rule.type === CSSRule.SUPPORTS_RULE) {
+                const inner = Array.from(rule.cssRules || [])
+                    .map((childRule) => serializeUnoRuleForPart(childRule, classSelector, partSelector))
+                    .join('');
+                return inner ? `@supports ${rule.conditionText}{${inner}}` : '';
+            }
+
+            if (rule.type === CSSRule.KEYFRAMES_RULE || rule.type === CSSRule.FONT_FACE_RULE) {
+                return rule.cssText;
+            }
+
+            return '';
+        }
+
+        function transformUnoCssTextForPart(cssText, token, partSelector) {
+            if (!cssText) return '';
+
+            const root = getUnoPartBridgeRoot();
+            const parserStyle = document.createElement('style');
+            parserStyle.textContent = cssText;
+            root.appendChild(parserStyle);
+
+            try {
+                const classSelector = `.${CSS.escape(token)}`;
+                return Array.from(parserStyle.sheet?.cssRules || [])
+                    .map((rule) => serializeUnoRuleForPart(rule, classSelector, partSelector))
+                    .filter(Boolean)
+                    .join('\n');
+            } catch (err) {
+                debugLog('Failed to transform UnoCSS rule for part bridge', err);
+                return '';
+            } finally {
+                parserStyle.remove();
+            }
+        }
+
+        async function buildUnoPartCss(className, partSelector) {
+            const normalized = (className || '').trim();
+            if (!normalized) return '';
+
+            window._vlUnoPartCssCache = window._vlUnoPartCssCache || new Map();
+            const cacheKey = `${partSelector}::${normalized}`;
+            if (window._vlUnoPartCssCache.has(cacheKey)) {
+                return window._vlUnoPartCssCache.get(cacheKey);
+            }
+
+            const runtime = window.__unocss_runtime;
+            if (!runtime || !runtime.uno || typeof runtime.uno.generate !== 'function') {
+                return '';
+            }
+
+            const cssBlocks = [];
+            for (const token of splitUnoTokens(normalized)) {
+                const generated = await runtime.uno.generate(token);
+                const cssBlock = transformUnoCssTextForPart(generated.css || '', token, partSelector);
+                if (cssBlock) cssBlocks.push(cssBlock);
+            }
+
+            const finalCss = cssBlocks.join('\n');
+            window._vlUnoPartCssCache.set(cacheKey, finalCss);
+            return finalCss;
+        }
+
         async function computeUnoPartStyles(className) {
             const normalized = (className || '').trim();
             if (!normalized) return {};
@@ -3605,28 +3896,35 @@ HTML_TEMPLATE = r"""
                 return;
             }
 
-            Object.entries(partMap).forEach(([partName, className]) => {
-                if (!partName || !className) return;
+            host.shadowRoot.querySelectorAll('[data-vl-uno-props]').forEach((partEl) => {
+                const previousProps = (partEl.getAttribute('data-vl-uno-props') || '')
+                    .split('|')
+                    .map((item) => item.trim())
+                    .filter(Boolean);
+                previousProps.forEach((prop) => partEl.style.removeProperty(prop));
+                partEl.removeAttribute('data-vl-uno-props');
             });
+
+            let combinedCss = '';
 
             for (const [partName, className] of Object.entries(partMap)) {
                 if (!partName || !className) continue;
                 const aliasMap = VL_UNO_PART_ALIASES[host.tagName] || {};
                 const resolvedPartName = aliasMap[partName] || partName;
                 const selector = `[part~="${CSS.escape(resolvedPartName)}"]`;
+                const cssText = await buildUnoPartCss(className, selector);
                 const styles = await computeUnoPartStyles(className);
+                const declaredProps = collectDeclaredProperties(cssText);
+
+                if (cssText) {
+                    combinedCss += `${cssText}\n`;
+                }
 
                 host.shadowRoot.querySelectorAll(selector).forEach((partEl) => {
-                    const previousProps = (partEl.getAttribute('data-vl-uno-props') || '')
-                        .split('|')
-                        .map((item) => item.trim())
-                        .filter(Boolean);
-
-                    previousProps.forEach((prop) => partEl.style.removeProperty(prop));
-
                     const appliedProps = [];
                     Object.entries(styles).forEach(([prop, value]) => {
                         if (!value) return;
+                        if (isPropCoveredByGeneratedCss(prop, declaredProps)) return;
                         partEl.style.setProperty(prop, value, 'important');
                         appliedProps.push(prop);
                     });
@@ -3637,6 +3935,18 @@ HTML_TEMPLATE = r"""
                         partEl.removeAttribute('data-vl-uno-props');
                     }
                 });
+            }
+
+            let styleEl = host.shadowRoot.querySelector('style[data-vl-uno-part-style="true"]');
+            if (combinedCss.trim()) {
+                if (!styleEl) {
+                    styleEl = document.createElement('style');
+                    styleEl.setAttribute('data-vl-uno-part-style', 'true');
+                    host.shadowRoot.appendChild(styleEl);
+                }
+                styleEl.textContent = combinedCss;
+            } else if (styleEl) {
+                styleEl.remove();
             }
         }
 

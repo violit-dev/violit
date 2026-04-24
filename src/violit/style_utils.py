@@ -11,6 +11,12 @@ AUTO_PART_WIDGETS = {
     "input": "input",
     "text_area": "textarea",
     "selectbox": "input",
+    "multiselect": "input",
+    "number_input": "input",
+    "slider": "slider",
+    "checkbox": {"surface": "control", "text": "label"},
+    "toggle": {"surface": "control", "text": "label"},
+    "radio": {"surface": "control", "text": "label"},
 }
 
 HOST_EXACT_TOKENS = {
@@ -218,6 +224,95 @@ PART_ARBITRARY_PROPERTIES = {
     "padding-left",
     "white-space",
     "appearance",
+}
+
+TEXT_PART_EXACT_TOKENS = {
+    "uppercase",
+    "lowercase",
+    "capitalize",
+    "italic",
+    "not-italic",
+    "antialiased",
+    "subpixel-antialiased",
+}
+
+TEXT_PART_PREFIXES = (
+    "text-",
+    "font-",
+    "tracking-",
+    "leading-",
+    "decoration-",
+    "underline-",
+    "case-",
+    "color-",
+    "c-",
+)
+
+SURFACE_PART_EXACT_TOKENS = {
+    "border",
+    "rounded",
+    "shadow",
+    "ring",
+    "appearance-none",
+}
+
+SURFACE_PART_PREFIXES = (
+    "bg-",
+    "border-",
+    "b-",
+    "rounded-",
+    "rd-",
+    "shadow-",
+    "ring-",
+    "opacity-",
+    "backdrop-",
+    "fill-",
+    "stroke-",
+    "p-",
+    "px-",
+    "py-",
+    "pt-",
+    "pr-",
+    "pb-",
+    "pl-",
+    "ps-",
+    "pe-",
+)
+
+TEXT_PART_ARBITRARY_PROPERTIES = {
+    "color",
+    "font-size",
+    "font-weight",
+    "font-family",
+    "font-style",
+    "line-height",
+    "letter-spacing",
+    "text-transform",
+    "text-decoration",
+    "text-align",
+    "white-space",
+}
+
+SURFACE_PART_ARBITRARY_PROPERTIES = {
+    "background",
+    "background-color",
+    "background-image",
+    "border",
+    "border-color",
+    "border-width",
+    "border-style",
+    "border-radius",
+    "box-shadow",
+    "backdrop-filter",
+    "padding",
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
+    "appearance",
+    "opacity",
+    "filter",
+    "transform",
 }
 
 
@@ -464,21 +559,68 @@ def _classify_widget_token(token: str) -> str:
     return "host"
 
 
+def _classify_widget_token_family(token: str) -> str:
+    core = _extract_core_utility(token)
+    if not core:
+        return "host"
+
+    arbitrary_property = _extract_arbitrary_property(core)
+    if arbitrary_property:
+        if arbitrary_property in HOST_ARBITRARY_PROPERTIES or arbitrary_property.startswith("--"):
+            return "host"
+        if arbitrary_property in TEXT_PART_ARBITRARY_PROPERTIES:
+            return "text"
+        if arbitrary_property in SURFACE_PART_ARBITRARY_PROPERTIES:
+            return "surface"
+        if arbitrary_property in PART_ARBITRARY_PROPERTIES:
+            return "surface"
+        return "host"
+
+    if core in HOST_EXACT_TOKENS or core.startswith(HOST_PREFIXES):
+        return "host"
+    if core in TEXT_PART_EXACT_TOKENS or core.startswith(TEXT_PART_PREFIXES):
+        return "text"
+    if core in SURFACE_PART_EXACT_TOKENS or core.startswith(SURFACE_PART_PREFIXES):
+        return "surface"
+    if core in PART_EXACT_TOKENS or core.startswith(PART_PREFIXES):
+        return "surface"
+    return "host"
+
+
 def auto_split_widget_cls(widget_type: str, class_string: str):
     """Split cls into host classes and auto part classes for supported widgets."""
     part_name = AUTO_PART_WIDGETS.get(widget_type)
     if not part_name or not class_string:
         return merge_cls(class_string), {}
 
+    if isinstance(part_name, str):
+        host_tokens = []
+        part_tokens = []
+        for token in split_uno_tokens(class_string):
+            if _classify_widget_token(token) == "part":
+                part_tokens.append(token)
+            else:
+                host_tokens.append(token)
+
+        part_map = {part_name: " ".join(part_tokens)} if part_tokens else {}
+        return " ".join(host_tokens), part_map
+
     host_tokens = []
-    part_tokens = []
+    part_tokens = {key: [] for key in set(part_name.values())}
     for token in split_uno_tokens(class_string):
-        if _classify_widget_token(token) == "part":
-            part_tokens.append(token)
+        token_family = _classify_widget_token_family(token)
+        if token_family == "surface":
+            part_tokens.setdefault(part_name.get("surface", "surface"), []).append(token)
+        elif token_family == "text":
+            part_tokens.setdefault(part_name.get("text", "text"), []).append(token)
         else:
             host_tokens.append(token)
 
-    part_map = {part_name: " ".join(part_tokens)} if part_tokens else {}
+    part_map = {
+        resolved_part: " ".join(tokens)
+        for resolved_part, tokens in part_tokens.items()
+        if tokens
+    }
     return " ".join(host_tokens), part_map
 
 
