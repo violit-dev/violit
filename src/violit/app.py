@@ -355,24 +355,24 @@ class App(
                 }}));
             }};
 
-            const waitForUnoCssRuntime = () => new Promise((resolve) => {{
-                if (window.__vlUnoReady) {{
+            const waitForTailwindRuntime = () => new Promise((resolve) => {{
+                if (window.__vlTailwindReady) {{
                     resolve();
                     return;
                 }}
 
                 const finish = () => {{
-                    window.removeEventListener('violit:unocss-ready', finish);
+                    window.removeEventListener('violit:tailwind-ready', finish);
                     resolve();
                 }};
 
-                window.addEventListener('violit:unocss-ready', finish, {{ once: true }});
+                window.addEventListener('violit:tailwind-ready', finish, {{ once: true }});
             }});
 
             const markResourcesReady = () => {{
                 if (resourcesStarted) return;
                 resourcesStarted = true;
-                Promise.all([waitForCriticalStyles(), waitForWebAwesomeComponents(), waitForUnoCssRuntime()]).then(() => {{
+                Promise.all([waitForCriticalStyles(), waitForWebAwesomeComponents(), waitForTailwindRuntime()]).then(() => {{
                     resourcesReady = true;
                     requestAnimationFrame(() => requestAnimationFrame(hideSplash));
                 }});
@@ -1918,13 +1918,9 @@ class App(
         };
     </script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
-    <script>
-        window.__unocss = window.__unocss || {};
-        window.__vlUnoReady = false;
-    </script>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet"></noscript>
-    <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime/uno.global.js" defer onload="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready'));" onerror="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready')); console.error('Failed to load UnoCSS runtime');"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4" defer onload="window.__vlTailwindReady = true; window.dispatchEvent(new Event('violit:tailwind-ready'));" onerror="window.__vlTailwindReady = true; window.dispatchEvent(new Event('violit:tailwind-ready')); console.error('Failed to load Tailwind CSS browser runtime');"></script>
     <link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" /></noscript>
     <style>
@@ -2061,11 +2057,7 @@ class App(
         };
     </script>
     <script src="/static/vendor/htmx/htmx.min.js" defer></script>
-    <script>
-        window.__unocss = window.__unocss || {};
-        window.__vlUnoReady = false;
-    </script>
-    <script src="/static/vendor/unocss/uno.global.js" defer onload="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready'));" onerror="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready')); console.error('Failed to load UnoCSS runtime');"></script>
+    <script src="/static/vendor/tailwindcss/tailwind.browser.js" defer onload="window.__vlTailwindReady = true; window.dispatchEvent(new Event('violit:tailwind-ready'));" onerror="window.__vlTailwindReady = true; window.dispatchEvent(new Event('violit:tailwind-ready')); console.error('Failed to load Tailwind CSS browser runtime');"></script>
     <link rel="preload" as="style" href="/static/vendor/highlightjs/atom-one-dark.min.css" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="/static/vendor/highlightjs/atom-one-dark.min.css" /></noscript>
     <style>
