@@ -4,7 +4,7 @@ from typing import Union, Callable, Optional
 from ..component import Component
 from ..context import rendering_ctx, fragment_ctx
 from ..state import get_session_store
-from ..style_utils import merge_cls, merge_style
+from ..style_utils import auto_split_widget_cls, merge_cls, merge_style, merge_part_cls, serialize_part_cls
 
 
 class FormWidgetsMixin:
@@ -41,6 +41,7 @@ class FormWidgetsMixin:
         if type != "primary": _variant = _type_map.get(type, "primary")
 
         cid = self._get_next_cid("btn")
+        user_part_cls = props.pop("part_cls", None)
         def builder():
             token = rendering_ctx.set(cid)
             bt = text() if callable(text) else text
@@ -51,19 +52,40 @@ class FormWidgetsMixin:
             icon_emoji = f'{icon} ' if icon and any(ord(c) > 127 for c in str(icon)) else ''
             disabled_attr = 'disabled' if disabled else ''
             _wd = self._get_widget_defaults("button")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("button", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("button", cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             host_style = _fs
             if use_container_width:
                 host_style = merge_style(host_style, "width:100%;")
+            host_props = dict(props)
+            part_bridge_script = ""
+            if _part_cls:
+                host_props["data_vl_part_cls"] = serialize_part_cls(_part_cls)
+                part_bridge_script = f'''<script>(function() {{
+                    let attempts = 0;
+                    const run = function() {{
+                        attempts += 1;
+                        const el = document.getElementById('{cid}');
+                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
+                            window.applyUnoPartStyles(el);
+                            return;
+                        }}
+                        if (attempts < 20) setTimeout(run, 80);
+                    }};
+                    run();
+                }})();</script>'''
             inner = Component("wa-button", id=cid, content=f"{icon_html}{icon_emoji}{bt}",
                               class_=_fc or None, style=host_style or None,
                               variant=theme_variant, appearance=appearance,
-                              with_start=bool(icon_html) or None, **attrs, **props)
+                              with_start=bool(icon_html) or None, **attrs, **host_props)
             # Inject disabled attribute manually since Component may not handle it
             inner_html = inner.render()
             if disabled:
                 inner_html = inner_html.replace(f'id="{cid}"', f'id="{cid}" disabled', 1)
+            inner_html += part_bridge_script
             return Component(None, id=cid, content=inner_html)
         self._register_component(cid, builder, action=on_click)
 

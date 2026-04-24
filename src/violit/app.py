@@ -290,6 +290,7 @@ class App(
             let resourcesStarted = false;
             let hidden = false;
             let hasServerRenderedContent = false;
+            let rootRevealedAt = null;
 
             const detectInitialContent = () => {{
                 const app = document.getElementById('app');
@@ -354,10 +355,24 @@ class App(
                 }}));
             }};
 
+            const waitForUnoCssRuntime = () => new Promise((resolve) => {{
+                if (window.__vlUnoReady) {{
+                    resolve();
+                    return;
+                }}
+
+                const finish = () => {{
+                    window.removeEventListener('violit:unocss-ready', finish);
+                    resolve();
+                }};
+
+                window.addEventListener('violit:unocss-ready', finish, {{ once: true }});
+            }});
+
             const markResourcesReady = () => {{
                 if (resourcesStarted) return;
                 resourcesStarted = true;
-                Promise.all([waitForCriticalStyles(), waitForWebAwesomeComponents()]).then(() => {{
+                Promise.all([waitForCriticalStyles(), waitForWebAwesomeComponents(), waitForUnoCssRuntime()]).then(() => {{
                     resourcesReady = true;
                     requestAnimationFrame(() => requestAnimationFrame(hideSplash));
                 }});
@@ -366,6 +381,7 @@ class App(
             const revealRoot = () => {{
                 const root = document.getElementById('root');
                 if (!root) return;
+                if (rootRevealedAt === null) rootRevealedAt = performance.now();
                 root.style.visibility = 'visible';
                 requestAnimationFrame(() => {{
                     root.style.opacity = '1';
@@ -377,9 +393,24 @@ class App(
                 document.body.classList.remove('vl-splash-active');
             }};
 
+            const publishInitialRenderMetrics = () => {{
+                const splashRemovedAt = performance.now();
+                const metrics = {{
+                    pageVisibleMs: rootRevealedAt === null ? splashRemovedAt : rootRevealedAt,
+                    splashRemovedMs: splashRemovedAt,
+                    splashMountedMs: splashMountedAt,
+                    pageVisibleSeconds: Number((((rootRevealedAt === null ? splashRemovedAt : rootRevealedAt) / 1000)).toFixed(3)),
+                    splashRemovedSeconds: Number((splashRemovedAt / 1000).toFixed(3)),
+                    splashVisibleMs: Number((splashRemovedAt - splashMountedAt).toFixed(1)),
+                }};
+                window.__vlInitialRenderMetrics = metrics;
+                window.dispatchEvent(new CustomEvent('violit:initial-render-ready', {{ detail: metrics }}));
+            }};
+
             const finishSplash = () => {{
                 unlockViewport();
                 if (splash && splash.isConnected) splash.remove();
+                publishInitialRenderMetrics();
             }};
             
             const hideSplash = () => {{
@@ -468,7 +499,7 @@ class App(
         self._fragments: Dict[str, Callable] = {} # Deprecated. It was used for dynamci fragment, but fragment_components in session store is used now.
         
         # Styling System: configure_widget defaults + user CSS
-        self._widget_defaults: Dict[str, Dict[str, str]] = {}
+        self._widget_defaults: Dict[str, Dict[str, Any]] = {}
         self._user_css: List[str] = []
         
         # Broadcasting System
@@ -538,22 +569,23 @@ class App(
         if self.debug_mode:
             print(*args, **kwargs)
 
-    def configure_widget(self, widget_type: str, cls: str = "", style: str = ""):
-        """Set default cls/style for a specific widget type.
+    def configure_widget(self, widget_type: str, cls: str = "", style: str = "", part_cls: Optional[Dict[str, str]] = None):
+        """Set default cls/style/part_cls for a specific widget type.
         
         These defaults are merged with per-widget cls/style values.
         Per-widget values take higher priority (appended after defaults).
         
         Args:
             widget_type: Widget function name (e.g. "button", "card", "text_input")
-            cls: Default Master CSS / utility classes
+            cls: Default UnoCSS / utility classes
             style: Default inline CSS (e.g. CSS variables)
+            part_cls: Default UnoCSS classes for supported shadow DOM parts
             
         Example:
-            app.configure_widget("button", cls="r:full shadow:md")
-            app.configure_widget("card", cls="r:16 shadow:lg")
+            app.configure_widget("button", cls="rounded-full shadow-md")
+            app.configure_widget("card", cls="rounded-2xl shadow-lg")
         """
-        self._widget_defaults[widget_type] = {'cls': cls, 'style': style}
+        self._widget_defaults[widget_type] = {'cls': cls, 'style': style, 'part_cls': part_cls or {}}
 
     def add_css(self, css: str):
         """Add custom CSS rules to the page.
@@ -603,8 +635,8 @@ class App(
         if resizable is not None:
             self._sidebar_resizable = bool(resizable)
 
-    def _get_widget_defaults(self, widget_type: str) -> Dict[str, str]:
-        """Get default cls/style for a widget type (internal helper)."""
+    def _get_widget_defaults(self, widget_type: str) -> Dict[str, Any]:
+        """Get default cls/style/part_cls for a widget type (internal helper)."""
         return self._widget_defaults.get(widget_type, {})
 
     def state(self, default_value, key=None) -> State:
@@ -1886,9 +1918,13 @@ class App(
         };
     </script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+    <script>
+        window.__unocss = window.__unocss || {};
+        window.__vlUnoReady = false;
+    </script>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet"></noscript>
-    <script src="https://cdn.jsdelivr.net/npm/@master/css-runtime@2.0.0-rc.67/dist/global.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@unocss/runtime/uno.global.js" defer onload="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready'));" onerror="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready')); console.error('Failed to load UnoCSS runtime');"></script>
     <link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css" /></noscript>
     <style>
@@ -2025,7 +2061,11 @@ class App(
         };
     </script>
     <script src="/static/vendor/htmx/htmx.min.js" defer></script>
-    <script src="/static/vendor/master-css/master-css-runtime.js" defer></script>
+    <script>
+        window.__unocss = window.__unocss || {};
+        window.__vlUnoReady = false;
+    </script>
+    <script src="/static/vendor/unocss/uno.global.js" defer onload="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready'));" onerror="window.__vlUnoReady = true; window.dispatchEvent(new Event('violit:unocss-ready')); console.error('Failed to load UnoCSS runtime');"></script>
     <link rel="preload" as="style" href="/static/vendor/highlightjs/atom-one-dark.min.css" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="/static/vendor/highlightjs/atom-one-dark.min.css" /></noscript>
     <style>
@@ -3417,6 +3457,215 @@ HTML_TEMPLATE = r"""
             });
         }
 
+        const VL_UNO_PART_PROPERTIES = [
+            'background',
+            'background-color',
+            'background-image',
+            'color',
+            'border',
+            'border-color',
+            'border-width',
+            'border-style',
+            'border-radius',
+            'box-shadow',
+            'backdrop-filter',
+            'filter',
+            'opacity',
+            'transform',
+            'font-size',
+            'font-weight',
+            'font-family',
+            'font-style',
+            'line-height',
+            'letter-spacing',
+            'text-transform',
+            'text-decoration',
+            'text-align',
+            'padding',
+            'padding-top',
+            'padding-right',
+            'padding-bottom',
+            'padding-left',
+            'white-space'
+        ];
+
+        const VL_UNO_PART_ALIASES = {
+            'WA-INPUT': {
+                'form-control-input': 'input',
+            },
+            'WA-SELECT': {
+                'form-control-input': 'display-input',
+                'input': 'display-input',
+            },
+            'WA-TEXTAREA': {
+                'form-control-input': 'textarea',
+            },
+        };
+
+        function getUnoPartBridgeRoot() {
+            let root = document.getElementById('vl-uno-part-bridge-root');
+            if (root) return root;
+            root = document.createElement('div');
+            root.id = 'vl-uno-part-bridge-root';
+            root.setAttribute('aria-hidden', 'true');
+            root.style.cssText = 'position:absolute;left:-9999px;top:0;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;';
+            document.body.appendChild(root);
+            return root;
+        }
+
+        function waitForAnimationFrames(count = 2) {
+            return new Promise((resolve) => {
+                const step = (remaining) => {
+                    if (remaining <= 0) {
+                        resolve();
+                        return;
+                    }
+                    requestAnimationFrame(() => step(remaining - 1));
+                };
+                step(count);
+            });
+        }
+
+        async function computeUnoPartStyles(className) {
+            const normalized = (className || '').trim();
+            if (!normalized) return {};
+
+            window._vlUnoPartStyleCache = window._vlUnoPartStyleCache || new Map();
+            if (window._vlUnoPartStyleCache.has(normalized)) {
+                return window._vlUnoPartStyleCache.get(normalized);
+            }
+
+            const root = getUnoPartBridgeRoot();
+            const baseline = document.createElement('div');
+            const probe = document.createElement('div');
+            let generatedStyleEl = null;
+            const baseCss = 'display: block; position: absolute; left: -9999px; top: 0; visibility: hidden; pointer-events: none;';
+            baseline.style.cssText = baseCss;
+            probe.style.cssText = baseCss;
+            baseline.textContent = 'M';
+            probe.textContent = 'M';
+
+            const runtime = window.__unocss_runtime;
+            if (runtime) {
+                if (runtime.uno && typeof runtime.uno.generate === 'function') {
+                    const generated = await runtime.uno.generate(normalized);
+                    generatedStyleEl = document.createElement('style');
+                    generatedStyleEl.textContent = generated.css || '';
+                    root.appendChild(generatedStyleEl);
+                } else if (typeof runtime.extractAll === 'function') {
+                    probe.className = normalized;
+                    root.appendChild(probe);
+                    await runtime.extractAll(root);
+                } else if (typeof runtime.extract === 'function') {
+                    const tokens = normalized.split(/\s+/).filter(Boolean);
+                    if (tokens.length) {
+                        await runtime.extract(tokens);
+                    }
+                }
+                if (!generatedStyleEl && typeof runtime.update === 'function') {
+                    await runtime.update();
+                }
+                await waitForAnimationFrames(2);
+            }
+
+            probe.className = normalized;
+            root.appendChild(baseline);
+            root.appendChild(probe);
+            await waitForAnimationFrames(1);
+
+            const baselineStyle = getComputedStyle(baseline);
+            const probeStyle = getComputedStyle(probe);
+            const styles = {};
+
+            VL_UNO_PART_PROPERTIES.forEach((prop) => {
+                const nextValue = probeStyle.getPropertyValue(prop).trim();
+                const baseValue = baselineStyle.getPropertyValue(prop).trim();
+                if (nextValue && nextValue !== baseValue) {
+                    styles[prop] = nextValue;
+                }
+            });
+
+            baseline.remove();
+            probe.remove();
+            if (generatedStyleEl) {
+                generatedStyleEl.remove();
+            }
+            window._vlUnoPartStyleCache.set(normalized, styles);
+            return styles;
+        }
+
+        async function applyUnoPartStyles(host) {
+            if (!host || !host.shadowRoot) return;
+
+            let partMap = null;
+            try {
+                partMap = JSON.parse(host.getAttribute('data-vl-part-cls') || '{}');
+            } catch (err) {
+                debugLog('Failed to parse data-vl-part-cls', err);
+                return;
+            }
+
+            Object.entries(partMap).forEach(([partName, className]) => {
+                if (!partName || !className) return;
+            });
+
+            for (const [partName, className] of Object.entries(partMap)) {
+                if (!partName || !className) continue;
+                const aliasMap = VL_UNO_PART_ALIASES[host.tagName] || {};
+                const resolvedPartName = aliasMap[partName] || partName;
+                const selector = `[part~="${CSS.escape(resolvedPartName)}"]`;
+                const styles = await computeUnoPartStyles(className);
+
+                host.shadowRoot.querySelectorAll(selector).forEach((partEl) => {
+                    const previousProps = (partEl.getAttribute('data-vl-uno-props') || '')
+                        .split('|')
+                        .map((item) => item.trim())
+                        .filter(Boolean);
+
+                    previousProps.forEach((prop) => partEl.style.removeProperty(prop));
+
+                    const appliedProps = [];
+                    Object.entries(styles).forEach(([prop, value]) => {
+                        if (!value) return;
+                        partEl.style.setProperty(prop, value, 'important');
+                        appliedProps.push(prop);
+                    });
+
+                    if (appliedProps.length) {
+                        partEl.setAttribute('data-vl-uno-props', appliedProps.join('|'));
+                    } else {
+                        partEl.removeAttribute('data-vl-uno-props');
+                    }
+                });
+            }
+        }
+
+        async function runUnoPartBridge(scope = document) {
+            const hosts = scope && scope.querySelectorAll ? scope.querySelectorAll('[data-vl-part-cls]') : [];
+            await Promise.all(Array.from(hosts).map((host) => applyUnoPartStyles(host)));
+        }
+
+        window._vlApplyUnoPartBridge = function(scope = document) {
+            const schedule = () => {
+                const invoke = () => {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => runUnoPartBridge(scope));
+                    });
+                };
+
+                invoke();
+                setTimeout(invoke, 120);
+                setTimeout(invoke, 360);
+            };
+
+            if (window.__vlUnoReady) {
+                schedule();
+                return;
+            }
+
+            window.addEventListener('violit:unocss-ready', schedule, { once: true });
+        };
+
         // [FIX] Plotly Auto-Resize Logic
         // Handles resizing when:
         // 1. Window resizes
@@ -3532,6 +3781,7 @@ HTML_TEMPLATE = r"""
             syncSidebarWidthFromStorage();
             setupSidebarResizer();
             window._vlLoadLib('Plotly', setupPlotlyResizer);
+            window._vlApplyUnoPartBridge(document);
         });
 
         if (mode === 'ws') {
@@ -3999,6 +4249,7 @@ HTML_TEMPLATE = r"""
                     // Apply updates immediately (no View Transition).
                     // CSS fade-in on .page-container handles the smooth entrance.
                     applyUpdates(msg.payload);
+                    window._vlApplyUnoPartBridge(document);
 
                     // Preserve the user's viewport position for same-page reactive updates.
                     if (!isNavigation && window._pendingScrollRestore) {

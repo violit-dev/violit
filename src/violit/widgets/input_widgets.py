@@ -8,7 +8,7 @@ import json
 from ..component import Component
 from ..context import rendering_ctx, layout_ctx
 from ..state import State
-from ..style_utils import merge_cls, merge_style, wrap_html
+from ..style_utils import auto_split_widget_cls, merge_cls, merge_style, merge_part_cls, serialize_part_cls, wrap_html
 
 
 class UploadedFile(io.BytesIO):
@@ -379,6 +379,7 @@ class InputWidgetsMixin:
             help: Tooltip / help text
         """
         cid = self._get_next_cid("select")
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"select:{label}"
         default_val = options[index] if options else None
@@ -458,9 +459,29 @@ class InputWidgetsMixin:
             select_html += f'>{opts_html}</wa-select>{listener_script}'
             
             _wd = self._get_widget_defaults("selectbox")
-            _fc = merge_cls(_wd.get("cls", ""), cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("selectbox", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("selectbox", cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            return Component(None, id=cid, content=wrap_html(select_html, _fc, _fs))
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            part_bridge_script = ""
+            if _part_cls:
+                part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
+                select_html = select_html.replace(f'<wa-select id="{cid}"', f'<wa-select id="{cid}"{part_attr}', 1)
+                part_bridge_script = f'''<script>(function() {{
+                    let attempts = 0;
+                    const run = function() {{
+                        attempts += 1;
+                        const el = document.getElementById('{cid}');
+                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
+                            window.applyUnoPartStyles(el);
+                            return;
+                        }}
+                        if (attempts < 20) setTimeout(run, 80);
+                    }};
+                    run();
+                }})();</script>'''
+            return Component(None, id=cid, content=wrap_html(select_html + part_bridge_script, _fc, _fs))
             
         self._register_component(cid, builder, action=action)
         return s
@@ -620,6 +641,7 @@ class InputWidgetsMixin:
             help: Tooltip / help text
         """
         cid = self._get_next_cid("textarea")
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"textarea:{label}"
         s = self.state(value, key=state_key)
@@ -721,9 +743,29 @@ class InputWidgetsMixin:
             html += f'></wa-textarea>{listener_script}'
             
             _wd = self._get_widget_defaults("text_area")
-            _fc = merge_cls(_wd.get("cls", ""), _cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls("text_area", _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls("text_area", _cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), _style)
-            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            part_bridge_script = ""
+            if _part_cls:
+                part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
+                html = html.replace(f'<wa-textarea id="{cid}"', f'<wa-textarea id="{cid}"{part_attr}', 1)
+                part_bridge_script = f'''<script>(function() {{
+                    let attempts = 0;
+                    const run = function() {{
+                        attempts += 1;
+                        const el = document.getElementById('{cid}');
+                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
+                            window.applyUnoPartStyles(el);
+                            return;
+                        }}
+                        if (attempts < 20) setTimeout(run, 80);
+                    }};
+                    run();
+                }})();</script>'''
+            return Component(None, id=cid, content=wrap_html(html + part_bridge_script, _fc, _fs))
         
         self._register_component(cid, builder, action=action)
         return s
@@ -1182,6 +1224,7 @@ class InputWidgetsMixin:
     def _input_component(self, type_name, tag_name, label, value, on_change, key=None, cls: str = "", style: str = "", live_update=False, label_visibility="visible", **props):
         """Generic input component builder"""
         cid = self._get_next_cid(type_name)
+        user_part_cls = props.pop("part_cls", None)
         
         state_key = key or f"{type_name}:{label}"
         s = self.state(value, key=state_key)
@@ -1240,8 +1283,28 @@ class InputWidgetsMixin:
             html = f'<{tag_name} id="{cid}" label="{_lbl}" value="{escaped_cv}" appearance="outlined" {attrs_str} {props_str}></{tag_name}>{listener_script}'
             
             _wd = self._get_widget_defaults(type_name)
-            _fc = merge_cls(_wd.get("cls", ""), cls)
+            default_host_cls, default_auto_part_cls = auto_split_widget_cls(type_name, _wd.get("cls", ""))
+            user_host_cls, user_auto_part_cls = auto_split_widget_cls(type_name, cls)
+            _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
+            _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            part_bridge_script = ""
+            if _part_cls:
+                part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
+                html = html.replace(f'<{tag_name} id="{cid}"', f'<{tag_name} id="{cid}"{part_attr}', 1)
+                part_bridge_script = f'''<script>(function() {{
+                    let attempts = 0;
+                    const run = function() {{
+                        attempts += 1;
+                        const el = document.getElementById('{cid}');
+                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
+                            window.applyUnoPartStyles(el);
+                            return;
+                        }}
+                        if (attempts < 20) setTimeout(run, 80);
+                    }};
+                    run();
+                }})();</script>'''
+            return Component(None, id=cid, content=wrap_html(html + part_bridge_script, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s
