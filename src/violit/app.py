@@ -284,6 +284,7 @@ class App(
             const splash = document.getElementById('splash');
             const splashMountedAt = performance.now();
             const minVisibleMs = 220;
+            let rootRevealedAt = null;
             let domReady = document.readyState !== 'loading';
             let wsReady = ("{self.mode}" !== "ws");
             let resourcesReady = false;
@@ -363,9 +364,25 @@ class App(
                 }});
             }};
 
+            const publishInitialRenderMetrics = () => {{
+                const splashRemovedAt = performance.now();
+                const pageVisibleMs = rootRevealedAt === null ? splashRemovedAt : rootRevealedAt;
+                const metrics = {{
+                    pageVisibleMs,
+                    splashRemovedMs: splashRemovedAt,
+                    splashMountedMs: splashMountedAt,
+                    pageVisibleSeconds: Number((pageVisibleMs / 1000).toFixed(3)),
+                    splashRemovedSeconds: Number((splashRemovedAt / 1000).toFixed(3)),
+                    splashVisibleMs: Number((splashRemovedAt - splashMountedAt).toFixed(1)),
+                }};
+                window.__vlInitialRenderMetrics = metrics;
+                window.dispatchEvent(new CustomEvent('violit:initial-render-ready', {{ detail: metrics }}));
+            }};
+
             const revealRoot = () => {{
                 const root = document.getElementById('root');
                 if (!root) return;
+                if (rootRevealedAt === null) rootRevealedAt = performance.now();
                 root.style.visibility = 'visible';
                 requestAnimationFrame(() => {{
                     root.style.opacity = '1';
@@ -380,6 +397,7 @@ class App(
             const finishSplash = () => {{
                 unlockViewport();
                 if (splash && splash.isConnected) splash.remove();
+                if (!window.__vlInitialRenderMetrics) publishInitialRenderMetrics();
             }};
             
             const hideSplash = () => {{
