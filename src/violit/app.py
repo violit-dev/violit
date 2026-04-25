@@ -141,8 +141,8 @@ class Page:
         self.icon = icon
         self.url_path = url_path or self.title.lower().replace(" ", "-")
         self.key = f"page_{self.url_path}"
-        self.require_auth = require_auth      # True이면 로그인 필요
-        self.require_role = require_role      # "admin" 등 역할 지정 시 해당 역할 필요
+        self.require_auth = require_auth      # If True, login is required
+        self.require_role = require_role      # If role is specified (e.g. "admin"), this role is required
 
     def run(self):
         self.entry_point()
@@ -238,14 +238,14 @@ class App(
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
 
-        # ── ORM / DB 초기화 ──────────────────────────────────────────────
+        # ── Initialize ORM / DB ──────────────────────────────────────────────
         self.db = None
         if db is not None:
             from .db import ViolItDB, normalize_db_url
             self.db = ViolItDB(normalize_db_url(db), migrate=migrate)
         self._db_migrate_mode = migrate
 
-        # ── Auth 초기화 ────────────────────────────────────────────────
+        # ── Initialize Auth ────────────────────────────────────────────────
         self.auth = None
         self.fastapi = FastAPI()
         self.fastapi.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -1605,26 +1605,26 @@ class App(
         username_field: str = "username",
         password_field: str = "hashed_password",
         role_field: str = "role",
-        login_page: str = "로그인",
+        login_page: str = "Login",
         require_auth: bool = False,
     ):
         """
-        Auth 시스템 초기화.
+        Initialize the Auth system.
 
         Parameters
         ----------
-        user_model : SQLModel 클래스
-            User 모델.
+        user_model : SQLModel class
+            The User model.
         username_field : str
-            아이디 콼럼 이름 (기본값: 'username').
+            The column name for the username (default: 'username').
         password_field : str
-            해시 비밀번호 콼럼 이름 (기본값: 'hashed_password').
+            The column name for the hashed password (default: 'hashed_password').
         role_field : str
-            역할 콼럼 이름 (기본값: 'role').
+            The column name for the role (default: 'role').
         login_page : str
-            미인증 접근 시 이동할 페이지 제목 (기본값: '로그인').
+            The title of the page to redirect to when unauthenticated access occurs (default: 'Login').
         require_auth : bool
-            True 이면 모든 페이지를 자동 보호.
+            If True, automatically protects all pages.
 
         Example::
 
@@ -1767,10 +1767,10 @@ class App(
                         # Execute the current page function
                         p = self.pages_map.get(key)
                         if p:
-                            # ── Auth 접근 권한 확인 ───────────────────────
+                            # ── Check Auth Access ───────────────────────
                             if self.app.auth is not None:
                                 if not self.app.auth.check_page_access(p):
-                                    # 미인증 / 권한 부족: 빈 컨테이너 반환
+                                    # Unauthenticated / Insufficient role: return empty container
                                     return Component("div", id=cid, content="", class_="page-container")
 
                             # Collect components from the page
@@ -2876,18 +2876,18 @@ class App(
         p.add_argument("--debug", action="store_true", help="Enable developer tools (native mode)")
         p.add_argument("--on-top", action="store_true", help="Keep window always on top (native mode)")
         p.add_argument("--port", type=int, default=8000)
-        # DB 마이그레이션 CLI 인자
+        # DB Migration CLI arguments
         p.add_argument("--make-migration", metavar="MSG", default=None,
-                       help="Alembic 마이그레이션 파일 생성 후 종료 (migrate='files' 모드 필요)")
+                       help="Generate Alembic migration file and exit (requires migrate='files' mode)")
         p.add_argument("--apply", action="store_true",
-                       help="미적용 Alembic 마이그레이션 적용 후 종료")
+                       help="Apply pending Alembic migrations and exit")
         p.add_argument("--rollback", type=int, metavar="N", nargs="?", const=1, default=None,
-                       help="Alembic 마이그레이션 N단계 롤백 후 종료")
+                       help="Rollback N steps of Alembic migrations and exit")
         args, _ = p.parse_known_args()
         if port is not None:
             args.port = port
 
-        # ── DB 마이그레이션 CLI 인자 처리 (서버 시작 없이 종료) ─────────
+        # ── Handle DB Migration CLI arguments (exit without starting server) ─────────
         if self.db is not None:
             if args.make_migration is not None:
                 self.db.make_migration(args.make_migration)
@@ -2927,14 +2927,14 @@ class App(
         except Exception:
             pass # Ignore if logging setup fails
 
-        # ── 서버 시작 전 자동 마이그레이션 ──────────────────────────────
+        # ── Automatic Migration Before Server Start ──────────────────────────────
         if self.db is not None:
             try:
                 self.db._run_startup_migration()
             except Exception as _db_exc:
                 import logging as _logging
                 _logging.getLogger("violit.db").error(
-                    f"[violit:db] 시작 시 마이그레이션 오류: {_db_exc}"
+                    f"[violit:db] Migration error during startup: {_db_exc}"
                 )
 
         if args.lite:
