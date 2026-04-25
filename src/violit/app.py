@@ -195,6 +195,27 @@ class IntervalHandle:
             del self._app._interval_callbacks[self._id]
 
 
+def _print_terminal_splash():
+    """Prints a welcome banner and GitHub repository link to the terminal."""
+    import sys
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+        
+    splash = """\033[95m
+ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+ ┃                                                             ┃
+ ┃   V I O L I T   ⚡  Pure Python Web Framework               ┃
+ ┃                                                             ┃
+ ┃   🌟 Love Violit? Please support us with a star on GitHub!  ┃
+ ┃   👉 https://github.com/violit-dev/violit                   ┃
+ ┃                                                             ┃
+ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\033[0m
+"""
+    print(splash)
+
+
 class App(
     TextWidgetsMixin,
     InputWidgetsMixin,
@@ -2930,6 +2951,10 @@ class App(
             
         if args.nosplash:
             os.environ["VIOLIT_NOSPLASH"] = "1"
+            
+        # Terminal Splash Banner (show only on master process, not on hot reload child or server-only)
+        if not args.nosplash and not os.environ.get("VIOLIT_WORKER") and not is_server_only:
+            _print_terminal_splash()
             
         # Hot Reload Manager Logic
         if args.reload and not os.environ.get("VIOLIT_WORKER"):
