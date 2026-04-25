@@ -778,3 +778,36 @@ app.run()
 - Session is stored **server-side** in TTL cache (1800s expiry) — not in cookie payload
 - Only a random session ID is sent to the browser via `ss_sid` cookie (HttpOnly)
 - CSRF protection is already built into violit and covers auth actions automatically
+
+---
+
+## 16. CLI (Command Line Interface)
+
+Violit provides a built-in CLI to manage your projects seamlessly, much like streamlit run or create-next-app.
+
+### iolit create
+Scaffolds a new Violit project with the recommended boilerplate (main.py, equirements.txt, .gitignore, README.md).
+`ash
+violit create my-app
+cd my-app
+`
+
+### iolit run
+Executes your Violit application. It passes any trailing arguments directly to App.run().
+`ash
+# Basic run
+violit run main.py
+
+# Hot reload (development)
+violit run main.py --reload
+
+# Native desktop mode
+violit run main.py --native
+
+# Database migrations (Alembic)
+violit run main.py --make-migration "add_users"
+violit run main.py --apply
+violit run main.py --rollback 1
+`
+
+*Note: You can still run python main.py [args]. iolit run is simply a convenient, standard wrapper.*
