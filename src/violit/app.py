@@ -207,12 +207,19 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, disconnect_timeout=0):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, disconnect_timeout=0, db: str = None, migrate='auto'):
         self.mode = mode
         self.use_cdn = use_cdn
         self.disconnect_timeout = disconnect_timeout
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
+
+        # ── ORM / DB 초기화 ──────────────────────────────────────────────
+        self.db = None
+        if db is not None:
+            from .db import ViolItDB, normalize_db_url
+            self.db = ViolItDB(normalize_db_url(db), migrate=migrate)
+        self._db_migrate_mode = migrate
         self.fastapi = FastAPI()
         self.fastapi.add_middleware(GZipMiddleware, minimum_size=1000)
         
@@ -2793,9 +2800,28 @@ class App(
         p.add_argument("--debug", action="store_true", help="Enable developer tools (native mode)")
         p.add_argument("--on-top", action="store_true", help="Keep window always on top (native mode)")
         p.add_argument("--port", type=int, default=8000)
+        # DB 마이그레이션 CLI 인자
+        p.add_argument("--make-migration", metavar="MSG", default=None,
+                       help="Alembic 마이그레이션 파일 생성 후 종료 (migrate='files' 모드 필요)")
+        p.add_argument("--apply", action="store_true",
+                       help="미적용 Alembic 마이그레이션 적용 후 종료")
+        p.add_argument("--rollback", type=int, metavar="N", nargs="?", const=1, default=None,
+                       help="Alembic 마이그레이션 N단계 롤백 후 종료")
         args, _ = p.parse_known_args()
         if port is not None:
             args.port = port
+
+        # ── DB 마이그레이션 CLI 인자 처리 (서버 시작 없이 종료) ─────────
+        if self.db is not None:
+            if args.make_migration is not None:
+                self.db.make_migration(args.make_migration)
+                return
+            if args.apply:
+                self.db.apply()
+                return
+            if args.rollback is not None:
+                self.db.rollback(steps=args.rollback)
+                return
         if args.on_top:
             self.on_top = True
 
@@ -2824,6 +2850,16 @@ class App(
                 logging.getLogger("uvicorn.access").addFilter(StaticResourceFilter())
         except Exception:
             pass # Ignore if logging setup fails
+
+        # ── 서버 시작 전 자동 마이그레이션 ──────────────────────────────
+        if self.db is not None:
+            try:
+                self.db._run_startup_migration()
+            except Exception as _db_exc:
+                import logging as _logging
+                _logging.getLogger("violit.db").error(
+                    f"[violit:db] 시작 시 마이그레이션 오류: {_db_exc}"
+                )
 
         if args.lite:
             self.mode = "lite"
