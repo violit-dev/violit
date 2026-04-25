@@ -134,12 +134,15 @@ class SidebarProxy:
 
 class Page:
     """Represents a page in multi-page app"""
-    def __init__(self, entry_point, title=None, icon=None, url_path=None):
+    def __init__(self, entry_point, title=None, icon=None, url_path=None,
+                 require_auth: bool = False, require_role: str = None):
         self.entry_point = entry_point
         self.title = title or entry_point.__name__.replace("_", " ").title()
         self.icon = icon
         self.url_path = url_path or self.title.lower().replace(" ", "-")
         self.key = f"page_{self.url_path}"
+        self.require_auth = require_auth      # True이면 로그인 필요
+        self.require_role = require_role      # "admin" 등 역할 지정 시 해당 역할 필요
 
     def run(self):
         self.entry_point()
@@ -220,6 +223,9 @@ class App(
             from .db import ViolItDB, normalize_db_url
             self.db = ViolItDB(normalize_db_url(db), migrate=migrate)
         self._db_migrate_mode = migrate
+
+        # ── Auth 초기화 ────────────────────────────────────────────────
+        self.auth = None
         self.fastapi = FastAPI()
         self.fastapi.add_middleware(GZipMiddleware, minimum_size=1000)
         
@@ -1572,6 +1578,49 @@ class App(
 
     # End Background Task API
 
+    def setup_auth(
+        self,
+        user_model,
+        username_field: str = "username",
+        password_field: str = "hashed_password",
+        role_field: str = "role",
+        login_page: str = "로그인",
+        require_auth: bool = False,
+    ):
+        """
+        Auth 시스템 초기화.
+
+        Parameters
+        ----------
+        user_model : SQLModel 클래스
+            User 모델.
+        username_field : str
+            아이디 콼럼 이름 (기본값: 'username').
+        password_field : str
+            해시 비밀번호 콼럼 이름 (기본값: 'hashed_password').
+        role_field : str
+            역할 콼럼 이름 (기본값: 'role').
+        login_page : str
+            미인증 접근 시 이동할 페이지 제목 (기본값: '로그인').
+        require_auth : bool
+            True 이면 모든 페이지를 자동 보호.
+
+        Example::
+
+            app.setup_auth(User)
+            app.setup_auth(User, login_page="Login", require_auth=True)
+        """
+        from .auth import ViolItAuth
+        self.auth = ViolItAuth(
+            app=self,
+            user_model=user_model,
+            username_field=username_field,
+            password_field=password_field,
+            role_field=role_field,
+            login_page=login_page,
+            require_auth=require_auth,
+        )
+
     def navigation(self, pages: List[Any], position="sidebar", align="center", auto_run=True, reactivity_mode=False):
         """Create multi-page navigation
         
@@ -1697,6 +1746,12 @@ class App(
                         # Execute the current page function
                         p = self.pages_map.get(key)
                         if p:
+                            # ── Auth 접근 권한 확인 ───────────────────────
+                            if self.app.auth is not None:
+                                if not self.app.auth.check_page_access(p):
+                                    # 미인증 / 권한 부족: 빈 컨테이너 반환
+                                    return Component("div", id=cid, content="", class_="page-container")
+
                             # Collect components from the page
                             store = get_session_store()
                             # Clear previous dynamic order for this page render

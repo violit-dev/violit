@@ -489,3 +489,292 @@ app.run()
 | Pages | `st.Page` in `st.navigation` | `vl.Page` in `app.navigation` | |
 | Theme | `config.toml` | `app = vl.App(theme="ocean")` | 30+ presets |
 | Desktop | Not available | `python app.py --native` | pywebview |
+| Database | External ORM | `app = vl.App(db="./app.db")` | SQLModel built-in |
+| Auth | External lib | `app.setup_auth(User)` | Session + bcrypt built-in |
+
+---
+
+## 14. Database (ORM)
+
+Violit has built-in database support via **SQLModel** (SQLAlchemy 2.0 + Pydantic).
+Models use standard SQLModel syntax — no custom wrapper classes needed.
+
+### Setup
+
+```python
+from sqlmodel import SQLModel, Field
+import violit as vl
+from typing import Optional
+
+# Define model (standard SQLModel)
+class Task(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str
+    done: bool = False
+    priority: int = 0
+
+# Pass db path to App — migration runs automatically on startup
+app = vl.App(title="My App", db="./app.db")
+# Default: migrate="auto" — creates tables + adds missing columns automatically
+```
+
+### Migration Modes
+
+```python
+app = vl.App(db="./app.db")                     # migrate="auto" (default)
+app = vl.App(db="./app.db", migrate="auto")      # safe auto: add columns only
+app = vl.App(db="./app.db", migrate="force")     # aggressive: also drops columns
+app = vl.App(db="./app.db", migrate="files")     # Alembic file-based (production/teams)
+app = vl.App(db="./app.db", migrate=False)       # disabled: manage DB yourself
+```
+
+**`auto` mode behavior (default):**
+- Creates missing tables automatically
+- Adds missing columns automatically (preserves existing data)
+- Warns about deleted/changed columns — does NOT apply them (safe)
+
+**File-based migration CLI** (when `migrate="files"`):
+```bash
+python main.py --make-migration "add priority column"  # generate Alembic file
+python main.py --apply                                  # apply pending migrations
+python main.py --rollback 1                            # roll back N steps
+```
+
+### CRUD API (`app.db`)
+
+```python
+# CREATE
+task = app.db.add(Task(title="Buy milk"))       # INSERT + commit + refresh
+task.id  # → auto-assigned int
+
+# READ
+task  = app.db.get(Task, 1)                     # by primary key → Task | None
+task  = app.db.first(Task, Task.done == False)  # first match → Task | None
+tasks = app.db.all(Task)                        # all rows → List[Task]
+tasks = app.db.filter(
+    Task,
+    Task.done == False,
+    order_by=Task.id.desc(),
+    limit=20,
+    offset=0,
+)
+
+# UPDATE
+task.done = True
+app.db.save(task)                               # UPDATE + commit
+
+# DELETE
+app.db.delete(task)                             # single row
+count = app.db.delete_by(Task, Task.done == True)  # bulk delete
+
+# AGGREGATES
+total = app.db.count(Task)
+done  = app.db.count(Task, Task.done == True)
+found = app.db.exists(Task, Task.title == "Buy milk")  # → bool
+```
+
+### Raw / Complex Queries
+
+```python
+from sqlmodel import select
+from sqlalchemy import func
+
+with app.db.session() as session:
+    results = session.exec(
+        select(Task)
+        .where(Task.done == False)
+        .where(Task.title.contains("urgent"))
+        .order_by(Task.priority.desc())
+        .limit(10)
+    ).all()
+
+    # Aggregation
+    count_by_done = session.exec(
+        select(Task.done, func.count(Task.id)).group_by(Task.done)
+    ).all()
+```
+
+### Supported Databases
+
+```python
+app = vl.App(db="./local.db")                                  # SQLite (default)
+app = vl.App(db="sqlite:///./local.db")                        # SQLite explicit URL
+app = vl.App(db="postgresql+psycopg2://user:pw@host/db")       # PostgreSQL
+app = vl.App(db="mysql+pymysql://user:pw@host/db")             # MySQL
+```
+
+### Column Types
+
+```python
+from sqlmodel import SQLModel, Field
+from typing import Optional
+from datetime import datetime
+
+class Article(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str                                           # NOT NULL text
+    content: Optional[str] = None                        # nullable text
+    view_count: int = 0                                  # integer with default
+    rating: float = 0.0                                  # float
+    is_published: bool = False                           # boolean
+    email: str = Field(unique=True)                      # unique constraint
+    created_at: datetime = Field(default_factory=datetime.now)
+```
+
+---
+
+## 15. Auth (Authentication)
+
+Violit has built-in session-based authentication using **bcrypt** password hashing.
+The session is stored server-side in violit's existing `ss_sid` cookie store.
+
+### Setup
+
+```python
+from sqlmodel import SQLModel, Field
+import violit as vl
+from typing import Optional
+
+# 1. Define your own User model (standard SQLModel)
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True)     # login identifier
+    hashed_password: str                   # MUST use this field name (default)
+    role: str = "user"                     # for role-based access control
+    # Add any extra fields freely:
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+
+# 2. Create app with DB
+app = vl.App(title="My App", db="./app.db")
+
+# 3. Register auth — one line
+app.setup_auth(User)
+# Optional params:
+# app.setup_auth(
+#     User,
+#     username_field="username",        # default
+#     password_field="hashed_password", # default
+#     role_field="role",                # default
+#     login_page="로그인",               # page title to redirect on auth failure
+#     require_auth=False,               # True = protect ALL pages automatically
+# )
+```
+
+### Auth API (`app.auth`)
+
+```python
+# Login — returns True on success, False on failure
+success = app.auth.login("admin", "password123")
+
+# Logout — clears session
+app.auth.logout()
+
+# Get current user — returns User object or None if not logged in
+user = app.auth.current_user()
+if user:
+    print(user.username)
+
+# Check login status
+if app.auth.is_authenticated():
+    app.text("You are logged in")
+
+# Check role (supports comma-separated multi-role: "admin,editor")
+if app.auth.has_role("admin"):
+    app.button("Admin Panel")
+
+# Create user (password auto-hashed with bcrypt)
+user = app.auth.create_user("john", "secure_pass", role="user", email="j@co.com")
+
+# Change password
+app.auth.change_password(user, "new_secure_pass")
+
+# Delete user
+app.auth.delete_user(user)
+```
+
+### Page Protection
+
+```python
+app.navigation([
+    vl.Page(login_page,   title="Login"),                              # public
+    vl.Page(home_page,    title="Home",    require_auth=True),         # login required
+    vl.Page(admin_page,   title="Admin",   require_auth=True,
+                                           require_role="admin"),       # admin only
+    vl.Page(profile_page, title="Profile", require_auth=True),         # login required
+])
+# Non-authenticated users are automatically redirected to the login page.
+# Users without the required role see an empty page (no redirect).
+```
+
+### Complete Auth Example
+
+```python
+from sqlmodel import SQLModel, Field
+import violit as vl
+from typing import Optional
+
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True)
+    hashed_password: str
+    role: str = "user"
+
+app = vl.App(title="My App", db="./app.db")
+app.setup_auth(User)
+
+# Create initial admin on first run
+def ensure_admin():
+    if not app.db.exists(User, User.username == "admin"):
+        app.auth.create_user("admin", "admin1234", role="admin")
+
+def login_page():
+    app.title("Login")
+    username = app.state("")
+    password = app.state("")
+
+    with app.form("login"):
+        app.text_input("Username", value=username)
+        app.password_input("Password", value=password)
+
+        def do_login():
+            if app.auth.login(username.value, password.value):
+                app.navigation_go("Home")   # switch to Home page
+            else:
+                app.toast("Invalid credentials", "danger")
+
+        app.form_submit_button("Login", on_click=do_login)
+
+def home_page():
+    user = app.auth.current_user()
+    app.title(f"Welcome, {user.username}!")
+
+    if app.auth.has_role("admin"):
+        app.button("Admin Panel", on_click=lambda: app.navigation_go("Admin"))
+
+    app.button("Logout",
+               on_click=lambda: (app.auth.logout(), app.navigation_go("Login")),
+               variant="secondary")
+
+def admin_page():
+    app.title("Admin Panel")
+    users = app.db.all(User)
+    app.text(f"Total users: {len(users)}")
+
+app.navigation([
+    vl.Page(login_page, title="Login"),
+    vl.Page(home_page,  title="Home",  require_auth=True),
+    vl.Page(admin_page, title="Admin", require_auth=True, require_role="admin"),
+])
+
+ensure_admin()
+app.run()
+```
+
+### Security Notes
+
+- Passwords are hashed with **bcrypt** (cost factor 12) — never stored as plaintext
+- Login uses timing-safe comparison (bcrypt built-in) — prevents timing attacks
+- Session is stored **server-side** in TTL cache (1800s expiry) — not in cookie payload
+- Only a random session ID is sent to the browser via `ss_sid` cookie (HttpOnly)
+- CSRF protection is already built into violit and covers auth actions automatically
