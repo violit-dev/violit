@@ -8,11 +8,11 @@ import json
 
 AUTO_PART_WIDGETS = {
     "button": "base",
-    "input": "input",
-    "text_area": "textarea",
-    "selectbox": "input",
-    "multiselect": "input",
-    "number_input": "input",
+    "input": "base",
+    "text_area": "base",
+    "selectbox": "combobox",
+    "multiselect": "combobox",
+    "number_input": "base",
     "slider": "slider",
     "checkbox": {"surface": "control", "text": "label"},
     "toggle": {"surface": "control", "text": "label"},
