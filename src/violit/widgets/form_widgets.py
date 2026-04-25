@@ -69,8 +69,8 @@ class FormWidgetsMixin:
                     const run = function() {{
                         attempts += 1;
                         const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
-                            window.applyUnoPartStyles(el);
+                        if (el && el.shadowRoot && window.applyPartStyles) {{
+                            window.applyPartStyles(el);
                             return;
                         }}
                         if (attempts < 20) setTimeout(run, 80);

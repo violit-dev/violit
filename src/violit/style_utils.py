@@ -380,8 +380,8 @@ def merge_part_cls(*part_maps):
     return merged
 
 
-def split_uno_tokens(class_string: str):
-    """Split UnoCSS classes while preserving bracketed arbitrary values."""
+def split_utility_tokens(class_string: str):
+    """Split utility classes while preserving bracketed arbitrary values."""
     if not class_string:
         return []
 
@@ -596,7 +596,7 @@ def auto_split_widget_cls(widget_type: str, class_string: str):
     if isinstance(part_name, str):
         host_tokens = []
         part_tokens = []
-        for token in split_uno_tokens(class_string):
+        for token in split_utility_tokens(class_string):
             if _classify_widget_token(token) == "part":
                 part_tokens.append(token)
             else:
@@ -607,7 +607,7 @@ def auto_split_widget_cls(widget_type: str, class_string: str):
 
     host_tokens = []
     part_tokens = {key: [] for key in set(part_name.values())}
-    for token in split_uno_tokens(class_string):
+    for token in split_utility_tokens(class_string):
         token_family = _classify_widget_token_family(token)
         if token_family == "surface":
             part_tokens.setdefault(part_name.get("surface", "surface"), []).append(token)

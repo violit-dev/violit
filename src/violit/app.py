@@ -577,9 +577,9 @@ class App(
         
         Args:
             widget_type: Widget function name (e.g. "button", "card", "text_input")
-            cls: Default UnoCSS / utility classes
+            cls: Default Tailwind / utility classes
             style: Default inline CSS (e.g. CSS variables)
-            part_cls: Default UnoCSS classes for supported shadow DOM parts
+            part_cls: Default Tailwind classes for supported shadow DOM parts
             
         Example:
             app.configure_widget("button", cls="rounded-full shadow-md")
@@ -3449,7 +3449,7 @@ HTML_TEMPLATE = r"""
             });
         }
 
-        const VL_UNO_PART_PROPERTIES = [
+        const VL_PART_BRIDGE_PROPERTIES = [
             'background',
             'background-color',
             'background-image',
@@ -3481,7 +3481,7 @@ HTML_TEMPLATE = r"""
             'white-space'
         ];
 
-        const VL_UNO_PART_ALIASES = {
+        const VL_PART_BRIDGE_ALIASES = {
             'WA-INPUT': {
                 'form-control-input': 'input',
             },
@@ -3494,11 +3494,11 @@ HTML_TEMPLATE = r"""
             },
         };
 
-        function getUnoPartBridgeRoot() {
-            let root = document.getElementById('vl-uno-part-bridge-root');
+        function getPartBridgeRoot() {
+            let root = document.getElementById('vl-part-bridge-root');
             if (root) return root;
             root = document.createElement('div');
-            root.id = 'vl-uno-part-bridge-root';
+            root.id = 'vl-part-bridge-root';
             root.setAttribute('aria-hidden', 'true');
             root.style.cssText = 'position:absolute;left:-9999px;top:0;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;';
             document.body.appendChild(root);
@@ -3518,7 +3518,7 @@ HTML_TEMPLATE = r"""
             });
         }
 
-        function splitUnoTokens(className) {
+        function splitUtilityTokens(className) {
             if (!className) return [];
 
             const tokens = [];
@@ -3656,7 +3656,7 @@ HTML_TEMPLATE = r"""
             return Array.from(new Set(variants));
         }
 
-        function transformUnoSelectorForPart(selector, classSelector, partSelector) {
+        function transformUtilitySelectorForPart(selector, classSelector, partSelector) {
             if (!selector || !selector.includes(classSelector)) return [];
             const rewritten = selector.split(classSelector).join(partSelector).trim();
             if (!rewritten) return [];
@@ -3724,31 +3724,43 @@ HTML_TEMPLATE = r"""
             return false;
         }
 
-        function serializeUnoRuleForPart(rule, classSelector, partSelector) {
+        function serializeUtilityRuleForPart(rule, classSelector, partSelector, parentSelector = '') {
             if (!rule) return '';
 
-            if (rule.type === CSSRule.STYLE_RULE) {
-                const selectors = rule.selectorText
-                    .split(',')
-                    .map((selector) => selector.trim())
-                    .flatMap((selector) => transformUnoSelectorForPart(selector, classSelector, partSelector));
+            const selectorText = String(rule.selectorText || '').trim();
+            const resolvedSelector = selectorText && parentSelector && selectorText.includes('&')
+                ? selectorText.split('&').join(parentSelector)
+                : selectorText;
 
-                if (!selectors.length) return '';
+            if (rule.type === CSSRule.STYLE_RULE) {
+                const selectors = resolvedSelector
+                    ? resolvedSelector
+                        .split(',')
+                        .map((selector) => selector.trim())
+                        .flatMap((selector) => transformUtilitySelectorForPart(selector, classSelector, partSelector))
+                    : [];
+
                 const declarationText = serializeImportantStyleDeclaration(rule.style);
-                if (!declarationText) return '';
-                return `${Array.from(new Set(selectors)).join(',')}{${declarationText}}`;
+                const ownRule = selectors.length && declarationText
+                    ? `${Array.from(new Set(selectors)).join(',')}{${declarationText}}`
+                    : '';
+                const nestedRules = Array.from(rule.cssRules || [])
+                    .map((childRule) => serializeUtilityRuleForPart(childRule, classSelector, partSelector, resolvedSelector))
+                    .filter(Boolean)
+                    .join('');
+                return `${ownRule}${nestedRules}`;
             }
 
             if (rule.type === CSSRule.MEDIA_RULE) {
                 const inner = Array.from(rule.cssRules || [])
-                    .map((childRule) => serializeUnoRuleForPart(childRule, classSelector, partSelector))
+                    .map((childRule) => serializeUtilityRuleForPart(childRule, classSelector, partSelector, parentSelector))
                     .join('');
                 return inner ? `@media ${rule.conditionText}{${inner}}` : '';
             }
 
             if (rule.type === CSSRule.SUPPORTS_RULE) {
                 const inner = Array.from(rule.cssRules || [])
-                    .map((childRule) => serializeUnoRuleForPart(childRule, classSelector, partSelector))
+                    .map((childRule) => serializeUtilityRuleForPart(childRule, classSelector, partSelector, parentSelector))
                     .join('');
                 return inner ? `@supports ${rule.conditionText}{${inner}}` : '';
             }
@@ -3757,13 +3769,20 @@ HTML_TEMPLATE = r"""
                 return rule.cssText;
             }
 
+            if (rule.cssRules?.length) {
+                return Array.from(rule.cssRules)
+                    .map((childRule) => serializeUtilityRuleForPart(childRule, classSelector, partSelector, parentSelector))
+                    .filter(Boolean)
+                    .join('');
+            }
+
             return '';
         }
 
-        function transformUnoCssTextForPart(cssText, token, partSelector) {
+        function transformCssTextForPart(cssText, token, partSelector) {
             if (!cssText) return '';
 
-            const root = getUnoPartBridgeRoot();
+            const root = getPartBridgeRoot();
             const parserStyle = document.createElement('style');
             parserStyle.textContent = cssText;
             root.appendChild(parserStyle);
@@ -3771,85 +3790,107 @@ HTML_TEMPLATE = r"""
             try {
                 const classSelector = `.${CSS.escape(token)}`;
                 return Array.from(parserStyle.sheet?.cssRules || [])
-                    .map((rule) => serializeUnoRuleForPart(rule, classSelector, partSelector))
+                    .map((rule) => serializeUtilityRuleForPart(rule, classSelector, partSelector))
                     .filter(Boolean)
                     .join('\n');
             } catch (err) {
-                debugLog('Failed to transform UnoCSS rule for part bridge', err);
+                debugLog('Failed to transform utility rule for part bridge', err);
                 return '';
             } finally {
                 parserStyle.remove();
             }
         }
 
-        async function buildUnoPartCss(className, partSelector) {
+        async function ensureTailwindTokensGenerated(className) {
+            const normalized = (className || '').trim();
+            if (!normalized) return;
+
+            const root = getPartBridgeRoot();
+            const probe = document.createElement('div');
+            probe.className = normalized;
+            probe.style.cssText = 'display:block;position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;';
+            probe.textContent = 'M';
+            root.appendChild(probe);
+            await waitForAnimationFrames(2);
+            probe.remove();
+        }
+
+        function getTailwindRuntimeSheets() {
+            if (window._vlTailwindRuntimeSheets?.length) {
+                return window._vlTailwindRuntimeSheets;
+            }
+
+            const sheets = Array.from(document.styleSheets || []).filter((sheet) => {
+                const owner = sheet.ownerNode;
+                if (!owner || owner.tagName !== 'STYLE') return false;
+                const text = owner.textContent || '';
+                return text.includes('tailwindcss v4') || text.includes('@layer theme, base, components, utilities');
+            });
+
+            window._vlTailwindRuntimeSheets = sheets;
+            return sheets;
+        }
+
+        function collectGeneratedCssForToken(token, partSelector) {
+            const classSelector = `.${CSS.escape(token)}`;
+            const cssBlocks = [];
+
+            getTailwindRuntimeSheets().forEach((sheet) => {
+                try {
+                    Array.from(sheet.cssRules || []).forEach((rule) => {
+                        const cssBlock = serializeUtilityRuleForPart(rule, classSelector, partSelector);
+                        if (cssBlock) cssBlocks.push(cssBlock);
+                    });
+                } catch (err) {
+                    // Ignore cross-origin or protected stylesheets.
+                }
+            });
+
+            return cssBlocks.join('\n');
+        }
+
+        async function buildTailwindPartCss(className, partSelector) {
             const normalized = (className || '').trim();
             if (!normalized) return '';
 
-            window._vlUnoPartCssCache = window._vlUnoPartCssCache || new Map();
+            window._vlTailwindPartCssCache = window._vlTailwindPartCssCache || new Map();
             const cacheKey = `${partSelector}::${normalized}`;
-            if (window._vlUnoPartCssCache.has(cacheKey)) {
-                return window._vlUnoPartCssCache.get(cacheKey);
+            if (window._vlTailwindPartCssCache.has(cacheKey)) {
+                return window._vlTailwindPartCssCache.get(cacheKey);
             }
 
-            const runtime = window.__unocss_runtime;
-            if (!runtime || !runtime.uno || typeof runtime.uno.generate !== 'function') {
-                return '';
-            }
+            await ensureTailwindTokensGenerated(normalized);
 
             const cssBlocks = [];
-            for (const token of splitUnoTokens(normalized)) {
-                const generated = await runtime.uno.generate(token);
-                const cssBlock = transformUnoCssTextForPart(generated.css || '', token, partSelector);
+            for (const token of splitUtilityTokens(normalized)) {
+                const cssBlock = collectGeneratedCssForToken(token, partSelector);
                 if (cssBlock) cssBlocks.push(cssBlock);
             }
 
             const finalCss = cssBlocks.join('\n');
-            window._vlUnoPartCssCache.set(cacheKey, finalCss);
+            window._vlTailwindPartCssCache.set(cacheKey, finalCss);
             return finalCss;
         }
 
-        async function computeUnoPartStyles(className) {
+        async function computeTailwindPartStyles(className) {
             const normalized = (className || '').trim();
             if (!normalized) return {};
 
-            window._vlUnoPartStyleCache = window._vlUnoPartStyleCache || new Map();
-            if (window._vlUnoPartStyleCache.has(normalized)) {
-                return window._vlUnoPartStyleCache.get(normalized);
+            window._vlTailwindPartStyleCache = window._vlTailwindPartStyleCache || new Map();
+            if (window._vlTailwindPartStyleCache.has(normalized)) {
+                return window._vlTailwindPartStyleCache.get(normalized);
             }
 
-            const root = getUnoPartBridgeRoot();
+            const root = getPartBridgeRoot();
             const baseline = document.createElement('div');
             const probe = document.createElement('div');
-            let generatedStyleEl = null;
             const baseCss = 'display: block; position: absolute; left: -9999px; top: 0; visibility: hidden; pointer-events: none;';
             baseline.style.cssText = baseCss;
             probe.style.cssText = baseCss;
             baseline.textContent = 'M';
             probe.textContent = 'M';
 
-            const runtime = window.__unocss_runtime;
-            if (runtime) {
-                if (runtime.uno && typeof runtime.uno.generate === 'function') {
-                    const generated = await runtime.uno.generate(normalized);
-                    generatedStyleEl = document.createElement('style');
-                    generatedStyleEl.textContent = generated.css || '';
-                    root.appendChild(generatedStyleEl);
-                } else if (typeof runtime.extractAll === 'function') {
-                    probe.className = normalized;
-                    root.appendChild(probe);
-                    await runtime.extractAll(root);
-                } else if (typeof runtime.extract === 'function') {
-                    const tokens = normalized.split(/\s+/).filter(Boolean);
-                    if (tokens.length) {
-                        await runtime.extract(tokens);
-                    }
-                }
-                if (!generatedStyleEl && typeof runtime.update === 'function') {
-                    await runtime.update();
-                }
-                await waitForAnimationFrames(2);
-            }
+            await ensureTailwindTokensGenerated(normalized);
 
             probe.className = normalized;
             root.appendChild(baseline);
@@ -3860,7 +3901,7 @@ HTML_TEMPLATE = r"""
             const probeStyle = getComputedStyle(probe);
             const styles = {};
 
-            VL_UNO_PART_PROPERTIES.forEach((prop) => {
+            VL_PART_BRIDGE_PROPERTIES.forEach((prop) => {
                 const nextValue = probeStyle.getPropertyValue(prop).trim();
                 const baseValue = baselineStyle.getPropertyValue(prop).trim();
                 if (nextValue && nextValue !== baseValue) {
@@ -3870,14 +3911,11 @@ HTML_TEMPLATE = r"""
 
             baseline.remove();
             probe.remove();
-            if (generatedStyleEl) {
-                generatedStyleEl.remove();
-            }
-            window._vlUnoPartStyleCache.set(normalized, styles);
+            window._vlTailwindPartStyleCache.set(normalized, styles);
             return styles;
         }
 
-        async function applyUnoPartStyles(host) {
+        async function applyTailwindPartStyles(host) {
             if (!host || !host.shadowRoot) return;
 
             let partMap = null;
@@ -3888,24 +3926,24 @@ HTML_TEMPLATE = r"""
                 return;
             }
 
-            host.shadowRoot.querySelectorAll('[data-vl-uno-props]').forEach((partEl) => {
-                const previousProps = (partEl.getAttribute('data-vl-uno-props') || '')
+            host.shadowRoot.querySelectorAll('[data-vl-part-props]').forEach((partEl) => {
+                const previousProps = (partEl.getAttribute('data-vl-part-props') || '')
                     .split('|')
                     .map((item) => item.trim())
                     .filter(Boolean);
                 previousProps.forEach((prop) => partEl.style.removeProperty(prop));
-                partEl.removeAttribute('data-vl-uno-props');
+                partEl.removeAttribute('data-vl-part-props');
             });
 
             let combinedCss = '';
 
             for (const [partName, className] of Object.entries(partMap)) {
                 if (!partName || !className) continue;
-                const aliasMap = VL_UNO_PART_ALIASES[host.tagName] || {};
+                const aliasMap = VL_PART_BRIDGE_ALIASES[host.tagName] || {};
                 const resolvedPartName = aliasMap[partName] || partName;
                 const selector = `[part~="${CSS.escape(resolvedPartName)}"]`;
-                const cssText = await buildUnoPartCss(className, selector);
-                const styles = await computeUnoPartStyles(className);
+                const cssText = await buildTailwindPartCss(className, selector);
+                const styles = await computeTailwindPartStyles(className);
                 const declaredProps = collectDeclaredProperties(cssText);
 
                 if (cssText) {
@@ -3922,18 +3960,18 @@ HTML_TEMPLATE = r"""
                     });
 
                     if (appliedProps.length) {
-                        partEl.setAttribute('data-vl-uno-props', appliedProps.join('|'));
+                        partEl.setAttribute('data-vl-part-props', appliedProps.join('|'));
                     } else {
-                        partEl.removeAttribute('data-vl-uno-props');
+                        partEl.removeAttribute('data-vl-part-props');
                     }
                 });
             }
 
-            let styleEl = host.shadowRoot.querySelector('style[data-vl-uno-part-style="true"]');
+            let styleEl = host.shadowRoot.querySelector('style[data-vl-part-style="true"]');
             if (combinedCss.trim()) {
                 if (!styleEl) {
                     styleEl = document.createElement('style');
-                    styleEl.setAttribute('data-vl-uno-part-style', 'true');
+                    styleEl.setAttribute('data-vl-part-style', 'true');
                     host.shadowRoot.appendChild(styleEl);
                 }
                 styleEl.textContent = combinedCss;
@@ -3942,16 +3980,16 @@ HTML_TEMPLATE = r"""
             }
         }
 
-        async function runUnoPartBridge(scope = document) {
+        async function runTailwindPartBridge(scope = document) {
             const hosts = scope && scope.querySelectorAll ? scope.querySelectorAll('[data-vl-part-cls]') : [];
-            await Promise.all(Array.from(hosts).map((host) => applyUnoPartStyles(host)));
+            await Promise.all(Array.from(hosts).map((host) => applyTailwindPartStyles(host)));
         }
 
-        window._vlApplyUnoPartBridge = function(scope = document) {
+        window._vlApplyPartBridge = function(scope = document) {
             const schedule = () => {
                 const invoke = () => {
                     requestAnimationFrame(() => {
-                        requestAnimationFrame(() => runUnoPartBridge(scope));
+                        requestAnimationFrame(() => runTailwindPartBridge(scope));
                     });
                 };
 
@@ -3960,13 +3998,15 @@ HTML_TEMPLATE = r"""
                 setTimeout(invoke, 360);
             };
 
-            if (window.__vlUnoReady) {
+            if (window.__vlTailwindReady) {
                 schedule();
                 return;
             }
 
-            window.addEventListener('violit:unocss-ready', schedule, { once: true });
+            window.addEventListener('violit:tailwind-ready', schedule, { once: true });
         };
+
+        window.applyPartStyles = applyTailwindPartStyles;
 
         // [FIX] Plotly Auto-Resize Logic
         // Handles resizing when:
@@ -4083,7 +4123,7 @@ HTML_TEMPLATE = r"""
             syncSidebarWidthFromStorage();
             setupSidebarResizer();
             window._vlLoadLib('Plotly', setupPlotlyResizer);
-            window._vlApplyUnoPartBridge(document);
+            window._vlApplyPartBridge(document);
         });
 
         if (mode === 'ws') {
@@ -4551,7 +4591,7 @@ HTML_TEMPLATE = r"""
                     // Apply updates immediately (no View Transition).
                     // CSS fade-in on .page-container handles the smooth entrance.
                     applyUpdates(msg.payload);
-                    window._vlApplyUnoPartBridge(document);
+                    window._vlApplyPartBridge(document);
 
                     // Preserve the user's viewport position for same-page reactive updates.
                     if (!isNavigation && window._pendingScrollRestore) {

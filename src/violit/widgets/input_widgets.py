@@ -38,15 +38,15 @@ class UploadedFile(io.BytesIO):
 class InputWidgetsMixin:
 
     @staticmethod
-    def _uno_part_bridge_script(target_selector: str) -> str:
+    def _part_bridge_script(target_selector: str) -> str:
         escaped_selector = json.dumps(target_selector)
         return f'''<script>(function() {{
             let attempts = 0;
             const run = function() {{
                 attempts += 1;
                 const hosts = Array.from(document.querySelectorAll({escaped_selector}));
-                if (hosts.length && hosts.every((el) => el.shadowRoot) && window.applyUnoPartStyles) {{
-                    hosts.forEach((el) => window.applyUnoPartStyles(el));
+                if (hosts.length && hosts.every((el) => el.shadowRoot) && window.applyPartStyles) {{
+                    hosts.forEach((el) => window.applyPartStyles(el));
                     return;
                 }}
                 if (attempts < 20) setTimeout(run, 80);
@@ -282,7 +282,7 @@ class InputWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
-            part_bridge_script = self._uno_part_bridge_script(f'wa-checkbox#{cid}[data-vl-part-cls]') if _part_cls else ''
+            part_bridge_script = self._part_bridge_script(f'wa-checkbox#{cid}[data-vl-part-cls]') if _part_cls else ''
             html = f'<wa-checkbox id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</wa-checkbox>{listener_script}{part_bridge_script}'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
@@ -324,7 +324,7 @@ class InputWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             radio_part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
-            part_bridge_script = self._uno_part_bridge_script(f'wa-radio-group#{cid} wa-radio[data-vl-part-cls]') if _part_cls else ''
+            part_bridge_script = self._part_bridge_script(f'wa-radio-group#{cid} wa-radio[data-vl-part-cls]') if _part_cls else ''
             
             opts_html = ""
             for i_opt, opt in enumerate(options):
@@ -502,8 +502,8 @@ class InputWidgetsMixin:
                     const run = function() {{
                         attempts += 1;
                         const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
-                            window.applyUnoPartStyles(el);
+                        if (el && el.shadowRoot && window.applyPartStyles) {{
+                            window.applyPartStyles(el);
                             return;
                         }}
                         if (attempts < 20) setTimeout(run, 80);
@@ -615,7 +615,7 @@ class InputWidgetsMixin:
             inner = Component("wa-select", id=cid, label=label, content=opts_html, multiple=True, with_clear=True, appearance="outlined", **_ms_extra)
             inner_html = inner.render() + listener_script
             if _part_cls:
-                inner_html += self._uno_part_bridge_script(f'wa-select#{cid}[data-vl-part-cls]')
+                inner_html += self._part_bridge_script(f'wa-select#{cid}[data-vl-part-cls]')
             if _fc or _fs:
                 return Component(None, id=f"{cid}_wrap", content=wrap_html(inner_html, _fc, _fs))
             return Component(None, id=cid, content=inner_html)
@@ -794,8 +794,8 @@ class InputWidgetsMixin:
                     const run = function() {{
                         attempts += 1;
                         const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
-                            window.applyUnoPartStyles(el);
+                        if (el && el.shadowRoot && window.applyPartStyles) {{
+                            window.applyPartStyles(el);
                             return;
                         }}
                         if (attempts < 20) setTimeout(run, 80);
@@ -882,7 +882,7 @@ class InputWidgetsMixin:
             if _part_cls:
                 part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
                 html = html.replace(f'<wa-input id="{cid}"', f'<wa-input id="{cid}"{part_attr}', 1)
-                html += self._uno_part_bridge_script(f'wa-input#{cid}[data-vl-part-cls]')
+                html += self._part_bridge_script(f'wa-input#{cid}[data-vl-part-cls]')
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         
         self._register_component(cid, builder, action=action)
@@ -1110,7 +1110,7 @@ class InputWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
-            part_bridge_script = self._uno_part_bridge_script(f'wa-switch#{cid}[data-vl-part-cls]') if _part_cls else ''
+            part_bridge_script = self._part_bridge_script(f'wa-switch#{cid}[data-vl-part-cls]') if _part_cls else ''
             html = f'<wa-switch id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{label}{help_html}</wa-switch>{listener_script}{part_bridge_script}'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
@@ -1348,8 +1348,8 @@ class InputWidgetsMixin:
                     const run = function() {{
                         attempts += 1;
                         const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyUnoPartStyles) {{
-                            window.applyUnoPartStyles(el);
+                        if (el && el.shadowRoot && window.applyPartStyles) {{
+                            window.applyPartStyles(el);
                             return;
                         }}
                         if (attempts < 20) setTimeout(run, 80);
