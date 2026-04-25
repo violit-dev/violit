@@ -207,9 +207,10 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, disconnect_timeout=0):
         self.mode = mode
         self.use_cdn = use_cdn
+        self.disconnect_timeout = disconnect_timeout
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
         self.fastapi = FastAPI()
@@ -1564,12 +1565,13 @@ class App(
 
     # End Background Task API
 
-    def navigation(self, pages: List[Any], position="sidebar", auto_run=True, reactivity_mode=False):
+    def navigation(self, pages: List[Any], position="sidebar", align="center", auto_run=True, reactivity_mode=False):
         """Create multi-page navigation
         
         Args:
             pages: List of Page objects or functions
             position: 'sidebar' or 'top' (default: sidebar)
+            align: 'left', 'center', or 'right' (default: left)
             auto_run: Run logic immediately (default: True)
             reactivity_mode: If True, treats each page as a reactive scope (auto pre-evaluates).
                              This allows standard 'if' statements to be reactive.
@@ -1601,6 +1603,11 @@ class App(
             curr = current_page_key_state.value
             
             items = []
+            if align == "left":
+                items.append(f"<style>#{cid} wa-button::part(base) {{ justify-content: flex-start; }}</style>")
+            elif align == "right":
+                items.append(f"<style>#{cid} wa-button::part(base) {{ justify-content: flex-end; }}</style>")
+
             for p in final_pages:
                 is_active = p.key == curr
                 page_hash = p.key.replace("page_", "")
@@ -2180,7 +2187,7 @@ class App(
             html_class = f"{t.theme_class} {'vl-splash-active' if self.show_splash else ''}".strip()
             body_class = "vl-splash-active" if self.show_splash else ""
             sidebar_resizer_style = "" if (self._sidebar_resizable and (sidebar_c or self.static_sidebar_order)) else "display: none;"
-            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%SIDEBAR_RESIZER_STYLE%", sidebar_resizer_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%HTML_CLASS%", html_class).replace("%BODY_CLASS%", body_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%SIDEBAR_WIDTH%", self._sidebar_width).replace("%SIDEBAR_MIN_WIDTH%", self._sidebar_min_width).replace("%SIDEBAR_MAX_WIDTH%", self._sidebar_max_width).replace("%SIDEBAR_RESIZABLE%", "true" if self._sidebar_resizable else "false").replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css).replace("%ROOT_STYLE%", root_style)
+            html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%SIDEBAR_RESIZER_STYLE%", sidebar_resizer_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%HTML_CLASS%", html_class).replace("%BODY_CLASS%", body_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%SIDEBAR_WIDTH%", self._sidebar_width).replace("%SIDEBAR_MIN_WIDTH%", self._sidebar_min_width).replace("%SIDEBAR_MAX_WIDTH%", self._sidebar_max_width).replace("%SIDEBAR_RESIZABLE%", "true" if self._sidebar_resizable else "false").replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css).replace("%ROOT_STYLE%", root_style).replace("%DISCONNECT_TIMEOUT%", str(self.disconnect_timeout))
             return HTMLResponse(html)
 
         @self.fastapi.post("/action/{cid}")
@@ -2413,6 +2420,8 @@ class App(
                 # Message processing loop
                 while True:
                     data = await ws.receive_json()
+                    if data.get("type") == "ping":
+                        continue
                     await process_message(data)
             except WebSocketDisconnect:
                 if sid and sid in self.ws_engine.sockets: 
@@ -4336,8 +4345,39 @@ HTML_TEMPLATE = r"""
             // Now connect WebSocket
             window._ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + "/ws");
             
+            window._intentionalDisconnect = false;
+            window._vlTimeout = %DISCONNECT_TIMEOUT%;
+            window._vlLastActivity = Date.now();
+
+            if (window._vlTimeout >= 0) {
+                // Send ping every 25 seconds to prevent network timeout
+                setInterval(() => {
+                    if (window._ws && window._ws.readyState === 1) {
+                        if (window._vlTimeout > 0 && (Date.now() - window._vlLastActivity) > window._vlTimeout * 1000) {
+                            debugLog("[WebSocket] Disconnecting due to inactivity timeout.");
+                            window._intentionalDisconnect = true;
+                            window._ws.close();
+                            document.body.style.transition = 'opacity 0.5s';
+                            document.body.style.opacity = '0.5';
+                            document.body.style.pointerEvents = 'none';
+                        } else {
+                            window._ws.send(JSON.stringify({ type: 'ping' }));
+                        }
+                    }
+                }, 25000);
+
+                if (window._vlTimeout > 0) {
+                    const resetActivity = () => { window._vlLastActivity = Date.now(); };
+                    document.addEventListener('mousemove', resetActivity, {passive: true});
+                    document.addEventListener('keydown', resetActivity, {passive: true});
+                    document.addEventListener('click', resetActivity, {passive: true});
+                    document.addEventListener('scroll', resetActivity, {passive: true});
+                }
+            }
+
             // Auto-reconnect/reload logic
             window._ws.onclose = () => {
+                if (window._intentionalDisconnect) return;
                 window._wsReady = false;
                 debugLog("[WebSocket] Connection lost. Auto-reloading...");
 
