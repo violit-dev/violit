@@ -739,7 +739,7 @@ def login_page():
 
         def do_login():
             if app.auth.login(username.value, password.value):
-                app.navigation_go("Home")   # switch to Home page
+                app.switch_page("Home")   # switch to Home page
             else:
                 app.toast("Invalid credentials", "danger")
 
@@ -750,10 +750,10 @@ def home_page():
     app.title(f"Welcome, {user.username}!")
 
     if app.auth.has_role("admin"):
-        app.button("Admin Panel", on_click=lambda: app.navigation_go("Admin"))
+        app.button("Admin Panel", on_click=lambda: app.switch_page("Admin"))
 
     app.button("Logout",
-               on_click=lambda: (app.auth.logout(), app.navigation_go("Login")),
+               on_click=lambda: (app.auth.logout(), app.switch_page("Login")),
                variant="secondary")
 
 def admin_page():
