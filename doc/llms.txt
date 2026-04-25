@@ -785,16 +785,17 @@ app.run()
 
 Violit provides a built-in CLI to manage your projects seamlessly, much like streamlit run or create-next-app.
 
-### iolit create
-Scaffolds a new Violit project with the recommended boilerplate (main.py, equirements.txt, .gitignore, README.md).
-`ash
+### violit create
+Scaffolds a new Violit project with the recommended boilerplate (main.py, 
+equirements.txt, .gitignore, README.md).
+```bash
 violit create my-app
 cd my-app
-`
+```
 
-### iolit run
+### violit run
 Executes your Violit application. It passes any trailing arguments directly to App.run().
-`ash
+```bash
 # Basic run
 violit run main.py
 
@@ -808,6 +809,6 @@ violit run main.py --native
 violit run main.py --make-migration "add_users"
 violit run main.py --apply
 violit run main.py --rollback 1
-`
+```
 
-*Note: You can still run python main.py [args]. iolit run is simply a convenient, standard wrapper.*
+*Note: You can still run python main.py [args]. violit run is simply a convenient, standard wrapper.*
