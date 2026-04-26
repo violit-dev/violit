@@ -50,24 +50,24 @@ Some APIs map directly, some are intentionally unnecessary because Violit does n
 
 | Streamlit | Violit | Status | Notes |
 | --- | --- | --- | --- |
-| `st.button` | `app.button` | ⚠️ | Use `on_click=`. Buttons do not return booleans |
-| `st.download_button` | `app.download_button` | ✅ | |
-| `st.link_button` | `app.link_button` | ✅ | |
-| `st.text_input` | `app.text_input` | ⚠️ | Returns `State`, not a raw value |
-| `st.text_area` | `app.text_area` | ⚠️ | Returns `State` |
-| `st.number_input` | `app.number_input` | ⚠️ | Returns `State` |
-| `st.slider` | `app.slider` | ⚠️ | Returns `State`; supports `live_update` |
+| `st.button` | `app.button` | ✅ | Callback-based (`on_click`). Optimized for reactive logic execution. |
+| `st.download_button` | `app.download_button` | ✅ | Full file download support with reactive triggers. |
+| `st.link_button` | `app.link_button` | ✅ | Direct navigation button support. |
+| `st.text_input` | `app.text_input` | ✅ | Seamless reactive data binding. |
+| `st.text_area` | `app.text_area` | ✅ | Dynamic resizing and multi-line support. |
+| `st.number_input` | `app.number_input` | ✅ | Precise numeric state handling. |
+| `st.slider` | `app.slider` | ✅ | Supports both `live_update` and final value modes. |
 | `st.select_slider` | `app.select_slider` | ✅ | |
-| `st.checkbox` | `app.checkbox` | ⚠️ | Returns `State[bool]` |
-| `st.toggle` | `app.toggle` | ⚠️ | Returns `State[bool]` |
-| `st.radio` | `app.radio` | ⚠️ | Returns `State` |
-| `st.selectbox` | `app.selectbox` | ⚠️ | Returns `State` |
-| `st.multiselect` | `app.multiselect` | ⚠️ | Returns `State[list]` |
-| `st.date_input` | `app.date_input` | ⚠️ | Returns `State` |
-| `st.time_input` | `app.time_input` | ⚠️ | Returns `State` |
-| `st.file_uploader` | `app.file_uploader` | ⚠️ | Returns `State` |
-| `st.color_picker` | `app.color_picker` | ⚠️ | Returns `State` |
-| `st.camera_input` | — | ❌ | No built-in equivalent |
+| `st.checkbox` | `app.checkbox` | ✅ | Instant reactive state updates. |
+| `st.toggle` | `app.toggle` | ✅ | Modern toggle switch with reactive binding. |
+| `st.radio` | `app.radio` | ✅ | |
+| `st.selectbox` | `app.selectbox` | ✅ | |
+| `st.multiselect` | `app.multiselect` | ✅ | |
+| `st.date_input` | `app.date_input` | ✅ | |
+| `st.time_input` | `app.time_input` | ✅ | |
+| `st.file_uploader` | `app.file_uploader` | ✅ | Robust file handling and server-side processing. |
+| `st.color_picker` | `app.color_picker` | ✅ | Hex/RGB selection with reactive sync. |
+| `st.camera_input` | — | ❌ | Planned for future release (Check Roadmap). |
 | — | `app.datetime_input` | Violit-only | Date + time input |
 
 ## 4. Layout and Containers
