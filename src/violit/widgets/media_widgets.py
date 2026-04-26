@@ -75,14 +75,15 @@ class MediaWidgetsMixin:
             
             # Modal HTML for enlarged image
             modal_id = f"modal-{cid}"
+            close_button_id = f"{modal_id}-close"
             modal_html = f'''
-            <wa-dialog id="{modal_id}" without-header style="--width: 100%; position: fixed; z-index: 10000;">
+            <wa-dialog id="{modal_id}" without-header light-dismiss with-footer style="--width: 100%; position: fixed; z-index: 10000;">
                 <div style="display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.05); border-radius: 0.5rem; overflow: hidden; padding: 1rem;">
                     <img src="{img_src}" style="max-width: 100%; max-height: 70vh; object-fit: contain; box-shadow: 0 10px 25px rgba(0,0,0,0.2);" />
                 </div>
                 {caption_html}
                 <div slot="footer" style="padding: 0; display: flex; justify-content: flex-end;">
-                    <wa-button variant="brand" appearance="accent" onclick="document.getElementById('{modal_id}').hide()">Close</wa-button>
+                    <button id="{close_button_id}" type="button" style="background: linear-gradient(135deg, #7c3aed, #2563eb); color: white; border: none; border-radius: 0.85rem; padding: 0.75rem 1.2rem; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(124,58,237,0.2);">Close</button>
                 </div>
                 <style>
                     #{modal_id} {{
@@ -119,6 +120,25 @@ class MediaWidgetsMixin:
                     }}
                 </style>
             </wa-dialog>
+            <script>
+                (() => {{
+                    const dialog = document.getElementById('{modal_id}');
+                    const closeButton = document.getElementById('{close_button_id}');
+                    if (!dialog || !closeButton || closeButton.dataset.vlBound === 'true') return;
+                    closeButton.dataset.vlBound = 'true';
+                    closeButton.addEventListener('click', () => {{
+                        if (typeof dialog.requestClose === 'function') {{
+                            dialog.requestClose(closeButton);
+                            return;
+                        }}
+                        if (dialog.dialog && typeof dialog.dialog.close === 'function') {{
+                            dialog.dialog.close();
+                            return;
+                        }}
+                        dialog.open = false;
+                    }});
+                }})();
+            </script>
             '''
 
             html = f'''
