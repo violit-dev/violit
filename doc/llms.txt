@@ -1,8 +1,8 @@
 # Violit — AI/LLM Code Generation Reference
 
-> **Violit ≈ Streamlit syntax + Reactive State (no rerun)**
-> If you know Streamlit, you already know 90% of Violit.
-> This document covers only the differences and Violit-specific patterns.
+> **Violit ≈ Streamlit-like authoring + fine-grained reactive updates + built-in app stack**
+> If you know Streamlit, start there, but do not assume Violit is only a widget-compatible clone.
+> Violit also has built-in ORM, auth, Tailwind-first styling hooks, background jobs, and interval timers.
 
 ---
 
@@ -13,6 +13,34 @@ Streamlit: st.xxx()        → Violit: app.xxx()
 st.session_state            → app.state()
 Full script rerun on change → Only affected widgets update (Zero Rerun)
 ```
+
+## High-Priority Rules For Code Generation
+
+- Always create `app = vl.App(...)` before using widgets.
+- Always end runnable examples with `app.run()`.
+- Prefer `app.state()` over ad-hoc globals or `session_state`-style dict code.
+- Pass `State` objects directly to widgets when you want reactivity.
+- Use `lambda:` when formatting `state.value` inside strings.
+- For complex reactive blocks, prefer `@app.reactivity`.
+- Do not generate `@app.fragment`; `fragment` is deprecated.
+- After defining a `@app.reactivity` function, call it once to register/render it.
+- Buttons do not return booleans. Use `on_click=`.
+- For database apps, prefer `vl.App(db="./app.db")` and `app.db` CRUD.
+- For auth, prefer `app.setup_auth(User)` instead of inventing a custom login stack.
+- For styling, start with `cls`. Use `style`, `configure_widget()`, `add_css()`, and `part_cls` only as needed.
+- For long-running work, prefer `app.background(...)`.
+- For polling and live tickers, prefer `app.interval(...)`.
+
+## Common Hallucinations To Avoid
+
+- Do not write `if app.button(...): ...`.
+- Do not assume Streamlit's rerun model exists in Violit.
+- Do not default to `st.session_state`-style patterns.
+- Do not generate `@app.fragment` or `app.fragment(...)`; it is deprecated.
+- Do not define `@app.reactivity` blocks and forget to call them.
+- Do not use `@app.reactivity` when a direct `State` pass, `lambda:`, `app.If()`, or `app.For()` already solves the problem more simply.
+- Do not treat styling as UnoCSS-first or invent framework-specific CSS DSLs.
+- Do not assume ORM and auth require external integration first; Violit already has built-in paths.
 
 ---
 
@@ -118,6 +146,46 @@ app.text(f"Count: {count.value}")          # Just passes string "Count: 0"
 - Pass `state.value` to widgets → frozen (not reactive)
 - Use `lambda:` when you need f-string formatting or complex logic
 - Use `.value` only in callbacks/calculations, not in widget arguments
+
+### Complex Reactivity: `@app.reactivity`
+
+Most reactivity in Violit does **not** need a decorator.
+Use direct `State` passing, operators, `lambda:`, `app.If()`, or `app.For()` first.
+
+Use `@app.reactivity` when you need a **reactive block with normal Python control flow**, especially `if` / `for` logic that should rerender as a unit.
+
+```python
+count = app.state(0)
+
+@app.reactivity
+def summary_block():
+    if count.value > 5:
+        app.success("Big!")
+    else:
+        app.info("Small")
+
+summary_block()  # REQUIRED: call once to register and render
+```
+
+**Important rules:**
+- Prefer `@app.reactivity` over deprecated `@app.fragment`
+- The decorated function must be called once after definition
+- Use it for grouped reactive control flow, not for every simple text binding
+- For simple output, `app.text(state)` or `app.text(lambda: ...)` is usually better
+
+**Decorator vs context manager:**
+- `@app.reactivity`: preferred for a function-wrapped reactive block and partial rerender of that block
+- `with app.reactivity():`: valid, but think of it as an inline reactive scope; use only when the inline form is clearly better
+
+**Deprecated pattern:**
+
+```python
+@app.fragment
+def old_block():
+    app.text("Do not generate this")
+```
+
+Do not generate that pattern in new Violit code.
 
 ---
 
@@ -326,13 +394,14 @@ app.set_theme("ocean")
 
 ---
 
-## 11. Styling (cls & style)
+## 11. Styling (Tailwind-first)
 
-Every widget supports `cls` and `style` parameters.
+Violit styling is currently **Tailwind-first**.
+Start with `cls`, then use `style`, `add_css()`, `configure_widget()`, and `part_cls` when you need more control.
 
 ```python
 app.text("Big", style="font-size: 2rem; font-weight: 800;")
-app.button("Wide", cls="w:100%", variant="primary")
+app.button("Wide", cls="w-full rounded-full bg-sky-500 text-white", variant="primary")
 app.card(cls="glass", style="padding: 2rem;")
 
 # Global CSS
@@ -344,9 +413,60 @@ app.add_css("""
 """)
 
 # Widget type defaults
-app.configure_widget("button", cls="font:600")
+app.configure_widget("button", cls="font-semibold rounded-full")
 app.configure_widget("card", style="border-radius: 1rem;")
+
+# Shadow DOM part styling
+app.button(
+    "Save",
+    part_cls={"base": "shadow-lg rounded-full"},
+)
 ```
+
+**Styling rules of thumb:**
+- `cls`: first choice for utilities and layout
+- `style`: direct CSS values or CSS variables
+- `configure_widget()`: defaults for a widget family
+- `add_css()`: global reusable classes and `::part()` selectors
+- `part_cls`: advanced Shadow DOM part overrides
+
+## Background Tasks & Interval Timers
+
+Use these instead of inventing your own thread/timer scaffolding unless you have a strong reason not to.
+
+```python
+import time
+
+progress = app.state(0)
+status = app.state("idle")
+
+def work():
+    status.set("running")
+    for step in range(1, 6):
+        time.sleep(0.35)
+        progress.set(step * 20)
+    status.set("completed")
+
+task = app.background(
+    work,
+    on_complete=lambda: app.toast("Finished", variant="success"),
+    singleton=True,
+)
+
+timer = app.interval(
+    lambda: app.toast("tick", duration=800),
+    ms=5000,
+    autostart=False,
+)
+
+app.button("Start job", on_click=task.start)
+app.button("Pause timer", on_click=timer.pause)
+app.progress(progress)
+```
+
+**When to use which:**
+- `app.background(...)`: long-running Python work
+- `app.interval(...)`: periodic callbacks, polling, dashboards, timers
 
 ---
 
@@ -483,7 +603,7 @@ app.run()
 | Input return | `val = st.text_input()` (str) | `val = app.text_input()` (State) | |
 | Rerun | `st.rerun()` | Not needed | Auto partial update |
 | Cache | `@st.cache_data` | Not needed | No full rerun |
-| Fragment | `@st.fragment` | Not needed | Fine-grained reactivity by design |
+| Reactive block | `@st.fragment` | `@app.reactivity` | `@app.fragment` is deprecated; call the decorated function once |
 | Key | `st.button("X", key="k")` | Usually not needed | Auto-generated |
 | Sidebar | `st.sidebar.xxx()` | `with app.sidebar: app.xxx()` | Context manager |
 | Pages | `st.Page` in `st.navigation` | `vl.Page` in `app.navigation` | |
