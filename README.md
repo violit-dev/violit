@@ -1,18 +1,14 @@
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/f6a56e37-37a5-437c-ae16-13bff7029797" alt="Violit Logo" width="100%">
-</p>
+# Violit
 
-🎉 **Featured on OpenSourceProjects.dev** : ["Stop Overcomplicating Your Data Dashboards"](https://www.opensourceprojects.dev/post/634ad562-83d4-4a7b-8a74-b61e47ad68aa)
+![Violit Logo](https://github.com/user-attachments/assets/f6a56e37-37a5-437c-ae16-13bff7029797)
 
+🎉 **Featured on OpenSourceProjects.dev**: ["Stop Overcomplicating Your Data Dashboards"](https://www.opensourceprojects.dev/post/634ad562-83d4-4a7b-8a74-b61e47ad68aa)
 
-# 💜 Violit
+> **"Faster than Light, Beautiful as Violet."** **Structure of Streamlit × Performance of React.**
 
-> **"Faster than Light, Beautiful as Violet."**
-> **Structure of Streamlit × Performance of React.**
+**Violit** is a Python web framework built on a **fine-grained reactive architecture**. It preserves the highly productive, top-down Python authoring style loved by the Streamlit community, but eliminates the performance bottlenecks of the **full script rerun** model.
 
-**Violit** is a next-generation Python web framework that adopts a **Fine-Grained State Architecture** for instant reactivity, unlike Streamlit's **Full Script Rerun** structure.
-
-Build applications that react at the speed of light with the most elegant syntax.
+It starts naturally from data apps and dashboards, but is not limited to them. With built-in ORM/Auth support and Tailwind-style design primitives, Violit also scales well to more general web applications such as admin tools, internal platforms, CRUD systems, and user-facing product UIs.
 
 <p align="center">
 <img src="https://img.shields.io/pypi/v/violit?color=blueviolet&style=flat-square&ignore=cache" alt="PyPI">
@@ -20,340 +16,302 @@ Build applications that react at the speed of light with the most elegant syntax
 <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="MIT License">
 <img src="https://img.shields.io/badge/Framework-FastAPI-009688.svg?style=flat-square" alt="FastAPI">
 <img src="https://img.shields.io/badge/UI-Web%20Awesome-0F766E.svg?style=flat-square" alt="Web Awesome">
+<img src="https://img.shields.io/github/stars/violit-dev/violit?style=flat-square&color=f59e0b" alt="Github Stars">
 </p>
-
----
-
-## 📸 Demo
-
-*A dashboard built with Violit running in real-time.*
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/violit-dev/violit/refs/heads/main/assets/demo_show_main_small.gif" alt="Violit Showcase Demo" width=60%>
-</p>
-
-
-
----
-
-## ⚡ Why Violit?
-
-### Architectural Differences
-
-Violit and Streamlit are similar in that they build UIs with Python code, but their internal mechanisms are fundamentally different.
-
-| Feature | Streamlit (Traditional) | **Violit (Reactive)** |
-| --- | --- | --- |
-| **Execution Model** | **Full Script Rerun**<br>Reruns the entire script on every user interaction. | **Fine-Grained Updates**<br>Updates only the components connected to the modified State. |
-| **Performance** | Response speed may degrade as data size increases. | Maintains consistent reactivity regardless of data scale. |
-| **Optimization** | Requires optimization decorators like `@cache`, `@fragment`. | Optimized by design without extra optimization code. |
-| **Deployment** | Optimized for web browser execution. | Supports both Web Browser and **Desktop Native App** modes. |
-| **Design** | Focuses on providing basic UI. | Provides ready-to-use designs with **20+ professional themes**. |
-
-### Key Features
-
-1.  **Optimization by Design (Streamlit-Like Syntax, No Complexity)**:
-    Streamlit's intuitive syntax is maintained, but complex optimization tools are removed at the architecture level.
-    *   ❌ **No `@cache_data`, `@fragment`, `st.rerun`**: Thanks to the fine-grained structure, manual optimization is unnecessary.
-    *   ❌ **No `key` Management**: No need to manually specify unique keys for widget state management.
-    *   ❌ **No Complex Callbacks**: No need to define complex callbacks/classes like Dash or Panel.
-
-2.  **Ultra-Fast Speed**: Even if you move the slider in 0.1s increments, the chart reacts in real-time without stuttering.
-
-3.  **Hybrid Runtime**:
-    *   **WebSocket Mode**: Ultra-low latency bidirectional communication (Default)
-    *   **Lite Mode**: HTTP-based, advantageous for handling large-scale concurrent connections
-
-4.  **Desktop Mode**: Can run as a perfect desktop application without Electron using the `--native` option.
-
----
-
-## 🎨 Theme Gallery
-
-You don't need to know CSS at all. Violit provides over 20 themes. (Soon, users will be able to easily add Custom Themes.)
-
-*Theme demo will be updated soon.*
-
-![Theme Gallery Grid](PLACEHOLDER_FOR_THEME_GALLERY_GRID)
-
-```python
-# Configuration at initialization
-app = vl.App(theme='cyberpunk')
-
-# Runtime change
-app.set_theme('ocean')
-```
-
-| Theme Family | Examples |
-| --- | --- |
-| **Dark 🌑** | `dark`, `dracula`, `monokai`, `ocean`, `forest`, `sunset` |
-| **Light ☀️** | `light`, `pastel`, `retro`, `nord`, `soft_neu` |
-| **Tech 🤖** | `cyberpunk`, `terminal`, `cyber_hud`, `blueprint` |
-| **Professional 💼** | `editorial`, `bootstrap`, `ant`, `material`, `lg_innotek` |
-
----
-
-## 📈 Benchmarks & Performance
-
-Benchmark results showing how efficient Violit's fine-grained update method is compared to the existing full rerun method.
-
-
-
-*Detailed benchmark data will be updated soon.*
-
-![Benchmark Chart](PLACEHOLDER_FOR_BENCHMARK_CHART)
-
-
----
-
-## 🚀 Comparison
-
-### Python UI Frameworks
-
-| Framework | Architecture | Learning Curve | Performance | Desktop App | Real-time |
-|-----------|---------|----------|---------|------------|------------|
-| **Streamlit** | Full Rerun | Very Easy | Slow | ❌ | △ |
-| **Dash** | Callback | Medium | Fast | ❌ | △ |
-| **Panel** | Param | Hard | Fast | ❌ | ✅ |
-| **Reflex** | React (Compile) | Hard | Fast | ❌ | ✅ |
-| **NiceGUI** | Vue | Easy | Fast | ✅ | ✅ |
-| **Violit** | **Signal** | **Very Easy** | **Fast** | **✅** | **✅** |
-
-### Code Comparison
-
-#### **1. vs Streamlit** (Rerun vs Signal)
-*Streamlit re-executes the **entire script** on button click, but Violit executes only **that function**.*
-
-```python
-# Streamlit
-import streamlit as st
-
-if "count" not in st.session_state:
-    st.session_state.count = 0
-
-if st.button("Click"):
-    st.session_state.count += 1 # Rerun triggers here
-
-st.write(st.session_state.count)
-```
-
-```python
-# Violit
-import violit as vl
-app = vl.App()
-
-count = app.state(0)
-
-# Update only count on click (No Rerun)
-app.button("Click", on_click=lambda: count.set(count.value + 1))
-app.write(count) 
-```
-
-#### **2. vs Dash** (Callback Hell vs Auto-Reactivity)
-*Dash requires complex **Callbacks** connecting Input/Output, but Violit only needs a single **State**.*
-
-```python
-# Dash
-from dash import Dash, html, Input, Output, callback
-
-app = Dash(__name__)
-app.layout = html.Div([
-    html.Button("Click", id="btn"),
-    html.Div(id="out")
-])
-
-@callback(Output("out", "children"), Input("btn", "n_clicks"))
-def update(n):
-    return f"Value: {n}" if n else "Value: 0"
-```
-
-```python
-# Violit
-count = app.state(0)
-
-app.button("Click", on_click=lambda: count.set(count.value + 1))
-# Automatic state dependency tracking -> No Callback needed
-app.write(lambda: f"Value: {count.value}")
-```
-
-#### **3. vs NiceGUI** (Binding vs Direct State)
-*NiceGUI is also great, but Violit offers a **more concise syntax** in the style of Streamlit.*
-
-```python
-# NiceGUI
-from nicegui import ui
-
-count = {'val': 0}
-ui.button('Click', on_click=lambda: count.update(val=count['val'] + 1))
-ui.label().bind_text_from(count, 'val', backward=lambda x: f'Value: {x}')
-```
-
-```python
-# Violit
-count = app.state(0)
-app.button('Click', on_click=lambda: count.set(count.value + 1))
-app.write(count) # No need for complex connections like .bind_text
-```
-
-#### **4. vs Reflex** (Class & Compile vs Pure Python)
-*Reflex requires State **class definition** and **compilation**, but Violit is a **pure Python** script.*
-
-```python
-# Reflex
-import reflex as rx
-
-class State(rx.State):
-    count: int = 0
-    def increment(self):
-        self.count += 1
-
-def index():
-    return rx.vstack(
-        rx.button("Click", on_click=State.increment),
-        rx.text(State.count)
-    )
-```
-
-```python
-# Violit
-# No class definition needed, no compilation needed
-count = app.state(0)
-app.button("Click", on_click=lambda: count.set(count.value + 1))
-app.write(count)
-```
-
----
-
-## 🚀 Quick Start
-
-### 1. Installation
-
-Can be installed in Python 3.10+ environments.
 
 ```bash
 pip install violit
-
-# Or development version
-pip install git+https://github.com/violit-dev/violit.git
 ```
 
+- **Docs:** <https://doc.violit.cloud>
+- **PyPI:** <https://pypi.org/project/violit/>
+- **GitHub:** <https://github.com/violit-dev/violit>
 
-### 2. Hello, Violit!
+## Demo
 
-Create a `hello.py` file.
+This demo illustrates the kind of interaction Violit was built for: Python-first UI code with reactive updates that remain snappy and smooth, even as the interface grows more complex.
+
+![Violit Showcase Demo](https://raw.githubusercontent.com/violit-dev/violit/refs/heads/main/assets/demo_show_main_small.gif)
+
+## Why Violit?
+
+Violit is designed for developers who love the immediate productivity of Streamlit but need an architecture that scales gracefully as their applications evolve from tiny dashboards to feature-rich web apps.
+
+- **Streamlit-like Python flow**, but completely free from full script reruns.
+- **Fine-grained state updates** ensuring only the dependent widgets update (React-like reactivity).
+- **Built-in ORM** ready to use with `vl.App(db=...)`.
+- **Tailwind-like styling** via the `cls` parameter.
+- **Async friendly** with built-in `app.background(...)` and `app.interval(...)`.
+- **Flexible Runtimes**: Runs in the Browser, HTMX Lite mode, and as Desktop Native apps.
+- **Rich ecosystem**: Out-of-the-box support for powerful widgets, themes, and animations.
+
+## Architectural Difference
+
+The fundamental difference lies not just in syntax, but in how the framework handles the DOM after a user interacts (clicks, types, or drags).
+
+| Topic | Streamlit | Violit |
+| :--- | :--- | :--- |
+| **Update Model** | Full script rerun | Fine-grained reactive updates |
+| **Interaction Cost** | The entire script may re-execute | Only explicitly dependent UI components update |
+| **Optimization Burden** | Often requires workarounds for rerun constraints | Naturally handled by the signal-based architecture |
+| **App Growth Path** | Ideal for quick, simple data views | Designed to scale into richer, stateful app flows |
+| **Runtime Modes** | Browser-focused | WebSocket, Lite, Desktop Native |
+| **Styling** | Basic theming | Themes + Tailwind-like utility styling |
+
+## Framework Comparison (Feature Matrix)
+
+Every Python UI framework has its own unique philosophy and strengths. This matrix compares the structural capabilities of popular frameworks to help you choose the right tool for your specific use case.
+
+| Framework | No Full Rerun | Pure Python (Zero JS/HTML) | SEO / SSR Ready | Desktop Native (exe/app) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Streamlit** | ❌ | ✅ | ❌ | ⚠️ *(Via wrappers)* |
+| **Dash / Panel** | ✅ *(Callbacks)* | ✅ | ❌ | ❌ |
+| **NiceGUI** | ✅ | ✅ | ❌ | ✅ |
+| **Reflex** | ✅ | ⚠️ *(React paradigm)* | ✅ | ❌ |
+| **RIO** | ✅ *(React-like)* | ✅ | ❌ | ✅ *(Local mode)* |
+| **Violit** | ✅ **(Signals)** | ✅ | ✅ | ✅ **(Built-in pywebview)** |
+
+### What This Matrix Means
+
+- **Streamlit** remains the easiest starting point for data scientists, but its full-rerun model can become a bottleneck as interaction complexity grows.
+- **Dash & Panel** are robust data tools but often require adopting specific callback structures.
+- **NiceGUI** is highly practical and productive, adopting a more object-oriented UI binding style.
+- **Reflex** is incredibly powerful and compiles to a React frontend, but introduces a steeper learning curve for developers unfamiliar with React concepts.
+- **RIO** is a modern, reactive framework inspired by React and Flutter, offering great component structures, though it requires adopting an opinionated class-based architecture.
+- **Violit** aims for the sweet spot: providing the **familiar, script-like readability of Streamlit**, while internally leveraging a **modern, fine-grained reactive engine** and offering built-in full-stack features (ORM, Auth, Desktop compilation).
+
+## Syntax Comparison
+
+The snippets below are intentionally minimal. The goal is to highlight how much structural boilerplate each framework requires to express the exact same tiny interaction.
+
+### Streamlit
+
+```python
+import streamlit as st
+
+name = st.text_input("Name", "Violit")
+st.write(f"Hello, {name}")
+```
+
+- **The Vibe:** Extremely direct and beginner-friendly.
+- **The Trade-off:** As the app grows, you find yourself constantly architecting around the full-rerun behavior.
+
+### NiceGUI
+
+```python
+from nicegui import ui
+
+name = ui.input("Name", value="Violit")
+ui.label().bind_text_from(name, "value", lambda v: f"Hello, {v}")
+
+ui.run()
+```
+
+- **The Vibe:** Explicit UI object binding. Excellent for component-driven design.
+- **The Trade-off:** Shifts away from the declarative, top-down reading flow that data professionals prefer.
+
+### Reflex
+
+```python
+import reflex as rx
+
+class State(rx.State):
+    name: str = "Violit"
+
+def app():
+    return rx.vstack(
+        rx.input(value=State.name, on_change=State.set_name),
+        rx.text(State.name),
+    )
+```
+
+- **The Vibe:** A robust, React-flavored state model.
+- **The Trade-off:** Requires defining separate state classes, which can feel heavy for small to medium interactive apps.
+
+### RIO
+
+```python
+import rio
+
+class Page(rio.Component):
+    name: str = "Violit"
+
+    def build(self) -> rio.Component:
+        return rio.Column(
+            rio.TextInput("Name", text=self.bind().name),
+            rio.Text(f"Hello, {self.name}"),
+        )
+```
+
+- **The Vibe:** Component-based and reactive, heavily inspired by React and Flutter.
+- **The Trade-off:** The class-based component structure is powerful but can feel opinionated and heavier compared to a simple procedural script.
+
+### Violit Syntax
 
 ```python
 import violit as vl
 
-app = vl.App(title="Hello Violit", theme='ocean')
+app = vl.App()
 
-app.title("💜 Hello, Violit!")
-app.markdown("Experience the speed of **Zero Rerun**.")
-
-count = app.state(0)
-
-col1, col2 = app.columns(2)
-with col1:
-    app.button("➕ Plus", on_click=lambda: count.set(count.value + 1))
-with col2:
-    app.button("➖ Minus", on_click=lambda: count.set(count.value - 1))
-
-app.metric("Current Count", count)
+name = app.text_input("Name", value="Violit")
+app.text(lambda: f"Hello, {name.value}")
 
 app.run()
 ```
 
-### 3. Execution
+- **The Vibe:** The top-down simplicity of Streamlit, powered by the reactive performance of modern JS frameworks.
+- **The Advantage:** The syntax remains lightweight, but the runtime updates only the necessary DOM nodes seamlessly.
 
-```bash
-# Basic run (WebSocket Mode)
-python hello.py
+## Quick Start
 
-# Desktop App Mode (Recommended)
-python hello.py --native
+Experience the core Violit philosophy: declare state, bind widgets, and let the runtime update only what's necessary.
 
-# Port configuration
-python hello.py --port 8020
+```python
+import violit as vl
+
+app = vl.App(title="Hello Violit", theme="violit_light_jewel")
+
+count = app.state(0)
+name = app.text_input("Project name", value="Violit")
+
+app.title("Build apps in pure Python")
+app.text(lambda: f"Hello, {name.value}")
+app.metric("Clicks", count)
+app.button("+1", on_click=lambda: count.set(count.value + 1))
+
+app.run()
 ```
 
----
+## Very Easy ORM Example
 
-## 📚 Widget Support
+Violit bridges the gap between a quick prototype and a production-ready application by offering built-in persistence.
 
-Violit supports core Streamlit widgets, and some features have been redesigned for greater efficiency.
+```python
+import violit as vl
+from sqlmodel import SQLModel, Field
+from typing import Optional
 
-For a detailed compatibility list and information on unsupported widgets, please refer to the [Streamlit API Support Matrix](./doc/Streamlit%20API%20Support%20Matrix.md) document.
+class Todo(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str
 
----
+app = vl.App(db="./todo.db")
 
-## 🛠️ Tech Stack
+app.db.add(Todo(title="Ship first Violit app"))
+items = app.db.all(Todo)
 
-*   **Backend**: FastAPI (Async Python)
-*   **Frontend**: Web Components (Web Awesome), Plotly.js, AG-Grid
-*   **Protocol**: WebSocket & HTTP/HTMX Hybrid
-*   **State**: Signal-based Reactivity
+app.title("Todo List")
+app.text(lambda: f"Total items: {len(items)}")
 
----
-
-## 🗺️ Roadmap
-
-Violit is continuously evolving.
-
-*   ✅ **Core**: Signal State Engine, Theme System
-*   ✅ **Widgets**: Plotly, Dataframe, Input Widgets
-*   ✅ **Homepage**: Official Homepage Open 
-*   ✅ **Documentation**: Official Technical Documentation and API Reference Update 
-*   ⏳ **Custom Components**: User-defined Custom Component Support 
-*   ⏳ **Custom Theme**: User-defined Custom Theme Support 
-*   ⏳ **async**: Async processing support 
-*   ⏳ **More examples**: Provide more real-world usable example code 
-*   ⏳ **Violit.Cloud**: Cloud deployment service
-*   ⏳ **Expansion**: Integration of more third-party libraries
-
----
-
-## 📂 Project Structure
-
-```bash
-.
-├── violit/            # Framework source code
-│   ├── app.py         # Main App class and entry point
-│   ├── broadcast.py   # Real-time WebSocket broadcasting
-│   ├── state.py       # Reactive State Engine
-│   ├── theme.py       # Theme management
-│   ├── assets/        # Built-in static files
-│   └── widgets/       # Widget implementations
-│       ├── input_widgets.py
-│       ├── data_widgets.py
-│       ├── layout_widgets.py
-│       └── ...
-└── requirements.txt   # Dependency list
+app.run()
 ```
 
----
+## Background Work
 
-## 🤝 Contributing
+This is where Violit truly separates itself from simple dashboard tools. You can model long-running tasks directly in your Python code without freezing the user interface.
 
-**Violit** is an open-source project. Let's build the future of faster and more beautiful Python UIs together.
+```python
+import time
+import violit as vl
 
-1.  Fork this repository
-2.  Create your feature branch
-3.  Commit your changes
-4.  Push to the branch
-5.  Open a Pull Request
+app = vl.App()
+progress = app.state(0)
 
----
+def work():
+    for step in range(1, 6):
+        time.sleep(0.3)
+        progress.set(step * 20)
+
+task = app.background(work)
+
+app.button("Run task", on_click=task.start)
+app.progress(progress)
+
+app.run()
+```
+
+*Tip: If you need periodic polling or refreshing, `app.interval(...)` is also natively supported.*
+
+## Styling
+
+Violit keeps UI customization practical and fast. You can use utility classes without dropping out of Python for every minor CSS adjustment.
+
+```python
+app.button(
+    "Deploy",
+    cls="rounded-full bg-sky-500 px-6 py-3 text-white shadow-lg hover:bg-sky-600",
+)
+```
+
+## Tech Stack
+
+Under the hood, Violit utilizes a pragmatic, modern stack focused on performance and interactivity.
+
+- **Backend:** FastAPI, Uvicorn
+- **Reactivity:** WebSocket runtime, HTMX-based Lite mode
+- **Data & DB:** SQLModel + Alembic, pandas, numpy
+- **Visualization:** Vega-Lite, Plotly integration
+- **Desktop:** pywebview for native executables
+- **Assets:** Local bundled assets for offline-friendly deployments
+
+## Roadmap
+
+Violit is evolving rapidly. The core reactive foundation is solid, and several full-stack features are already implemented. Our next steps focus on ecosystem expansion and customization.
+
+- ✅ **Core**: Signal State Engine, Theme System
+- ✅ **Widgets**: Plotly, Dataframe, Input Widgets
+- ✅ **ORM**: Built-in ORM support with SQLModel and migrations
+- ✅ **Auth**: Built-in authentication flow and page protection
+- ✅ **Styling**: Tailwind-like utility styling support
+- ✅ **Homepage**: Official Website launched
+- ✅ **Documentation**: Technical Documentation and API Reference
+- ⏳ **Custom Components**: User-defined Custom Component APIs
+- ⏳ **Custom Theme**: Advanced theming support
+- ⏳ **Examples**: More real-world, production-grade templates
+- ⏳ **Violit.Cloud**: One-click cloud deployment service
+- ⏳ **Expansion**: Deeper integration with third-party libraries
+
+See detailed plans in: [a_website/ROADMAP.md](a_website/ROADMAP.md)
+
+## Installation
+
+Getting started is as simple as installing the package. The Violit CLI is automatically included.
+
+```bash
+pip install violit
+# Or to get the latest bleeding-edge version:
+pip install git+https://github.com/violit-dev/violit.git
+```
+
+## Running Your App
+
+Violit ships with a powerful CLI. The recommended way to run your apps is via `violit run`.
+
+```bash
+violit run app.py
+violit run app.py --reload    # Auto-reload on code changes
+violit run app.py --native    # Launch as a Desktop App
+violit run app.py --port 8020
+```
+
+You can also scaffold a new project instantly:
+
+```bash
+violit create my_app
+cd my_app
+violit run main.py --reload
+```
+
+## Documentation & Resources
+
+Ready to dive deeper? Check out our official guides depending on your needs:
+
+- **Live Docs:** <https://doc.violit.cloud>
+- **Streamlit Migration:** [Streamlit API Support Matrix](doc/Streamlit%20API%20Support%20Matrix.md)
+- **AI Coding Context:** [llms.txt](doc/llms.txt)
 
 ## 📝 License
 
-MIT License
+Violit is released under the **MIT License**.
 
-**Violit™ is a trademark of The Violit Team.**
-
----
-
-<p align="center">
-<strong>Made with 💜 by the Violit Team</strong>
-<br>
-<em>Faster than Light, Beautiful as Violet.</em>
-</p>
+*Trademark Note: The open-source license applies to the code, while "Violit™" remains a trademark of The Violit Team to ensure clear project identity.*
