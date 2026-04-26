@@ -701,6 +701,8 @@ class InputWidgetsMixin:
             auto_rows = max(4, min(12, content_lines + 1))
             effective_rows = auto_rows
             
+            textarea_resize = props.pop("resize", "vertical")
+
             if self.mode == 'lite':
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
                 listener_script = ""
@@ -708,6 +710,12 @@ class InputWidgetsMixin:
                 # WS mode: use addEventListener for Web Awesome custom events
                 attrs = {}
                 desired_json = json.dumps(cv, ensure_ascii=False)
+                resize_sync = ""
+                if textarea_resize == "auto":
+                    resize_sync = '''
+                            if (typeof el.handleValueChange === 'function') el.handleValueChange();
+                            if (typeof el.setTextareaDimensions === 'function') el.setTextareaDimensions();
+                    '''
                 listener_script = f'''
                 <script>
                 (function() {{
@@ -716,8 +724,7 @@ class InputWidgetsMixin:
                     if (el) {{
                         const syncTextarea = function() {{
                             if (el.value !== desiredValue) el.value = desiredValue;
-                            if (typeof el.handleValueChange === 'function') el.handleValueChange();
-                            if (typeof el.setTextareaDimensions === 'function') el.setTextareaDimensions();
+{resize_sync}
                         }};
 
                         syncTextarea();
@@ -742,22 +749,25 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            textarea_props = {"resize": "auto"}
-            if height:
-                h_str = str(height)
-                if h_str.endswith("rows"):
-                    # Explicit rows: "10rows" -> 10
+            textarea_props = {"resize": textarea_resize}
+            explicit_min_height = None
+            if height is not None:
+                h_str = str(height).strip()
+                if h_str.endswith("px"):
+                    val = h_str[:-2].strip()
                     try:
-                        effective_rows = int(h_str.replace("rows", "").strip())
-                        textarea_props["rows"] = effective_rows
+                        explicit_min_height = max(48, int(float(val)))
+                    except ValueError:
+                        explicit_min_height = None
+                else:
+                    # Violit treats `height` as visible rows by default.
+                    # Use an explicit `px` suffix when a pixel height is intended.
+                    row_text = h_str.replace("rows", "").strip()
+                    try:
+                        effective_rows = max(1, int(float(row_text)))
                     except ValueError:
                         effective_rows = 4
-                        textarea_props["rows"] = effective_rows
-                else:
-                    # Everything else: Treat as pixels (Streamlit default)
-                    # "200", 200, "200px" -> 200px
-                    val = h_str.replace("px", "").strip()
-                    _style = merge_style(f"height: {val}px;", _style)
+                    textarea_props["rows"] = effective_rows
             else:
                 textarea_props["rows"] = effective_rows
 
@@ -766,7 +776,10 @@ class InputWidgetsMixin:
             # Give the host element a minimum block size so multiline editors always look multiline.
             min_height_rem = max(5.5, 1.35 * effective_rows + 1.6)
             existing_inner_style = props.get("style", "")
-            textarea_style = merge_style(existing_inner_style, f"min-height: {min_height_rem:.2f}rem;")
+            if explicit_min_height is not None:
+                textarea_style = merge_style(existing_inner_style, f"min-height: {explicit_min_height}px;")
+            else:
+                textarea_style = merge_style(existing_inner_style, f"min-height: {min_height_rem:.2f}rem;")
             textarea_props["style"] = textarea_style
 
             if max_chars is not None: textarea_props["maxlength"] = max_chars
