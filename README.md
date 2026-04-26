@@ -64,12 +64,12 @@ Every Python UI framework has its own unique philosophy and strengths. This matr
 
 | Framework | No Full Rerun | Pure Python (Zero JS/HTML) | SEO / SSR Ready | Desktop Native (exe/app) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Streamlit** | ❌ | ✅ | ❌ | ⚠️ *(Via wrappers)* |
-| **Dash / Panel** | ✅ *(Callbacks)* | ✅ | ❌ | ❌ |
+| **Streamlit** | ❌ | ✅ | ❌ | ❌ |
+| **Dash / Panel** | ✅<br />*(Callbacks)* | ✅ | ❌ | ❌ |
 | **NiceGUI** | ✅ | ✅ | ❌ | ✅ |
-| **Reflex** | ✅ | ⚠️ *(React paradigm)* | ✅ | ❌ |
-| **RIO** | ✅ *(React-like)* | ✅ | ❌ | ✅ *(Local mode)* |
-| **Violit** | ✅ **(Signals)** | ✅ | ✅ | ✅ **(Built-in pywebview)** |
+| **Reflex** | ✅ | ⚠️<br />*(React paradigm)* | ✅ | ❌ |
+| **RIO** | ✅<br />*(React-like)* | ✅ | ❌ | ✅<br />*(Local mode)* |
+| **Violit** | ✅<br />**(Signals)** | ✅ | ✅ | ✅<br />**(Built-in pywebview)** |
 
 ### What This Matrix Means
 
@@ -271,7 +271,6 @@ Violit is evolving rapidly. The core reactive foundation is solid, and several f
 - ⏳ **Violit.Cloud**: One-click cloud deployment service
 - ⏳ **Expansion**: Deeper integration with third-party libraries
 
-See detailed plans in: [a_website/ROADMAP.md](a_website/ROADMAP.md)
 
 ## Installation
 
