@@ -1552,6 +1552,7 @@ class App(
         singleton: bool = False,
         max_workers: int = 4,
         executor: str = "thread",
+        flush_interval: float = 0.2,
     ) -> 'BackgroundTask':
         """Run a long-running function in the background without blocking the UI.
         
@@ -1566,6 +1567,7 @@ class App(
             singleton:   If True, prevents starting a second instance while running
             max_workers: Max concurrent background tasks (shared pool, default: 4)
             executor:    'thread' (default) or 'process' (for CPU-heavy, future)
+            flush_interval: Seconds between live UI flushes while the task runs
         
         Returns:
             BackgroundTask handle with start() / cancel() / state / is_running
@@ -1595,6 +1597,7 @@ class App(
             singleton=singleton,
             max_workers=max_workers,
             executor=executor,
+            flush_interval=flush_interval,
         )
 
     # End Background Task API

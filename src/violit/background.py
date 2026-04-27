@@ -86,6 +86,7 @@ class BackgroundTask:
         singleton: bool = False,
         max_workers: int = 4,
         executor: str = "thread",
+        flush_interval: float = 0.2,
     ):
         self._fn = fn
         self._app = app
@@ -94,6 +95,7 @@ class BackgroundTask:
         self._singleton = singleton
         self._max_workers = max_workers
         self._executor_type = executor
+        self._flush_interval = max(0.01, float(flush_interval))
         self._state = "idle"
         self._future: Optional[Future] = None
         self._result: Any = None
@@ -248,7 +250,7 @@ class BackgroundTask:
         t = session_ctx.set(sid) if sid else None
         try:
             while not stop_event.is_set():
-                stop_event.wait(0.2)  # flush every 200ms
+                stop_event.wait(self._flush_interval)
                 if not stop_event.is_set():
                     self._push_dirty_to_session(sid)
         finally:
