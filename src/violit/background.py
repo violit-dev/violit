@@ -259,38 +259,47 @@ class BackgroundTask:
 
     def _push_dirty_to_session(self, sid: str):
         """Push any dirty component updates to the specific user session."""
-        if not sid or not self._app.ws_engine:
-            return
-
-        if sid not in self._app.ws_engine.sockets:
-            logger.debug(f"[background] Session {sid[:8]}... not connected, skipping push")
+        if not sid:
             return
 
         try:
             dirty = self._app._get_dirty_rendered()
-            if not dirty:
+
+            if self._app.ws_engine and sid in self._app.ws_engine.sockets:
+                if not dirty:
+                    return
+
+                main_loop = getattr(self._app, '_main_loop', None)
+                if main_loop is not None and main_loop.is_running():
+                    # Submit the coroutine to uvicorn's loop from this worker thread.
+                    # run_coroutine_threadsafe is thread-safe and reuses the existing loop.
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._app.ws_engine.push_updates(sid, dirty),
+                        main_loop,
+                    )
+                    future.result(timeout=5)  # block until sent (or timeout)
+                else:
+                    # Fallback: main loop not captured yet (e.g. HTMX/lite mode)
+                    loop = asyncio.new_event_loop()
+                    try:
+                        loop.run_until_complete(
+                            self._app.ws_engine.push_updates(sid, dirty)
+                        )
+                    finally:
+                        loop.close()
+
+                logger.debug(f"[background] Pushed {len(dirty)} updates to session {sid[:8]}...")
                 return
 
-            main_loop = getattr(self._app, '_main_loop', None)
-            if main_loop is not None and main_loop.is_running():
-                # Submit the coroutine to uvicorn's loop from this worker thread.
-                # run_coroutine_threadsafe is thread-safe and reuses the existing loop.
-                future = asyncio.run_coroutine_threadsafe(
-                    self._app.ws_engine.push_updates(sid, dirty),
-                    main_loop,
-                )
-                future.result(timeout=5)  # block until sent (or timeout)
-            else:
-                # Fallback: main loop not captured yet (e.g. HTMX/lite mode)
-                loop = asyncio.new_event_loop()
-                try:
-                    loop.run_until_complete(
-                        self._app.ws_engine.push_updates(sid, dirty)
-                    )
-                finally:
-                    loop.close()
+            if self._app.lite_engine:
+                payload = self._app._build_lite_oob_payload(dirty)
+                if not payload:
+                    return
+                self._app._enqueue_lite_stream_payload(sid, payload)
+                logger.debug(f"[background] Enqueued lite stream payload for session {sid[:8]}...")
+                return
 
-            logger.debug(f"[background] Pushed {len(dirty)} updates to session {sid[:8]}...")
+            logger.debug(f"[background] Session {sid[:8]}... not connected, skipping push")
 
         except Exception as e:
             logger.debug(f"[background] Failed to push updates: {e}")

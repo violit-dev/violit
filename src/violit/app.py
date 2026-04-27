@@ -9,6 +9,7 @@ import argparse
 import threading
 import time
 import json
+import queue
 import warnings
 import secrets
 import hmac
@@ -17,7 +18,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.gzip import GZipMiddleware
 import inspect
 import uvicorn
@@ -559,6 +560,8 @@ class App(
         
         self.ws_engine = WsEngine() if mode == 'ws' else None
         self.lite_engine = LiteEngine() if mode == 'lite' else None
+        self._lite_stream_queues: Dict[str, queue.Queue] = {}
+        self._lite_stream_lock = threading.Lock()
         self._main_loop: asyncio.AbstractEventLoop | None = None
         app_instance_ref[0] = self
         
@@ -578,6 +581,81 @@ class App(
     def engine(self):
         """Get current engine (WS or Lite)"""
         return self.ws_engine if self.mode == 'ws' else self.lite_engine
+
+    def _replace_lite_stream_queue(self, sid: str):
+        with self._lite_stream_lock:
+            stream_queue = queue.Queue()
+            self._lite_stream_queues[sid] = stream_queue
+            return stream_queue
+
+    def _enqueue_lite_stream_payload(self, sid: str, payload: str):
+        if not sid or not payload or not self.lite_engine:
+            return
+        with self._lite_stream_lock:
+            stream_queue = self._lite_stream_queues.get(sid)
+        if stream_queue is None:
+            return
+        try:
+            stream_queue.put_nowait(payload)
+        except Exception as exc:
+            logging.getLogger(__name__).debug(f"[lite-stream] Failed to enqueue payload: {exc}")
+
+    def _drain_lite_side_effects(self, store) -> str:
+        html = ""
+
+        toasts = store.get('toasts', [])
+        if toasts:
+            import html as html_lib
+            toasts_json = json.dumps(toasts)
+            toasts_escaped = html_lib.escape(toasts_json)
+
+            html += f'''<div id="toast-injector" hx-swap-oob="true" data-toasts="{toasts_escaped}">
+                    <script>
+                    (function() {{
+                        var container = document.getElementById('toast-injector');
+                        if (!container) return;
+                        var toastsAttr = container.getAttribute('data-toasts');
+                        if (!toastsAttr) return;
+                        var toasts = JSON.parse(toastsAttr);
+                        toasts.forEach(function(t) {{
+                            if (typeof createToast === 'function') {{
+                                createToast(t.message, t.variant, t.icon);
+                            }}
+                        }});
+                        container.removeAttribute('data-toasts');
+                    }})();
+                    </script>
+                    </div>'''
+            store['toasts'] = []
+
+        effects = store.get('effects', [])
+        if effects:
+            effects_json = json.dumps(effects)
+            html += f'''<div id="effects-injector" hx-swap-oob="true" data-effects='{effects_json}'>
+                    <script>
+                    (function() {{
+                        const container = document.getElementById('effects-injector');
+                        if (!container) return;
+                        const effects = JSON.parse(container.getAttribute('data-effects'));
+                        effects.forEach(e => {{
+                            if (e === 'balloons') createBalloons();
+                            if (e === 'snow') createSnow();
+                        }});
+                        container.removeAttribute('data-effects');
+                    }})();
+                    </script>
+                    </div>'''
+            store['effects'] = []
+
+        return html
+
+    def _build_lite_oob_payload(self, components: Optional[List[Component]] = None) -> str:
+        store = get_session_store()
+        html = ""
+        if components and self.lite_engine:
+            html += self.lite_engine.wrap_oob(components)
+        html += self._drain_lite_side_effects(store)
+        return html
 
     def _generate_csrf_token(self, session_id: str) -> str:
         """Generate CSRF token for session"""
@@ -2276,6 +2354,44 @@ class App(
             html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%SIDEBAR_RESIZER_STYLE%", sidebar_resizer_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%HTML_CLASS%", html_class).replace("%BODY_CLASS%", body_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%SIDEBAR_WIDTH%", self._sidebar_width).replace("%SIDEBAR_MIN_WIDTH%", self._sidebar_min_width).replace("%SIDEBAR_MAX_WIDTH%", self._sidebar_max_width).replace("%SIDEBAR_RESIZABLE%", "true" if self._sidebar_resizable else "false").replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css).replace("%ROOT_STYLE%", root_style).replace("%DISCONNECT_TIMEOUT%", str(self.disconnect_timeout))
             return HTMLResponse(html)
 
+        @self.fastapi.get("/lite-stream")
+        async def lite_stream(request: Request):
+            sid = request.cookies.get("ss_sid")
+            if not sid:
+                return HTMLResponse("", status_code=204)
+
+            stream_queue = self._replace_lite_stream_queue(sid)
+
+            async def event_stream():
+                try:
+                    yield "retry: 1000\n\n"
+                    while True:
+                        if await request.is_disconnected():
+                            break
+                        try:
+                            payload = await asyncio.to_thread(stream_queue.get, True, 0.5)
+                        except queue.Empty:
+                            yield ": keep-alive\n\n"
+                            continue
+                        if not payload:
+                            continue
+                        yield f"event: oob\ndata: {json.dumps(payload)}\n\n"
+                finally:
+                    with self._lite_stream_lock:
+                        current = self._lite_stream_queues.get(sid)
+                        if current is stream_queue:
+                            self._lite_stream_queues.pop(sid, None)
+
+            return StreamingResponse(
+                event_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache, no-transform",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+
         @self.fastapi.post("/action/{cid}")
         async def action(request: Request, cid: str):
             # Session ID: get from cookie
@@ -2332,55 +2448,7 @@ class App(
                 
                 # Build response: clicked component HTML + OOB for others
                 response_html = clicked_component.render() if clicked_component else ""
-                response_html += self.lite_engine.wrap_oob(other_dirty)
-                
-                # Process Toasts
-                toasts = store.get('toasts', [])
-                if toasts:
-                    import html as html_lib
-                    toasts_json = json.dumps(toasts)
-                    toasts_escaped = html_lib.escape(toasts_json)
-                    
-                    toast_injector = f'''<div id="toast-injector" hx-swap-oob="true" data-toasts="{toasts_escaped}">
-                    <script>
-                    (function() {{
-                        var container = document.getElementById('toast-injector');
-                        if (!container) return;
-                        var toastsAttr = container.getAttribute('data-toasts');
-                        if (!toastsAttr) return;
-                        var toasts = JSON.parse(toastsAttr);
-                        toasts.forEach(function(t) {{
-                            if (typeof createToast === 'function') {{
-                                createToast(t.message, t.variant, t.icon);
-                            }}
-                        }});
-                        container.removeAttribute('data-toasts');
-                    }})();
-                    </script>
-                    </div>'''
-                    response_html += toast_injector
-                    store['toasts'] = []
-                
-                # Process Effects (Balloons, Snow)
-                effects = store.get('effects', [])
-                if effects:
-                    effects_json = json.dumps(effects)
-                    effect_injector = f'''<div id="effects-injector" hx-swap-oob="true" data-effects='{effects_json}'>
-                    <script>
-                    (function() {{
-                        const container = document.getElementById('effects-injector');
-                        if (!container) return;
-                        const effects = JSON.parse(container.getAttribute('data-effects'));
-                        effects.forEach(e => {{
-                            if (e === 'balloons') createBalloons();
-                            if (e === 'snow') createSnow();
-                        }});
-                        container.removeAttribute('data-effects');
-                    }})();
-                    </script>
-                    </div>'''
-                    response_html += effect_injector
-                    store['effects'] = []
+                response_html += self._build_lite_oob_payload(other_dirty)
                 
                 return HTMLResponse(response_html)
             return HTMLResponse("")
@@ -4814,6 +4882,81 @@ HTML_TEMPLATE = r"""
         } else {
              // Lite Mode (HTMX) specifics
             document.addEventListener('DOMContentLoaded', () => {
+                const reviveScripts = (root) => {
+                    if (!root) return;
+                    root.querySelectorAll('script').forEach((oldScript) => {
+                        const script = document.createElement('script');
+                        Array.from(oldScript.attributes).forEach((attr) => script.setAttribute(attr.name, attr.value));
+                        script.textContent = oldScript.textContent;
+                        oldScript.parentNode.replaceChild(script, oldScript);
+                    });
+                };
+
+                const applyLiteStreamPayload = (html) => {
+                    if (!html) return;
+                    const template = document.createElement('template');
+                    template.innerHTML = html.trim();
+                    const nodes = Array.from(template.content.children);
+
+                    nodes.forEach((node) => {
+                        const targetId = node.id;
+
+                        if (targetId) {
+                            const existing = document.getElementById(targetId);
+                            if (existing && existing !== node) {
+                                purgePlotly(existing);
+                                existing.replaceWith(node);
+                            } else {
+                                document.body.appendChild(node);
+                            }
+                        } else {
+                            document.body.appendChild(node);
+                        }
+
+                        if (window.htmx && typeof window.htmx.process === 'function') {
+                            window.htmx.process(node);
+                        }
+                        reviveScripts(node);
+                    });
+
+                    if (typeof window._vlApplyPartBridge === 'function') {
+                        window._vlApplyPartBridge(document);
+                    }
+
+                    if (typeof hljs !== 'undefined') {
+                        document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
+                            hljs.highlightElement(block);
+                        });
+                    }
+                };
+
+                const connectLiteStream = () => {
+                    if (!window.EventSource) return;
+                    if (window.__vlLiteEventSource) {
+                        window.__vlLiteEventSource.close();
+                    }
+
+                    const eventSource = new EventSource('/lite-stream');
+                    window.__vlLiteEventSource = eventSource;
+
+                    eventSource.addEventListener('oob', (event) => {
+                        window._vlLastActivity = Date.now();
+                        try {
+                            applyLiteStreamPayload(JSON.parse(event.data));
+                        } catch (err) {
+                            console.error('[Lite Stream] Failed to apply payload', err);
+                        }
+                    });
+
+                    window.addEventListener('beforeunload', () => {
+                        if (window.__vlLiteEventSource) {
+                            window.__vlLiteEventSource.close();
+                        }
+                    }, { once: true });
+                };
+
+                connectLiteStream();
+
                 document.body.addEventListener('htmx:beforeSwap', function(evt) {
                     if (evt.detail.target) {
                         purgePlotly(evt.detail.target);
