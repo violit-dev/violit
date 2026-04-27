@@ -16,7 +16,8 @@ def run_app(args, unknown_args):
     Execute the target script.
     Passes any unknown_args to the script so App.run() can parse them (e.g. --reload, --make-migration).
     """
-    script_path = args.script
+    script_path = os.path.abspath(args.script)
+    script_dir = os.path.dirname(script_path)
     
     if not os.path.exists(script_path):
         print(f"Error: Script '{script_path}' does not exist.", file=sys.stderr)
@@ -24,6 +25,9 @@ def run_app(args, unknown_args):
         
     # Rewrite sys.argv so the target script sees itself as the main executable
     sys.argv = [script_path] + unknown_args
+    original_sys_path = list(sys.path)
+    if script_dir:
+        sys.path.insert(0, script_dir)
     
     # Run the script as __main__
     try:
@@ -33,6 +37,8 @@ def run_app(args, unknown_args):
     except Exception as e:
         print(f"Error running '{script_path}': {e}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        sys.path[:] = original_sys_path
 
 def create_project(args):
     """
