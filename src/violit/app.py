@@ -3549,11 +3549,18 @@ HTML_TEMPLATE = r"""
         
         // [LOCK] Automatically attach the HTMX CSRF token in Lite mode.
         if (mode === 'lite' && window._csrf_token) {
-            document.addEventListener('DOMContentLoaded', function() {
+            const attachHtmxCsrf = function() {
+                if (!document.body || document.body.dataset.vlHtmxCsrfBound === 'true') return;
+                document.body.dataset.vlHtmxCsrfBound = 'true';
                 document.body.addEventListener('htmx:configRequest', function(evt) {
                     evt.detail.parameters['_csrf_token'] = window._csrf_token;
                 });
-            });
+            };
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', attachHtmxCsrf, { once: true });
+            } else {
+                attachHtmxCsrf();
+            }
         }
         
         // Helper to clean up Plotly instances before removing elements
