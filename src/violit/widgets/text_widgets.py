@@ -1,6 +1,7 @@
 """Text widgets"""
 
-from typing import Union, Callable, Optional
+import time
+from typing import Union, Callable, Optional, Any
 from ..component import Component
 from ..context import rendering_ctx
 from ..style_utils import merge_cls, merge_style
@@ -99,6 +100,85 @@ class TextWidgetsMixin:
             
         # Flush remaining text
         flush_buffer()
+
+    def _write_stream_to_placeholder(self, placeholder, items, cursor=None):
+        with placeholder.container():
+            for index, item in enumerate(items):
+                if isinstance(item, str):
+                    text = item
+                    if cursor and index == len(items) - 1:
+                        text += str(cursor)
+                    self.markdown(text)
+                else:
+                    self.write(item)
+
+    def _normalize_stream_iterator(self, stream):
+        candidate = stream() if callable(stream) and not hasattr(stream, "__iter__") else stream
+        if hasattr(candidate, "__iter__"):
+            return iter(candidate)
+        raise TypeError("write_stream expects an iterable, generator, or callable returning an iterable.")
+
+    def _extract_stream_chunk(self, chunk: Any):
+        if isinstance(chunk, str):
+            return chunk
+
+        if isinstance(chunk, dict):
+            if isinstance(chunk.get("text"), str):
+                return chunk["text"]
+            if isinstance(chunk.get("content"), str):
+                return chunk["content"]
+            delta = chunk.get("delta") or {}
+            if isinstance(delta, dict) and isinstance(delta.get("content"), str):
+                return delta["content"]
+
+        choices = getattr(chunk, "choices", None)
+        if choices:
+            first = choices[0]
+            delta = getattr(first, "delta", None)
+            if delta is not None:
+                content = getattr(delta, "content", None)
+                if isinstance(content, str):
+                    return content
+            message = getattr(first, "message", None)
+            if message is not None:
+                content = getattr(message, "content", None)
+                if isinstance(content, str):
+                    return content
+
+        text = getattr(chunk, "text", None)
+        if isinstance(text, str):
+            return text
+
+        return chunk
+
+    def write_stream(self, stream, *, cursor=None):
+        """Stream content into the app, compatible with Streamlit's st.write_stream."""
+        placeholder = self.empty()
+        iterator = self._normalize_stream_iterator(stream)
+
+        rendered_items = []
+        all_text = True
+
+        for raw_chunk in iterator:
+            chunk = self._extract_stream_chunk(raw_chunk)
+            if isinstance(chunk, str):
+                if rendered_items and isinstance(rendered_items[-1], str):
+                    rendered_items[-1] += chunk
+                else:
+                    rendered_items.append(chunk)
+            else:
+                all_text = False
+                rendered_items.append(chunk)
+
+            self._write_stream_to_placeholder(placeholder, rendered_items, cursor=cursor)
+            if cursor is not None:
+                time.sleep(0)
+
+        self._write_stream_to_placeholder(placeholder, rendered_items, cursor=None)
+
+        if all_text:
+            return "".join(item for item in rendered_items if isinstance(item, str))
+        return rendered_items
     
     def _render_markdown(self, text: str) -> str:
         """Render markdown to HTML (internal helper)"""

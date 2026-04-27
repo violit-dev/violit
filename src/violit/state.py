@@ -51,6 +51,7 @@ def get_session_store():
                 'tracker': DependencyTracker(),
                 'builders': {},
                 'actions': {},
+                'submitted_values': {},
                 'component_count': 0,
                 'fragment_components': {},
                 'order': [],
@@ -72,6 +73,7 @@ def get_session_store():
             'tracker': DependencyTracker(),
             'builders': {},
             'actions': {},
+            'submitted_values': {},
             'component_count': base_count,  # Start from where initial build left off
             'fragment_components': {},
             'order': [],

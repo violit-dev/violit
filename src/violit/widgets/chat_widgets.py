@@ -1,8 +1,9 @@
 import html as html_lib
 import json
-from typing import Optional, Union, Callable
+import re
+from typing import Optional, Union, Callable, Any, Sequence
 from ..component import Component
-from ..context import fragment_ctx, session_ctx
+from ..context import fragment_ctx, session_ctx, layout_ctx
 from ..state import get_session_store
 from ..style_utils import merge_cls, merge_style
 
@@ -13,6 +14,10 @@ def _reset_dynamic_chat_children(message_id: str):
 
     store = get_session_store()
     store['fragment_components'][message_id] = []
+
+
+def _sanitize_chat_key(value: Any) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", str(value)).strip("_") or "chat"
 
 class ChatWidgetsMixin:
     """Chat-related widgets"""
@@ -69,6 +74,8 @@ class ChatWidgetsMixin:
         self,
         name: str,
         avatar: Optional[str] = None,
+        *,
+        width: Union[str, int] = "stretch",
         cls: str = "",
         style: str = "",
         thinking: bool = False,
@@ -78,9 +85,7 @@ class ChatWidgetsMixin:
         """
         Insert a chat message container.
         
-        Args:
-            name (str): The name of the author (e.g. "user", "assistant").
-            avatar (str, optional): The avatar image or emoji.
+        Streamlit-compatible chat message container.
         """
         cid = self._get_next_cid("chat_message")
         
@@ -170,6 +175,16 @@ class ChatWidgetsMixin:
 
                     safe_name = html_lib.escape(self.name or "assistant")
 
+                    width_style = ""
+                    if isinstance(width, int):
+                        width_style = f"max-width:min(100%, {int(width)}px);"
+                    elif isinstance(width, str):
+                        normalized_width = width.strip().lower()
+                        if normalized_width == "content":
+                            width_style = "max-width:min(100%, fit-content); width:fit-content;"
+                        elif normalized_width != "stretch":
+                            width_style = f"max-width:min(100%, {html_lib.escape(normalized_width, quote=True)});"
+
                     safe_key_attr = ""
                     if self.key:
                         safe_key_attr = f' data-chat-key="{html_lib.escape(str(self.key), quote=True)}"'
@@ -179,7 +194,7 @@ class ChatWidgetsMixin:
                         <div class="chat-avatar" style="flex-shrink:0; padding-top:2px;">
                            {avatar_content}
                         </div>
-                        <div class="chat-content" style="flex:1; min-width:0; overflow-wrap:break-word; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div class="chat-content" style="flex:1; min-width:0; overflow-wrap:break-word; display:flex; flex-direction:column; gap:0.5rem; {width_style}">
                             <div class="chat-author" style="font-size:0.8rem; letter-spacing:0.03em; text-transform:uppercase; font-weight:700; color:{name_color}; padding:0 0.2rem;">{safe_name}</div>
                             <div class="chat-bubble" style="background:{bubble_bg}; border:{bubble_border}; box-shadow:{bubble_shadow}; border-radius:20px; padding:16px 18px; color:var(--vl-text); line-height:1.6;">
                                 {inner_html}
@@ -241,20 +256,44 @@ class ChatWidgetsMixin:
             **kwargs,
         )
 
-    def chat_input(self, placeholder: str = "Your message", on_submit: Optional[Callable[[str], None]] = None, auto_scroll: Union[bool, str] = True,
-                   max_chars: Optional[int] = None, disabled: bool = False, cls: str = "", style: str = "",
-                   multiline: bool = True, submit_on_enter: bool = True, pinned: bool = False,
-                   scroll_behavior: str = "smooth"):
+    def chat_input(
+        self,
+        placeholder: str = "Your message",
+        *,
+        key: Optional[Union[str, int]] = None,
+        max_chars: Optional[int] = None,
+        accept_file: Union[bool, str] = False,
+        file_type: Optional[Union[str, Sequence[str]]] = None,
+        accept_audio: bool = False,
+        audio_sample_rate: Optional[int] = 16000,
+        disabled: bool = False,
+        on_submit: Optional[Callable[..., None]] = None,
+        args: Optional[Sequence[Any]] = None,
+        kwargs: Optional[dict[str, Any]] = None,
+        width: Union[str, int] = "stretch",
+        height: Union[str, int] = "content",
+        auto_scroll: Union[bool, str] = True,
+        cls: str = "",
+        style: str = "",
+        multiline: bool = True,
+        submit_on_enter: bool = True,
+        pinned: Optional[bool] = None,
+        scroll_behavior: str = "smooth",
+    ):
         """
-        Display a chat input widget at the bottom of the page.
-        
-        Args:
-            placeholder (str): Placeholder text.
-            on_submit (Callable[[str], None]): Callback function to run when message is sent.
-            auto_scroll (bool): If True, automatically scroll to bottom after rendering.
+        Streamlit-compatible chat input widget.
         """
-        cid = self._get_next_cid("chat_input")
+        if accept_file:
+            raise NotImplementedError("accept_file is not supported yet by violit.chat_input.")
+        if accept_audio:
+            raise NotImplementedError("accept_audio is not supported yet by violit.chat_input.")
+        del file_type, audio_sample_rate
+
+        cid = f"chat_input_{_sanitize_chat_key(key)}" if key is not None else self._get_next_cid("chat_input")
         store = get_session_store()
+        callback_args = tuple(args or ())
+        callback_kwargs = dict(kwargs or {})
+        effective_pinned = (layout_ctx.get() == "main") if pinned is None else bool(pinned)
         
         # Register action handler in session store (not static_actions)
         # This ensures each session has its own handler
@@ -264,7 +303,7 @@ class ChatWidgetsMixin:
             if isinstance(val, str):
                 val = val.strip()
             if val:
-                on_submit(val)
+                on_submit(*callback_args, val, **callback_kwargs)
         
         # Use static_actions for initial registration, but the handler
         # captures the session-specific on_submit callback via closure
@@ -278,7 +317,20 @@ class ChatWidgetsMixin:
             scroll_mode = self._resolve_chat_scroll_mode(auto_scroll)
             scroll_mode_js = json.dumps(scroll_mode)
             scroll_behavior_js = json.dumps(scroll_behavior)
-            if pinned:
+            width_style = "width: 100%;"
+            if isinstance(width, int):
+                width_style = f"width: min(100%, {int(width)}px);"
+
+            min_height_px = 48
+            max_height_px = 180 if multiline else 48
+            if isinstance(height, int):
+                min_height_px = max(48, int(height))
+            elif isinstance(height, str):
+                normalized_height = height.strip().lower()
+                if normalized_height == "stretch":
+                    min_height_px = 96
+
+            if effective_pinned:
                 container_style = '''
                 position: fixed;
                 bottom: 0;
@@ -310,7 +362,7 @@ class ChatWidgetsMixin:
                 {container_style}
             ">
                 <div data-chat-input-root="{cid}" style="
-                    width: 100%;
+                    {width_style}
                     max-width: 860px;
                     background: color-mix(in srgb, var(--vl-bg-card) 92%, white 8%);
                     border: 1px solid color-mix(in srgb, var(--vl-border) 80%, transparent);
@@ -335,8 +387,8 @@ class ChatWidgetsMixin:
                             color: var(--vl-text);
                             outline: none;
                             resize: none;
-                            min-height: 24px;
-                            max-height: {"180px" if multiline else "48px"};
+                            min-height: {min_height_px}px;
+                            max-height: {max_height_px}px;
                             line-height: 1.5;
                             font-family: inherit;
                         "
@@ -357,7 +409,7 @@ class ChatWidgetsMixin:
 
                     const autoResize = () => {{
                         el.style.height = 'auto';
-                        el.style.height = Math.min(el.scrollHeight, {180 if multiline else 48}) + 'px';
+                        el.style.height = Math.min(el.scrollHeight, {max_height_px}) + 'px';
                     }};
 
                     const scrollMode = {scroll_mode_js};
@@ -497,7 +549,7 @@ class ChatWidgetsMixin:
         # But if we clear it here, and the script reruns multiple times or checks it multiple times? 
         # Usually it's read once per run.
         
-        val = store['actions'].pop(cid, None)
+        val = store.get('submitted_values', {}).pop(cid, None)
         
         # To prevent stale values on subsequent non-related runs (e.g. other buttons),
         # we ideally need to know 'who' triggered the run.

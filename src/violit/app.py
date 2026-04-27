@@ -2413,6 +2413,8 @@ class App(
             
             v = f.get("value")
             store = get_session_store()
+            if v is not None:
+                store.setdefault('submitted_values', {})[cid] = v
             act = store['actions'].get(cid) or self.static_actions.get(cid)
             if act:
                 if not callable(act):
@@ -2532,6 +2534,8 @@ class App(
                     
                     cid, v = data.get('id'), data.get('value')
                     store = get_session_store()
+                    if v is not None:
+                        store.setdefault('submitted_values', {})[cid] = v
                     act = store['actions'].get(cid) or self.static_actions.get(cid)
                     
                     self.debug_print(f"  Action found: {act is not None}")
