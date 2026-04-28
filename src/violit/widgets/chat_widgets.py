@@ -1,6 +1,7 @@
 import html as html_lib
 import json
 import re
+import time
 from typing import Optional, Union, Callable, Any, Sequence
 from ..component import Component
 from ..context import fragment_ctx, session_ctx, layout_ctx
@@ -18,6 +19,67 @@ def _reset_dynamic_chat_children(message_id: str):
 
 def _sanitize_chat_key(value: Any) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", str(value)).strip("_") or "chat"
+
+
+def _clone_chat_items(messages_state):
+    return [dict(item) for item in messages_state.value]
+
+
+def _patch_last_chat_item(messages_state, **updates):
+    items = _clone_chat_items(messages_state)
+    if not items:
+        return
+    items[-1] = {**items[-1], **updates}
+    messages_state.set(items)
+
+
+def _iter_stream_text_fragments(text: str, preferred_size: int = 12):
+    if not text:
+        return
+
+    for token in re.findall(r"\S+\s*|\s+", text):
+        if len(token) <= preferred_size:
+            yield token
+            continue
+
+        for start in range(0, len(token), preferred_size):
+            yield token[start:start + preferred_size]
+
+
+def _resolve_stream_smoothness_score(score: float):
+    clamped = max(1.0, min(10.0, float(score)))
+    progress = (clamped - 1.0) / 9.0
+    eased = progress ** 1.35
+    flush = 0.003 + eased * 0.087
+    fragment_size = max(3, int(round(42 - eased * 39)))
+    return flush, fragment_size
+
+
+def _resolve_stream_pacing(stream_speed: Optional[Union[str, int, float]], flush_interval: float):
+    if stream_speed is None:
+        return max(0.01, float(flush_interval)), 12
+
+    if isinstance(stream_speed, str):
+        normalized = stream_speed.strip().lower()
+        if normalized in {"fast", "snappy"}:
+            return 0.003, 42
+        if normalized in {"cinematic", "dramatic"}:
+            return 0.14, 2
+        if normalized in {"smooth", "slow"}:
+            return 0.09, 3
+        if normalized in {"balanced", "default", "normal"}:
+            return 0.02, 14
+        try:
+            numeric = float(normalized)
+        except ValueError:
+            return max(0.01, float(flush_interval)), 12
+        if 1.0 <= numeric <= 10.0:
+            return _resolve_stream_smoothness_score(numeric)
+        return max(0.01, numeric), 12
+
+    if 1.0 <= float(stream_speed) <= 10.0:
+        return _resolve_stream_smoothness_score(float(stream_speed))
+    return max(0.01, float(stream_speed)), 12
 
 class ChatWidgetsMixin:
     """Chat-related widgets"""
@@ -256,6 +318,32 @@ class ChatWidgetsMixin:
             **kwargs,
         )
 
+    def chat_messages(
+        self,
+        messages,
+        *,
+        height: Union[int, str] = "58vh",
+        cursor: Optional[str] = "|",
+        cls: str = "",
+        style: str = "",
+        border: bool = False,
+    ):
+        """Render chat history from a list-like state using Violit chat widgets."""
+        items = messages.value if hasattr(messages, "value") else messages
+        with self.chat_thread(height=height, cls=cls, style=style, border=border):
+            for item in items or []:
+                role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
+                with self.chat_message(role):
+                    chunks = item.get("chunks") if isinstance(item, dict) else None
+                    status = item.get("status") if isinstance(item, dict) else None
+                    content = item.get("content") if isinstance(item, dict) else str(item)
+                    if chunks:
+                        self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
+                    elif content:
+                        self.markdown(content)
+                    else:
+                        self.caption(item.get("thinking_label", "Thinking...") if isinstance(item, dict) else "Thinking...")
+
     def chat_input(
         self,
         placeholder: str = "Your message",
@@ -268,6 +356,12 @@ class ChatWidgetsMixin:
         audio_sample_rate: Optional[int] = 16000,
         disabled: bool = False,
         on_submit: Optional[Callable[..., None]] = None,
+        messages: Optional[Any] = None,
+        user_name: str = "user",
+        assistant_name: str = "assistant",
+        stream_cursor: Optional[str] = "|",
+        stream_speed: Optional[Union[str, int, float]] = None,
+        flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
         width: Union[str, int] = "stretch",
@@ -281,7 +375,15 @@ class ChatWidgetsMixin:
         scroll_behavior: str = "smooth",
     ):
         """
-        Streamlit-compatible chat input widget.
+        Violit chat input widget with a Streamlit-like surface.
+
+        If `messages` is provided and `on_submit` returns a string, the string
+        becomes the assistant reply. If it returns an iterable, the iterable is
+        streamed into the assistant bubble automatically.
+
+        `stream_speed` accepts presets like "fast", "balanced", "smooth",
+        "cinematic" or a smoothness score from 1 to 10, where 10 is the
+        smoothest.
         """
         if accept_file:
             raise NotImplementedError("accept_file is not supported yet by violit.chat_input.")
@@ -294,6 +396,7 @@ class ChatWidgetsMixin:
         callback_args = tuple(args or ())
         callback_kwargs = dict(kwargs or {})
         effective_pinned = (layout_ctx.get() == "main") if pinned is None else bool(pinned)
+        effective_flush_interval, fragment_size = _resolve_stream_pacing(stream_speed, flush_interval)
         
         # Register action handler in session store (not static_actions)
         # This ensures each session has its own handler
@@ -302,8 +405,69 @@ class ChatWidgetsMixin:
                 return
             if isinstance(val, str):
                 val = val.strip()
-            if val:
+            if not val:
+                return
+
+            if messages is None:
                 on_submit(*callback_args, val, **callback_kwargs)
+                return
+
+            messages.set(_clone_chat_items(messages) + [
+                {"role": user_name, "content": val, "status": "done"},
+                {"role": assistant_name, "content": "", "chunks": [], "status": "thinking"},
+            ])
+
+            def run_reply():
+                result = on_submit(*callback_args, val, **callback_kwargs)
+
+                if isinstance(result, str):
+                    reply = result.strip()
+                    if not reply:
+                        raise RuntimeError("Chat reply was empty.")
+                    _patch_last_chat_item(messages, content=reply, chunks=[], status="done", cursor=None)
+                    return reply
+
+                candidate = result() if callable(result) and not hasattr(result, "__iter__") else result
+                if not hasattr(candidate, "__iter__"):
+                    reply = str(result).strip()
+                    if not reply:
+                        raise RuntimeError("Chat reply was empty.")
+                    _patch_last_chat_item(messages, content=reply, chunks=[], status="done", cursor=None)
+                    return reply
+
+                chunks = []
+                for raw_chunk in candidate:
+                    chunk = self._extract_stream_chunk(raw_chunk)
+                    text = chunk if isinstance(chunk, str) else str(chunk)
+                    if not text:
+                        continue
+                    fragments = list(_iter_stream_text_fragments(text, preferred_size=fragment_size))
+                    for index, fragment in enumerate(fragments):
+                        chunks.append(fragment)
+                        _patch_last_chat_item(messages, chunks=list(chunks), status="streaming", cursor=stream_cursor)
+                        if index < len(fragments) - 1:
+                            time.sleep(effective_flush_interval)
+
+                reply = "".join(chunks).strip()
+                if not reply:
+                    raise RuntimeError("Chat reply was empty.")
+                _patch_last_chat_item(messages, content=reply, chunks=list(chunks), status="done", cursor=None)
+                return reply
+
+            def fail_reply(exc):
+                _patch_last_chat_item(
+                    messages,
+                    content=f"Error:\n\n```text\n{exc}\n```",
+                    chunks=[],
+                    status="error",
+                    cursor=None,
+                )
+
+            self.background(
+                run_reply,
+                on_error=fail_reply,
+                flush_interval=effective_flush_interval,
+            ).start()
         
         # Use static_actions for initial registration, but the handler
         # captures the session-specific on_submit callback via closure
