@@ -508,13 +508,22 @@ class LayoutWidgetsMixin:
                         <div style="padding:1rem;">{inner_html}</div>
                     </wa-dialog>
                     <script>
-                        document.getElementById('{modal_id}').show();
-                        // Listen for native close event (e.g. backdrop click, escape key, etc.)
-                        document.getElementById('{modal_id}').addEventListener('wa-after-hide', (e) => {{
-                            if (e.target.id === '{modal_id}') {{
-                                window.sendAction('{dialog_id}', 'closed');
-                            }}
-                        }});
+                        (() => {{
+                            const dialog = document.getElementById('{modal_id}');
+                            if (!dialog) return;
+                            dialog.open = true;
+                            requestAnimationFrame(() => {{
+                                dialog.open = true;
+                            }});
+                            if (dialog.dataset.vlHideBound === 'true') return;
+                            dialog.dataset.vlHideBound = 'true';
+                            // Listen for native close event (e.g. backdrop click, escape key, etc.)
+                            dialog.addEventListener('wa-after-hide', (e) => {{
+                                if (e.target.id === '{modal_id}') {{
+                                    window.sendAction('{dialog_id}', 'closed');
+                                }}
+                            }});
+                        }})();
                     </script>
                     '''
                     return Component("div", id=dialog_id, content=html)
@@ -525,11 +534,16 @@ class LayoutWidgetsMixin:
                 store = get_session_store()
                 sid = session_ctx.get()
                 
+                def dialog_action(value=None):
+                    if value == 'closed':
+                        return
+                    close_dialog()
+
                 # Register action immediately so we can close from UI
                 if sid is None:
-                    self.static_actions[dialog_id] = close_dialog
+                    self.static_actions[dialog_id] = dialog_action
                 else:
-                    store.setdefault('actions', {})[dialog_id] = close_dialog
+                    store.setdefault('actions', {})[dialog_id] = dialog_action
 
                 # Check if it's already registered to avoid duplicates
                 is_registered = dialog_id in store.get('builders', {}) or dialog_id in self.static_builders
@@ -548,7 +562,27 @@ class LayoutWidgetsMixin:
                     store.setdefault('forced_dirty', set()).add(dialog_id)
 
             def close_dialog(*args, **kwargs):
-                self._enqueue_eval(f"if (document.getElementById('{modal_id}')) document.getElementById('{modal_id}').hide();")
+                self._enqueue_eval(
+                    f"""
+                    (() => {{
+                        const dialog = document.getElementById('{modal_id}');
+                        if (!dialog) return;
+                        if (typeof dialog.requestClose === 'function') {{
+                            dialog.requestClose();
+                            return;
+                        }}
+                        if (dialog.dialog && typeof dialog.dialog.close === 'function') {{
+                            dialog.dialog.close();
+                            return;
+                        }}
+                        if (typeof dialog.hide === 'function') {{
+                            dialog.hide();
+                            return;
+                        }}
+                        dialog.open = false;
+                    }})();
+                    """
+                )
 
             open_dialog.open = open_dialog
             open_dialog.close = close_dialog
