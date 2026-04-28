@@ -1,4 +1,5 @@
 import html as html_lib
+import asyncio
 import json
 import re
 import time
@@ -33,11 +34,60 @@ def _patch_last_chat_item(messages_state, **updates):
     messages_state.set(items)
 
 
-def _iter_stream_text_fragments(text: str, preferred_size: int = 12):
+def _push_stream_frame(app):
+    sid = session_ctx.get()
+    if not sid:
+        return
+
+    dirty = app._get_dirty_rendered()
+    if not dirty:
+        return
+
+    if app.ws_engine and sid in app.ws_engine.sockets:
+        main_loop = getattr(app, "_main_loop", None)
+        if main_loop is not None and main_loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                app.ws_engine.push_updates(sid, dirty),
+                main_loop,
+            )
+            future.result(timeout=5)
+            return
+
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(app.ws_engine.push_updates(sid, dirty))
+        finally:
+            loop.close()
+        return
+
+    if app.lite_engine:
+        payload = app._build_lite_oob_payload(dirty)
+        if payload:
+            app._enqueue_lite_stream_payload(sid, payload)
+
+
+def _iter_stream_text_fragments(text: str, preferred_size: int = 12, mode: str = "chunk"):
     if not text:
         return
 
-    for token in re.findall(r"\S+\s*|\s+", text):
+    normalized_mode = (mode or "chunk").strip().lower()
+
+    if normalized_mode == "raw":
+        yield text
+        return
+
+    if normalized_mode == "char":
+        for char in text:
+            yield char
+        return
+
+    tokens = re.findall(r"\S+\s*|\s+", text)
+    if normalized_mode == "word":
+        for token in tokens:
+            yield token
+        return
+
+    for token in tokens:
         if len(token) <= preferred_size:
             yield token
             continue
@@ -46,40 +96,62 @@ def _iter_stream_text_fragments(text: str, preferred_size: int = 12):
             yield token[start:start + preferred_size]
 
 
-def _resolve_stream_smoothness_score(score: float):
-    clamped = max(1.0, min(10.0, float(score)))
-    progress = (clamped - 1.0) / 9.0
-    eased = progress ** 1.35
-    flush = 0.003 + eased * 0.087
-    fragment_size = max(3, int(round(42 - eased * 39)))
-    return flush, fragment_size
+def _resolve_stream_speed_value(stream_speed: Any) -> Optional[str]:
+    candidate = stream_speed.value if hasattr(stream_speed, "value") else stream_speed
+    if callable(candidate) and not isinstance(candidate, str):
+        candidate = candidate()
+    if candidate is None:
+        return None
+    return str(candidate)
 
 
-def _resolve_stream_pacing(stream_speed: Optional[Union[str, int, float]], flush_interval: float):
-    if stream_speed is None:
-        return max(0.01, float(flush_interval)), 12
+def _resolve_stream_profile(stream_speed: Optional[str], flush_interval: float):
+    fallback_delay = max(0.01, float(flush_interval))
+    normalized = (stream_speed or "balanced").strip().lower()
 
-    if isinstance(stream_speed, str):
-        normalized = stream_speed.strip().lower()
-        if normalized in {"fast", "snappy"}:
-            return 0.003, 42
-        if normalized in {"cinematic", "dramatic"}:
-            return 0.14, 2
-        if normalized in {"smooth", "slow"}:
-            return 0.09, 3
-        if normalized in {"balanced", "default", "normal"}:
-            return 0.02, 14
-        try:
-            numeric = float(normalized)
-        except ValueError:
-            return max(0.01, float(flush_interval)), 12
-        if 1.0 <= numeric <= 10.0:
-            return _resolve_stream_smoothness_score(numeric)
-        return max(0.01, numeric), 12
+    profiles = {
+        "fast": {"delay": 0.0, "fragment_size": 9999, "fragment_mode": "raw", "punctuation_pause": 0.0, "space_pause": 0.0, "flush_interval": 0.01, "emit_interval": 0.0, "emit_chars": 9999, "emit_on_punctuation": True},
+        "snappy": {"delay": 0.0, "fragment_size": 9999, "fragment_mode": "raw", "punctuation_pause": 0.0, "space_pause": 0.0, "flush_interval": 0.01, "emit_interval": 0.0, "emit_chars": 9999, "emit_on_punctuation": True},
+        "balanced": {"delay": 0.012, "fragment_size": 9999, "fragment_mode": "word", "punctuation_pause": 0.02, "space_pause": 0.0, "flush_interval": 0.02, "emit_interval": 0.028, "emit_chars": 20, "emit_on_punctuation": True},
+        "default": {"delay": 0.012, "fragment_size": 9999, "fragment_mode": "word", "punctuation_pause": 0.02, "space_pause": 0.0, "flush_interval": 0.02, "emit_interval": 0.028, "emit_chars": 20, "emit_on_punctuation": True},
+        "normal": {"delay": 0.012, "fragment_size": 9999, "fragment_mode": "word", "punctuation_pause": 0.02, "space_pause": 0.0, "flush_interval": 0.02, "emit_interval": 0.028, "emit_chars": 20, "emit_on_punctuation": True},
+        "smooth": {"delay": 0.03, "fragment_size": 2, "fragment_mode": "chunk", "punctuation_pause": 0.06, "space_pause": 0.01, "flush_interval": 0.03, "emit_interval": 0.05, "emit_chars": 4, "emit_on_punctuation": True},
+        "slow": {"delay": 0.03, "fragment_size": 2, "fragment_mode": "chunk", "punctuation_pause": 0.06, "space_pause": 0.01, "flush_interval": 0.03, "emit_interval": 0.05, "emit_chars": 4, "emit_on_punctuation": True},
+        "cinematic": {"delay": 0.085, "fragment_size": 1, "fragment_mode": "char", "punctuation_pause": 0.18, "space_pause": 0.03, "flush_interval": 0.05, "emit_interval": 0.09, "emit_chars": 1, "emit_on_punctuation": True},
+        "dramatic": {"delay": 0.085, "fragment_size": 1, "fragment_mode": "char", "punctuation_pause": 0.18, "space_pause": 0.03, "flush_interval": 0.05, "emit_interval": 0.09, "emit_chars": 1, "emit_on_punctuation": True},
+    }
+    profile = profiles.get(normalized)
+    if profile is not None:
+        return profile
+    return {"delay": fallback_delay, "fragment_size": 18, "fragment_mode": "chunk", "punctuation_pause": 0.0, "space_pause": 0.0, "flush_interval": min(0.04, fallback_delay), "emit_interval": max(0.02, fallback_delay), "emit_chars": 18, "emit_on_punctuation": True}
 
-    if 1.0 <= float(stream_speed) <= 10.0:
-        return _resolve_stream_smoothness_score(float(stream_speed))
-    return max(0.01, float(stream_speed)), 12
+
+def _stream_fragment_pause(fragment: str, base_delay: float, punctuation_pause: float, space_pause: float = 0.0) -> float:
+    pause = max(0.0, float(base_delay))
+    if space_pause > 0 and fragment.isspace():
+        pause += space_pause
+        return pause
+    if punctuation_pause <= 0:
+        return pause
+    if any(mark in fragment for mark in (".", "!", "?", ";", ":", "\n")):
+        pause += punctuation_pause
+    elif "," in fragment:
+        pause += punctuation_pause * 0.5
+    return pause
+
+
+def _should_emit_stream_frame(profile: dict[str, float], last_emit_at: float, pending_chars: int, fragment: str) -> bool:
+    force_on_punctuation = bool(profile.get("emit_on_punctuation", False))
+    min_emit_interval = max(0.0, float(profile.get("emit_interval", 0.0)))
+    min_emit_chars = max(1, int(profile.get("emit_chars", 1)))
+
+    if force_on_punctuation and any(mark in fragment for mark in (".", "!", "?", ";", ":", "\n")):
+        return True
+    if pending_chars >= min_emit_chars:
+        return True
+    if min_emit_interval <= 0:
+        return True
+    return (time.perf_counter() - last_emit_at) >= min_emit_interval
 
 class ChatWidgetsMixin:
     """Chat-related widgets"""
@@ -338,7 +410,13 @@ class ChatWidgetsMixin:
                     status = item.get("status") if isinstance(item, dict) else None
                     content = item.get("content") if isinstance(item, dict) else str(item)
                     if chunks:
-                        self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
+                        if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
+                            streamed_text = "".join(chunks)
+                            if status == "streaming" and cursor:
+                                streamed_text += str(cursor)
+                            self.markdown(streamed_text)
+                        else:
+                            self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
                     elif content:
                         self.markdown(content)
                     else:
@@ -355,12 +433,12 @@ class ChatWidgetsMixin:
         accept_audio: bool = False,
         audio_sample_rate: Optional[int] = 16000,
         disabled: bool = False,
-        on_submit: Optional[Callable[..., None]] = None,
+        on_submit: Optional[Callable[..., Any]] = None,
         messages: Optional[Any] = None,
         user_name: str = "user",
         assistant_name: str = "assistant",
         stream_cursor: Optional[str] = "|",
-        stream_speed: Optional[Union[str, int, float]] = None,
+        stream_speed: Any = None,
         flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
@@ -383,7 +461,8 @@ class ChatWidgetsMixin:
 
         `stream_speed` accepts presets like "fast", "balanced", "smooth",
         "cinematic" or a smoothness score from 1 to 10, where 10 is the
-        smoothest.
+        smoothest. It can also be provided as a State-like object or callable
+        so the active preset is resolved when the user submits a message.
         """
         if accept_file:
             raise NotImplementedError("accept_file is not supported yet by violit.chat_input.")
@@ -396,8 +475,6 @@ class ChatWidgetsMixin:
         callback_args = tuple(args or ())
         callback_kwargs = dict(kwargs or {})
         effective_pinned = (layout_ctx.get() == "main") if pinned is None else bool(pinned)
-        effective_flush_interval, fragment_size = _resolve_stream_pacing(stream_speed, flush_interval)
-        
         # Register action handler in session store (not static_actions)
         # This ensures each session has its own handler
         def handler(val):
@@ -416,6 +493,11 @@ class ChatWidgetsMixin:
                 {"role": user_name, "content": val, "status": "done"},
                 {"role": assistant_name, "content": "", "chunks": [], "status": "thinking"},
             ])
+
+            stream_profile = _resolve_stream_profile(
+                _resolve_stream_speed_value(stream_speed),
+                flush_interval,
+            )
 
             def run_reply():
                 result = on_submit(*callback_args, val, **callback_kwargs)
@@ -436,17 +518,39 @@ class ChatWidgetsMixin:
                     return reply
 
                 chunks = []
+                last_emit_at = time.perf_counter()
+                pending_emit_chars = 0
                 for raw_chunk in candidate:
                     chunk = self._extract_stream_chunk(raw_chunk)
                     text = chunk if isinstance(chunk, str) else str(chunk)
                     if not text:
                         continue
-                    fragments = list(_iter_stream_text_fragments(text, preferred_size=fragment_size))
-                    for index, fragment in enumerate(fragments):
+                    fragments = list(
+                        _iter_stream_text_fragments(
+                            text,
+                            preferred_size=stream_profile["fragment_size"],
+                            mode=stream_profile["fragment_mode"],
+                        )
+                    )
+                    for fragment in fragments:
                         chunks.append(fragment)
+                        pending_emit_chars += len(fragment)
                         _patch_last_chat_item(messages, chunks=list(chunks), status="streaming", cursor=stream_cursor)
-                        if index < len(fragments) - 1:
-                            time.sleep(effective_flush_interval)
+                        if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
+                            _push_stream_frame(self)
+                            last_emit_at = time.perf_counter()
+                            pending_emit_chars = 0
+                        pause = _stream_fragment_pause(
+                            fragment,
+                            stream_profile["delay"],
+                            stream_profile["punctuation_pause"],
+                            stream_profile["space_pause"],
+                        )
+                        if pause > 0:
+                            time.sleep(pause)
+
+                if chunks and pending_emit_chars > 0:
+                    _push_stream_frame(self)
 
                 reply = "".join(chunks).strip()
                 if not reply:
@@ -466,7 +570,7 @@ class ChatWidgetsMixin:
             self.background(
                 run_reply,
                 on_error=fail_reply,
-                flush_interval=effective_flush_interval,
+                flush_interval=stream_profile["flush_interval"],
             ).start()
         
         # Use static_actions for initial registration, but the handler
@@ -528,39 +632,47 @@ class ChatWidgetsMixin:
                 <div data-chat-input-root="{cid}" style="
                     {width_style}
                     max-width: 860px;
-                    background: color-mix(in srgb, var(--vl-bg-card) 92%, white 8%);
-                    border: 1px solid color-mix(in srgb, var(--vl-border) 80%, transparent);
-                    border-radius: 24px;
-                    padding: 10px;
-                    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.10);
                     display: flex;
                     align-items: flex-end;
                     gap: 10px;
                     pointer-events: auto;
                 ">
-                    <textarea id="input_{cid}" class="chat-input-box" placeholder={placeholder_js}
-                        rows="1"
-                        {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
-                        {"disabled" if disabled else ""}
-                        style="
-                            flex: 1;
-                            border: none;
-                            background: transparent;
-                            padding: 10px 12px;
-                            font-size: 1rem;
-                            color: var(--vl-text);
-                            outline: none;
-                            resize: none;
-                            min-height: {min_height_px}px;
-                            max-height: {max_height_px}px;
-                            line-height: 1.5;
-                            font-family: inherit;
-                        "
-                    ></textarea>
-                    <wa-button size="small" variant="brand" appearance="accent" {"disabled" if disabled else ""} onclick="
+                    <div style="
+                        flex: 1;
+                        min-width: 0;
+                        background: color-mix(in srgb, var(--vl-bg-card) 92%, white 8%);
+                        border: 1px solid color-mix(in srgb, var(--vl-border) 80%, transparent);
+                        border-radius: 24px;
+                        padding: 10px;
+                        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.10);
+                    ">
+                        <textarea id="input_{cid}" class="chat-input-box" placeholder={placeholder_js}
+                            rows="1"
+                            {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
+                            {"disabled" if disabled else ""}
+                            style="
+                                width: 100%;
+                                border: none;
+                                background: transparent;
+                                padding: 10px 12px;
+                                font-size: 1rem;
+                                color: var(--vl-text);
+                                outline: none;
+                                resize: none;
+                                min-height: {min_height_px}px;
+                                max-height: {max_height_px}px;
+                                line-height: 1.5;
+                                font-family: inherit;
+                                box-sizing: border-box;
+                            "
+                        ></textarea>
+                    </div>
+                    <wa-button id="send_{cid}" type="button" size="small" variant="brand" appearance="accent" {"disabled" if disabled else ""} style="flex: 0 0 48px; min-width: 48px; width: 48px; height: 48px; margin-bottom: 2px; --wa-button-padding-inline: 0;" onclick="
                         window.submitChatInput_{cid}();
                     ">
-                        <wa-icon name="send" label="Send"></wa-icon>
+                        <span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0;">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1rem;height:1rem;display:block;fill:currentColor;transform:translate(-1.5px, 1px);transform-origin:center;"><path d="M476.6 3.2c18.6 10.5 27.5 32.4 21.8 53.1l-96 352c-4 14.8-18.2 25.3-33.5 25.7s-30-9.1-34.8-23.6l-48.6-145.9-145.9-48.6C125.1 211 115.2 196.4 115.6 181s10.9-29.5 25.7-33.5l352-96c20.7-5.7 42.6 3.2 53.1 21.8zM176.9 177.1l125.4 41.8 41.8 125.4L426.7 41.6 176.9 177.1z"/></svg>
+                        </span>
                     </wa-button>
                 </div>
             </div>
@@ -568,8 +680,28 @@ class ChatWidgetsMixin:
             <script>
                 (function() {{
                     const el = document.getElementById('input_{cid}');
+                    const sendButton = document.getElementById('send_{cid}');
                     const root = document.querySelector('[data-chat-input-root="{cid}"]');
                     if (!el) return;
+
+                    const resolveChatScope = () => {{
+                        if (!root) return document.body;
+                        let current = root.parentElement;
+                        while (current) {{
+                            if (current.querySelector('[data-chat-thread="true"]')) {{
+                                return current;
+                            }}
+                            current = current.parentElement;
+                        }}
+                        return root.parentElement || root;
+                    }};
+
+                    const chatScope = resolveChatScope();
+
+                    const getChatThread = () => {{
+                        if (!chatScope) return null;
+                        return chatScope.querySelector('[data-chat-thread="true"]');
+                    }};
 
                     const autoResize = () => {{
                         el.style.height = 'auto';
@@ -594,33 +726,30 @@ class ChatWidgetsMixin:
                     }};
 
                     const latestChatTarget = () => {{
-                        if (!root) return el;
-                        const messages = Array.from(document.querySelectorAll('[data-chat-message="true"]'));
-                        let candidate = null;
-                        for (const node of messages) {{
-                            const position = node.compareDocumentPosition(root);
-                            if (position & Node.DOCUMENT_POSITION_FOLLOWING) {{
-                                candidate = node;
-                            }}
+                        const chatThread = getChatThread();
+                        if (chatThread) {{
+                            const messages = Array.from(chatThread.querySelectorAll('[data-chat-message="true"]'));
+                            return messages[messages.length - 1] || chatThread;
                         }}
-                        return candidate || root;
+                        if (!root) return el;
+                        return root;
                     }};
 
                     const maybeScrollToLatest = () => {{
                         if (scrollMode !== 'bottom') return;
                         const target = latestChatTarget();
                         if (!target) return;
-                        const scrollParent = findScrollableAncestor(target) || findScrollableAncestor(root);
-                        if (scrollParent) {{
-                            const parentRect = scrollParent.getBoundingClientRect();
-                            const targetRect = target.getBoundingClientRect();
-                            const nextTop = scrollParent.scrollTop + (targetRect.bottom - parentRect.top) - scrollParent.clientHeight + 16;
-                            scrollParent.scrollTo({{ top: Math.max(nextTop, 0), behavior: scrollBehavior }});
-                            return;
-                        }}
-                        if (typeof target.scrollIntoView === 'function') {{
-                            target.scrollIntoView({{ block: 'end', behavior: scrollBehavior, inline: 'nearest' }});
-                        }}
+                        const chatThread = getChatThread();
+                        const scrollParent = chatThread || findScrollableAncestor(target) || findScrollableAncestor(root);
+                        if (!scrollParent) return;
+                        const syncBottom = () => {{
+                            const nextTop = Math.max(scrollParent.scrollHeight - scrollParent.clientHeight, 0);
+                            scrollParent.scrollTop = nextTop;
+                            scrollParent.scrollTo({{ top: nextTop, behavior: 'auto' }});
+                        }};
+                        syncBottom();
+                        requestAnimationFrame(syncBottom);
+                        setTimeout(syncBottom, 80);
                     }};
 
                     const scheduleScrollToLatest = () => {{
@@ -629,26 +758,64 @@ class ChatWidgetsMixin:
                         }}
                         window.__violitChatScrollFrame_{cid} = requestAnimationFrame(() => {{
                             maybeScrollToLatest();
+                            requestAnimationFrame(maybeScrollToLatest);
                         }});
+                    }};
+
+                    const focusInput = () => {{
+                        try {{
+                            el.focus({{ preventScroll: true }});
+                        }} catch (_err) {{
+                            el.focus();
+                        }}
+                    }};
+
+                    const preserveViewport = (position) => {{
+                        if (!position) return;
+                        const restore = () => {{
+                            window.scrollTo(position.x || 0, position.y || 0);
+                        }};
+                        restore();
+                        requestAnimationFrame(() => {{
+                            restore();
+                            requestAnimationFrame(restore);
+                        }});
+                        setTimeout(restore, 80);
+                    }};
+
+                    const syncSendButtonState = () => {{
+                        if (!sendButton || {'true' if disabled else 'false'}) return;
+                        const hasValue = !!((el.value || '').trim());
+                        sendButton.disabled = !hasValue;
+                        sendButton.setAttribute('aria-disabled', hasValue ? 'false' : 'true');
                     }};
 
                     window.submitChatInput_{cid} = function() {{
                         if ({'true' if disabled else 'false'}) return;
+                        const viewport = {{ x: window.scrollX, y: window.scrollY }};
                         const rawValue = el.value || '';
                         const trimmed = rawValue.trim();
                         if (!trimmed) {{
-                            el.focus();
+                            if (document.activeElement && typeof document.activeElement.blur === 'function') {{
+                                document.activeElement.blur();
+                            }}
+                            preserveViewport(viewport);
                             return;
                         }}
                         window.lastActiveChatInput = 'input_{cid}';
                         {f"window.sendAction('{cid}', trimmed);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: trimmed, _csrf_token: window._csrf_token || ''}}, swap: 'none'}});"}
                         el.value = '';
                         autoResize();
+                        syncSendButtonState();
+                        scheduleScrollToLatest();
                     }};
 
                     if (!el.dataset.chatReady) {{
                         el.dataset.chatReady = 'true';
-                        el.addEventListener('input', autoResize);
+                        el.addEventListener('input', () => {{
+                            autoResize();
+                            syncSendButtonState();
+                        }});
                         el.addEventListener('keydown', function(event) {{
                             if ({submit_on_enter_js} && event.key === 'Enter' && !event.shiftKey) {{
                                 event.preventDefault();
@@ -661,30 +828,51 @@ class ChatWidgetsMixin:
                         window.__violitChatObserver_{cid}.disconnect();
                     }}
 
+                    const mutationTouchesChat = (mutation) => {{
+                        const targetNode = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
+                        if (targetNode && targetNode.closest && targetNode.closest('[data-chat-thread="true"]')) {{
+                            return true;
+                        }}
+                        for (const node of mutation.addedNodes || []) {{
+                            if (node instanceof Element && (node.matches('[data-chat-thread="true"], [data-chat-message="true"]') || node.querySelector('[data-chat-thread="true"], [data-chat-message="true"]'))) {{
+                                return true;
+                            }}
+                        }}
+                        for (const node of mutation.removedNodes || []) {{
+                            if (node instanceof Element && (node.matches('[data-chat-thread="true"], [data-chat-message="true"]') || node.querySelector('[data-chat-thread="true"], [data-chat-message="true"]'))) {{
+                                return true;
+                            }}
+                        }}
+                        return false;
+                    }};
+
                     window.__violitChatObserver_{cid} = new MutationObserver((mutationList) => {{
                         if (scrollMode !== 'bottom') return;
                         for (const mutation of mutationList) {{
-                            if (mutation.type === 'childList' || mutation.type === 'characterData') {{
+                            if ((mutation.type === 'childList' || mutation.type === 'characterData') && mutationTouchesChat(mutation)) {{
                                 scheduleScrollToLatest();
                                 break;
                             }}
                         }}
                     }});
 
-                    window.__violitChatObserver_{cid}.observe(document.body, {{
+                    window.__violitChatObserver_{cid}.observe(chatScope || document.body, {{
                         childList: true,
                         subtree: true,
                         characterData: true,
                     }});
 
                     autoResize();
+                    syncSendButtonState();
 
                     setTimeout(scheduleScrollToLatest, 100);
                     setTimeout(scheduleScrollToLatest, 320);
 
                     if (window.lastActiveChatInput === 'input_{cid}') {{
                         setTimeout(() => {{
-                            el.focus();
+                            const viewport = {{ x: window.scrollX, y: window.scrollY }};
+                            focusInput();
+                            preserveViewport(viewport);
                             window.lastActiveChatInput = null;
                         }}, 120);
                     }}
