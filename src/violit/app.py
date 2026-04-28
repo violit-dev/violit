@@ -4401,6 +4401,7 @@ HTML_TEMPLATE = r"""
             window._pageScrollPositions = {};
             window._currentPageKey = null;
             window._pendingScrollRestore = null;
+            window._suppressHashRestoreOnce = false;
 
             window._vlFindAgGridViewport = (root) => {
                 const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
@@ -4525,6 +4526,7 @@ HTML_TEMPLATE = r"""
                     }
                     window._pendingPageKey = val;
                     const pageName = val.replace('page_', '');
+                    window._suppressHashRestoreOnce = true;
                     window.location.hash = pageName;
                     debugLog(`Updated hash: #${pageName}`);
                 }
@@ -5222,6 +5224,20 @@ HTML_TEMPLATE = r"""
             } else {
                 setTimeout(restoreFromHash, 200);
             }
+        } else {
+            const handleBrowserHistoryNavigation = () => {
+                if (window._suppressHashRestoreOnce) {
+                    window._suppressHashRestoreOnce = false;
+                    return;
+                }
+                if (!window._wsReady) {
+                    return;
+                }
+                setTimeout(restoreFromHash, 40);
+            };
+
+            window.addEventListener('hashchange', handleBrowserHistoryNavigation);
+            window.addEventListener('popstate', handleBrowserHistoryNavigation);
         }
     </script>
 </body>
