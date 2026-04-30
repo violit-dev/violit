@@ -670,7 +670,10 @@ class InputWidgetsMixin:
         """Multi-line text input
 
         Args:
-            height: Number of visible text rows (default: 3)
+            height: Streamlit-style height. ``None`` keeps the default multiline
+                    size, integers are treated as pixels, ``"content"`` grows to
+                    fit content, and ``"stretch"`` stretches with its container.
+                    Use ``rows=...`` for explicit row counts.
             max_chars: Maximum number of characters
             placeholder: Placeholder text when empty
             disabled: If True, widget is grayed out
@@ -691,6 +694,7 @@ class InputWidgetsMixin:
             # Create local shallow copies of cls/style to avoid shadowing/unbound errors
             _cls = cls
             _style = style
+            local_props = dict(props)
 
             token = rendering_ctx.set(cid)
             cv = s.value
@@ -698,10 +702,49 @@ class InputWidgetsMixin:
 
             text_value = "" if cv is None else str(cv)
             content_lines = text_value.count("\n") + 1 if text_value else 1
-            auto_rows = max(4, min(12, content_lines + 1))
-            effective_rows = auto_rows
-            
-            textarea_resize = props.pop("resize", "vertical")
+            min_pixel_height = 68 if label_visibility == "collapsed" else 98
+            effective_rows = 3
+            explicit_height_px = None
+            height_mode = None
+
+            rows_value = local_props.pop("rows", None)
+            if rows_value is not None:
+                try:
+                    effective_rows = max(1, int(float(str(rows_value).strip().replace("rows", ""))))
+                except ValueError:
+                    effective_rows = 3
+
+            resize_prop = local_props.pop("resize", None)
+            if height is None:
+                pass
+            elif isinstance(height, (int, float)):
+                explicit_height_px = max(min_pixel_height, int(float(height)))
+            else:
+                height_str = str(height).strip()
+                height_lower = height_str.lower()
+
+                if height_lower in {"content", "stretch"}:
+                    height_mode = height_lower
+                    if rows_value is None:
+                        effective_rows = max(3, min(12, content_lines))
+                elif height_lower.endswith("px"):
+                    try:
+                        explicit_height_px = max(min_pixel_height, int(float(height_lower[:-2].strip())))
+                    except ValueError:
+                        explicit_height_px = None
+                elif height_lower.endswith("rows"):
+                    if rows_value is None:
+                        try:
+                            effective_rows = max(1, int(float(height_lower[:-4].strip())))
+                        except ValueError:
+                            effective_rows = 3
+                else:
+                    try:
+                        explicit_height_px = max(min_pixel_height, int(float(height_lower)))
+                    except ValueError:
+                        explicit_height_px = None
+
+            textarea_resize = resize_prop if resize_prop is not None else ("auto" if height_mode in {"content", "stretch"} else "vertical")
 
             if self.mode == 'lite':
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
@@ -749,35 +792,21 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            textarea_props = {"resize": textarea_resize}
-            explicit_min_height = None
-            if height is not None:
-                h_str = str(height).strip()
-                if h_str.endswith("px"):
-                    val = h_str[:-2].strip()
-                    try:
-                        explicit_min_height = max(48, int(float(val)))
-                    except ValueError:
-                        explicit_min_height = None
-                else:
-                    # Violit treats `height` as visible rows by default.
-                    # Use an explicit `px` suffix when a pixel height is intended.
-                    row_text = h_str.replace("rows", "").strip()
-                    try:
-                        effective_rows = max(1, int(float(row_text)))
-                    except ValueError:
-                        effective_rows = 4
-                    textarea_props["rows"] = effective_rows
-            else:
-                textarea_props["rows"] = effective_rows
+            textarea_props = {"resize": textarea_resize, "rows": effective_rows}
 
             # Web Awesome's auto resize can still collapse empty textareas to a single line
             # before the component fully measures itself, especially in initially hidden tabs.
-            # Give the host element a minimum block size so multiline editors always look multiline.
-            min_height_rem = max(5.5, 1.35 * effective_rows + 1.6)
-            existing_inner_style = props.get("style", "")
-            if explicit_min_height is not None:
-                textarea_style = merge_style(existing_inner_style, f"min-height: {explicit_min_height}px;")
+            # Give the host element a stable baseline size that follows Streamlit-style height semantics.
+            min_height_rem = max(4.75, 1.35 * effective_rows + 1.2)
+            existing_inner_style = local_props.pop("style", "")
+            if explicit_height_px is not None:
+                textarea_style = merge_style(
+                    existing_inner_style,
+                    f"min-height: {explicit_height_px}px;",
+                    f"height: {explicit_height_px}px;",
+                )
+            elif height_mode == "stretch":
+                textarea_style = merge_style(existing_inner_style, f"min-height: {min_pixel_height}px;", "height: 100%;")
             else:
                 textarea_style = merge_style(existing_inner_style, f"min-height: {min_height_rem:.2f}rem;")
             textarea_props["style"] = textarea_style
@@ -787,7 +816,7 @@ class InputWidgetsMixin:
             if disabled: textarea_props["disabled"] = True
             if help: textarea_props["hint"] = help
             html = f'<wa-textarea id="{cid}" label="{label}" value="{cv}" appearance="outlined"'
-            for k, v in {**attrs, **textarea_props, **props}.items():
+            for k, v in {**attrs, **textarea_props, **local_props}.items():
                 if v is True: html += f' {k}'
                 elif v is not False and v is not None: html += f' {k}="{v}"'
             html += f'></wa-textarea>{listener_script}'
