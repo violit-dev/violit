@@ -16,15 +16,21 @@ def _plotly_json_dumps(fig) -> str:
     import numpy as np
 
     def _normalize(value):
+        if isinstance(value, np.ndarray):
+            return [_normalize(item) for item in value.tolist()]
+        if isinstance(value, np.generic):
+            return value.item()
         if isinstance(value, dict):
             if set(value.keys()) == {"dtype", "bdata"}:
                 try:
                     array = np.frombuffer(base64.b64decode(value["bdata"]), dtype=np.dtype(value["dtype"]))
-                    return array.tolist()
+                    return [_normalize(item) for item in array.tolist()]
                 except Exception:
                     return value
             return {key: _normalize(item) for key, item in value.items()}
         if isinstance(value, list):
+            return [_normalize(item) for item in value]
+        if isinstance(value, tuple):
             return [_normalize(item) for item in value]
         return value
 
