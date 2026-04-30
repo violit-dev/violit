@@ -3574,6 +3574,59 @@ HTML_TEMPLATE = r"""
             }
         }
 
+        function copyElementAttributes(target, source) {
+            if (!target || !source) return;
+
+            Array.from(target.getAttributeNames()).forEach((name) => {
+                if (name !== 'id') {
+                    target.removeAttribute(name);
+                }
+            });
+
+            Array.from(source.getAttributeNames()).forEach((name) => {
+                if (name !== 'id') {
+                    target.setAttribute(name, source.getAttribute(name));
+                }
+            });
+        }
+
+        function executeInlineScripts(root) {
+            if (!root || !root.querySelectorAll) return;
+            root.querySelectorAll('script').forEach((s) => {
+                const script = document.createElement('script');
+                script.textContent = s.textContent;
+                document.body.appendChild(script);
+                script.remove();
+            });
+        }
+
+        function trySmartUpdatePlotlyWrapper(el, itemHtml) {
+            if (!el || !itemHtml) return false;
+
+            const temp = document.createElement('div');
+            temp.innerHTML = itemHtml;
+
+            const nextWrapper = temp.firstElementChild;
+            const currentPlot = el.querySelector('.js-plotly-plot');
+            const nextPlot = temp.querySelector('.js-plotly-plot');
+
+            if (!nextWrapper || !currentPlot || !nextPlot) return false;
+            if (currentPlot.id !== nextPlot.id) return false;
+            if (nextPlot.hasAttribute('data-vl-deferred-chart')) return false;
+
+            copyElementAttributes(el, nextWrapper);
+            copyElementAttributes(currentPlot, nextPlot);
+
+            Array.from(el.children).forEach((child) => {
+                if (child !== currentPlot) {
+                    child.remove();
+                }
+            });
+
+            executeInlineScripts(temp);
+            return true;
+        }
+
         function restartPageEnterAnimation(pageEl) {
             if (!pageEl || !pageEl.classList || !pageEl.classList.contains('page-container')) return;
             if (!document.body.classList.contains('anim-soft')) return;
@@ -4790,6 +4843,12 @@ HTML_TEMPLATE = r"""
                                         }
                                     }
                                 }
+
+                                // Plotly chart wrappers: keep the existing plot DOM and rerun the incoming
+                                // render script so Plotly.react updates traces without nuking the background.
+                                if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('.js-plotly-plot')) {
+                                    smartUpdated = trySmartUpdatePlotlyWrapper(el, item.html);
+                                }
                                 
                                 // Default: Full DOM replacement
                                 if (!smartUpdated) {
@@ -4804,12 +4863,7 @@ HTML_TEMPLATE = r"""
                                     // Execute scripts
                                     const temp = document.createElement('div');
                                     temp.innerHTML = item.html;
-                                    temp.querySelectorAll('script').forEach(s => {
-                                        const script = document.createElement('script');
-                                        script.textContent = s.textContent;
-                                        document.body.appendChild(script);
-                                        script.remove();
-                                    });
+                                    executeInlineScripts(temp);
 
                                     if (isNavigation && newEl && newEl.classList.contains('page-container')) {
                                         requestAnimationFrame(() => restartPageEnterAnimation(newEl));

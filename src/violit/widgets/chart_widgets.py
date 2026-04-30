@@ -116,6 +116,11 @@ _PLOTLY_RENDER_SCRIPT = """
         if (state.rendering) return;
         var isInitialMount = !el.querySelector('.plot-container');
 
+        if (isInitialMount) {{
+            el.replaceChildren();
+            el.removeAttribute('data-vl-deferred-chart');
+        }}
+
         var size = _vlMeasure(el);
         var nextHeight = size.height > 10 ? size.height : (explicitHeight || 0);
         if (size.width < 10) return;
@@ -256,7 +261,7 @@ _PLOTLY_RENDER_SCRIPT = """
         if (!el) return;
 
         _vlBindResizeObserver();
-        _vlScheduleRender(!window._vlPlotlyInited.has(cid));
+        _vlScheduleRender(true);
 
     }}
 

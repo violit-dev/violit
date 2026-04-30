@@ -141,31 +141,42 @@ class DataWidgetsMixin:
             html = f'''
             <style>
                 #{cid}.vl-ag-grid .ag-body-viewport,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport {{
                     -ms-overflow-style: auto !important;
                     scrollbar-width: thin !important;
                 }}
 
+                #{cid}.vl-ag-grid .ag-center-cols-viewport {{
+                    -ms-overflow-style: none !important;
+                    scrollbar-width: none !important;
+                }}
+
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar {{
                     display: block !important;
                     width: 10px !important;
                     height: 10px !important;
                 }}
 
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar {{
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                }}
+
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-track,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-track {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-track {{
                     background: transparent;
                 }}
 
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb {{
                     background: color-mix(in srgb, var(--vl-text-muted), transparent 30%);
                     border-radius: 999px;
                 }}
 
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb:hover,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb:hover {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb:hover {{
                     background: color-mix(in srgb, var(--vl-primary), transparent 20%);
                 }}
             </style>
@@ -658,31 +669,42 @@ class DataWidgetsMixin:
             }})();</script>
             <style>
                 #{cid}.vl-ag-grid .ag-body-viewport,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport {{
                     -ms-overflow-style: auto !important;
                     scrollbar-width: thin !important;
                 }}
 
+                #{cid}.vl-ag-grid .ag-center-cols-viewport {{
+                    -ms-overflow-style: none !important;
+                    scrollbar-width: none !important;
+                }}
+
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar {{
                     display: block !important;
                     width: 10px !important;
                     height: 10px !important;
                 }}
 
+                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar {{
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                }}
+
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-track,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-track {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-track {{
                     background: transparent;
                 }}
 
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb {{
                     background: color-mix(in srgb, var(--vl-text-muted), transparent 30%);
                     border-radius: 999px;
                 }}
 
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb:hover,
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar-thumb:hover {{
+                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb:hover {{
                     background: color-mix(in srgb, var(--vl-primary), transparent 20%);
                 }}
             </style>
