@@ -1,6 +1,9 @@
 """Layout Widgets Mixin for Violit"""
 
-from typing import Union, Callable, Optional, List
+import hashlib
+import re
+
+from typing import Any, Union, Callable, Optional, List
 from ..component import Component
 from ..context import rendering_ctx, fragment_ctx, layout_ctx, session_ctx
 from ..style_utils import merge_cls, merge_style
@@ -20,6 +23,20 @@ def _reset_dynamic_fragment_children(fragment_id: str):
 
     store = get_session_store()
     store['fragment_components'][fragment_id] = []
+
+
+def _sanitize_layout_key(value: Any) -> str:
+    raw = str(value)
+    normalized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw)
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+
+    if normalized and normalized == raw and len(normalized) <= 64:
+        return normalized
+
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+    if not normalized:
+        return f"layout_{digest}"
+    return f"{normalized[:48]}_{digest}"
 
 
 class LayoutWidgetsMixin:
@@ -228,9 +245,17 @@ class LayoutWidgetsMixin:
         
         return ExpanderContext(self, cid, label, expanded, icon, cls, style)
 
-    def tabs(self, labels: List[str], cls: str = "", style: str = ""):
-        """Create tabbed interface"""
-        cid = self._get_next_cid("tabs")
+    def tabs(self, labels: List[str], cls: str = "", style: str = "", *, key: Any = None):
+        """Create tabbed interface.
+
+        Args:
+            labels: Tab labels in display order.
+            cls: Additional CSS classes for the outer wrapper.
+            style: Additional inline styles for the outer wrapper.
+            key: Optional stable identifier for preserving active-tab state across
+                 rerenders when surrounding component order can change.
+        """
+        cid = f"tabs_{_sanitize_layout_key(key)}" if key is not None else self._get_next_cid("tabs")
         
         class TabsManager:
             def __init__(self, app, tabs_id, labels, user_cls="", user_style=""):
