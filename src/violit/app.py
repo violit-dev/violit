@@ -18,7 +18,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 import inspect
 import uvicorn
@@ -236,6 +236,7 @@ class App(
         self.mode = mode
         self.use_cdn = use_cdn
         self.disconnect_timeout = disconnect_timeout
+        self.boot_id = uuid.uuid4().hex
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
 
@@ -1997,6 +1998,12 @@ class App(
             builders = store.get('builders')
             if builders:
                 builders.clear()
+            actions = store.get('actions')
+            if actions:
+                actions.clear()
+            submitted_values = store.get('submitted_values')
+            if submitted_values:
+                submitted_values.clear()
             order = store.get('order')
             if order:
                 order.clear()
@@ -2006,6 +2013,21 @@ class App(
             fragment_components = store.get('fragment_components')
             if fragment_components:
                 fragment_components.clear()
+            tracker = store.get('tracker')
+            if tracker and getattr(tracker, 'subscribers', None) is not None:
+                tracker.subscribers.clear()
+            dirty_states = store.get('dirty_states')
+            if dirty_states:
+                dirty_states.clear()
+            forced_dirty = store.get('forced_dirty')
+            if forced_dirty:
+                forced_dirty.clear()
+            eval_queue = store.get('eval_queue')
+            if eval_queue:
+                eval_queue.clear()
+            deferred_charts = store.get('_vl_chart_requested')
+            if deferred_charts:
+                deferred_charts.clear()
             base_component_count = STATIC_STORE.get('component_count', 0)
             if store.get('component_count') != base_component_count:
                 store['component_count'] = base_component_count
@@ -2043,7 +2065,14 @@ class App(
                 print(f"[DEBUG] CSRF token generated: {bool(csrf_token)}")
             
             # Debug flag injection
-            debug_script = f'<script>window._debug_mode = {str(self.debug_mode).lower()};</script>'
+            debug_script = (
+                f'<script>'
+                f'window._vlBootId = "{self.boot_id}";'
+                f'window._vlServerBootId = null;'
+                f'window._vlWsHelloReceived = false;'
+                f'window._debug_mode = {str(self.debug_mode).lower()};'
+                f'</script>'
+            )
             
             # Vendor Resources Selection
             active_theme_name = "dark" if t.mode == "dark" else "light"
@@ -2352,7 +2381,25 @@ class App(
             body_class = "vl-splash-active" if self.show_splash else ""
             sidebar_resizer_style = "" if (self._sidebar_resizable and (sidebar_c or self.static_sidebar_order)) else "display: none;"
             html = HTML_TEMPLATE.replace("%CONTENT%", main_c).replace("%SIDEBAR_CONTENT%", sidebar_c).replace("%SIDEBAR_STYLE%", sidebar_style).replace("%SIDEBAR_RESIZER_STYLE%", sidebar_resizer_style).replace("%MAIN_CLASS%", main_class).replace("%MODE%", self.mode).replace("%TITLE%", self.app_title).replace("%HTML_CLASS%", html_class).replace("%BODY_CLASS%", body_class).replace("%CSS_VARS%", t.to_css_vars()).replace("%SPLASH%", self._splash_html if self.show_splash else "").replace("%CONTAINER_MAX_WIDTH%", self.container_max_width).replace("%WIDGET_GAP%", self.widget_gap).replace("%SIDEBAR_WIDTH%", self._sidebar_width).replace("%SIDEBAR_MIN_WIDTH%", self._sidebar_min_width).replace("%SIDEBAR_MAX_WIDTH%", self._sidebar_max_width).replace("%SIDEBAR_RESIZABLE%", "true" if self._sidebar_resizable else "false").replace("%CSRF_SCRIPT%", csrf_script).replace("%DEBUG_SCRIPT%", debug_script).replace("%VENDOR_RESOURCES%", vendor_resources).replace("%USER_CSS%", user_css).replace("%ROOT_STYLE%", root_style).replace("%DISCONNECT_TIMEOUT%", str(self.disconnect_timeout))
-            return HTMLResponse(html)
+            return HTMLResponse(
+                html,
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+
+        @self.fastapi.get("/__violit_boot")
+        async def boot_probe():
+            return JSONResponse(
+                {"bootId": self.boot_id},
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
 
         @self.fastapi.get("/lite-stream")
         async def lite_stream(request: Request):
@@ -2476,6 +2523,7 @@ class App(
             # Set session context (outside while loop - very important!)
             t = session_ctx.set(sid)
             self.ws_engine.sockets[sid] = ws
+            await ws.send_json({"type": "hello", "bootId": self.boot_id})
             
             # Message processing function
             async def process_message(data):
@@ -4458,6 +4506,8 @@ HTML_TEMPLATE = r"""
             window._wsReady = false;
             window._actionQueue = [];
             window._ws = null;
+            window._vlWsHelloReceived = false;
+            window._vlReloadScheduled = false;
             
             // Page scroll position memory: { pageKey: scrollY }
             window._pageScrollPositions = {};
@@ -4609,6 +4659,38 @@ HTML_TEMPLATE = r"""
                 }
             };
 
+            window._vlBuildHardReloadUrl = () => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('_vlr', Date.now().toString());
+                return url.toString();
+            };
+
+            window._vlHardReload = () => {
+                if (window._vlReloadScheduled) {
+                    return;
+                }
+                window._vlReloadScheduled = true;
+                window.location.replace(window._vlBuildHardReloadUrl());
+            };
+
+            window._vlFinalizeWsReady = () => {
+                if (window._wsReady) {
+                    return;
+                }
+
+                window._wsReady = true;
+
+                if (window._actionQueue.length > 0) {
+                    debugLog(`[WebSocket] Processing ${window._actionQueue.length} queued action(s)...`);
+                    window._actionQueue.forEach(payload => {
+                        window._ws.send(JSON.stringify(payload));
+                    });
+                    window._actionQueue.length = 0;
+                }
+
+                setTimeout(restoreFromHash, 100);
+            };
+
             window._ws = null;
 
             // Now connect WebSocket
@@ -4648,17 +4730,21 @@ HTML_TEMPLATE = r"""
             window._ws.onclose = () => {
                 if (window._intentionalDisconnect) return;
                 window._wsReady = false;
+                window._vlWsHelloReceived = false;
                 debugLog("[WebSocket] Connection lost. Auto-reloading...");
 
                 let retryDelay = 50;
                 const maxDelay = 2000;
                 
                 const checkServer = () => {
-                   fetch(location.href)
+                   const probeUrl = new URL('/__violit_boot', window.location.origin);
+                   probeUrl.searchParams.set('_t', Date.now().toString());
+
+                   fetch(probeUrl.toString(), { cache: 'no-store' })
                        .then(r => {
                            if(r.ok) {
                                debugLog("[Hot Reload] Server back online. Reloading...");
-                               window.location.reload();
+                               window._vlHardReload();
                            } else {
                                retryDelay = Math.min(retryDelay * 1.5, maxDelay);
                                setTimeout(checkServer, retryDelay);
@@ -4675,19 +4761,7 @@ HTML_TEMPLATE = r"""
             // CRITICAL: Restore from hash ONLY after WebSocket is connected
             window._ws.onopen = () => {
                 debugLog("[WebSocket] Connected successfully");
-                window._wsReady = true;
-                
-                // Process queued actions
-                if (window._actionQueue.length > 0) {
-                    debugLog(`[WebSocket] Processing ${window._actionQueue.length} queued action(s)...`);
-                    window._actionQueue.forEach(payload => {
-                        window._ws.send(JSON.stringify(payload));
-                    });
-                    window._actionQueue.length = 0; // Clear queue
-                }
-                
-                // Restore from hash after processing queue
-                setTimeout(restoreFromHash, 100);
+                window._vlReloadScheduled = false;
             };
             
             // Handle WebSocket errors
@@ -4699,6 +4773,19 @@ HTML_TEMPLATE = r"""
             window._ws.onmessage = (e) => {
                 debugLog("[WebSocket] Message received");
                 const msg = JSON.parse(e.data);
+                if (msg.type === 'hello') {
+                    window._vlServerBootId = msg.bootId || null;
+
+                    if (window._vlBootId && msg.bootId && window._vlBootId !== msg.bootId) {
+                        debugLog(`[WebSocket] Boot mismatch detected (${window._vlBootId} != ${msg.bootId}). Hard reloading...`);
+                        window._vlHardReload();
+                        return;
+                    }
+
+                    window._vlWsHelloReceived = true;
+                    window._vlFinalizeWsReady();
+                    return;
+                }
                 if(msg.type === 'update') {
                     // Check if this is a navigation update (page transition)
                     // Server sends isNavigation flag based on action type
