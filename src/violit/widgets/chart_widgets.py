@@ -1,10 +1,34 @@
 """Chart Widgets Mixin for Violit"""
 
+import base64
+import json
+
 from typing import Union, Optional, Any, Callable
 from ..component import Component
 from ..context import rendering_ctx, initial_render_ctx
 from ..state import State, get_session_store
 from ..style_utils import merge_cls, merge_style
+
+
+def _plotly_json_dumps(fig) -> str:
+    """Serialize Plotly figures with plain arrays instead of Plotly 6 typed-array blobs."""
+
+    import numpy as np
+
+    def _normalize(value):
+        if isinstance(value, dict):
+            if set(value.keys()) == {"dtype", "bdata"}:
+                try:
+                    array = np.frombuffer(base64.b64decode(value["bdata"]), dtype=np.dtype(value["dtype"]))
+                    return array.tolist()
+                except Exception:
+                    return value
+            return {key: _normalize(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [_normalize(item) for item in value]
+        return value
+
+    return json.dumps(_normalize(fig.to_plotly_json()), ensure_ascii=False, separators=(",", ":"))
 
 
 # [OPTIMIZED] Plotly render script with fast updates
@@ -349,7 +373,6 @@ class ChartWidgetsMixin:
         
         def builder():
             import plotly.graph_objects as go
-            import plotly.io as pio
             current_fig = self._resolve_chart_data(fig, cid)
             
             data_points_est = 0
@@ -434,7 +457,7 @@ class ChartWidgetsMixin:
                     # Recreate figure with new traces and original layout
                     current_fig = go.Figure(data=new_traces, layout=current_fig.layout)
                 
-            fj = pio.to_json(current_fig)
+            fj = _plotly_json_dumps(current_fig)
             width_style = "width: 100%;" if use_container_width else ""
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{width_style} height: 500px;"></div>
@@ -525,7 +548,6 @@ class ChartWidgetsMixin:
         
         def builder():
             import plotly.graph_objects as go
-            import plotly.io as pio
             current_data = self._resolve_chart_data(data, cid)
             
             data_points_est = 0
@@ -556,7 +578,7 @@ class ChartWidgetsMixin:
                 template='plotly_white'
             )
             
-            fj = pio.to_json(fig)
+            fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
@@ -578,7 +600,6 @@ class ChartWidgetsMixin:
         
         def builder():
             import plotly.graph_objects as go
-            import plotly.io as pio
             current_data = self._resolve_chart_data(data, cid)
             
             data_points_est = 0
@@ -613,7 +634,7 @@ class ChartWidgetsMixin:
                 template='plotly_white'
             )
             
-            fj = pio.to_json(fig)
+            fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
@@ -635,7 +656,6 @@ class ChartWidgetsMixin:
         
         def builder():
             import plotly.graph_objects as go
-            import plotly.io as pio
             current_data = self._resolve_chart_data(data, cid)
             
             data_points_est = 0
@@ -667,7 +687,7 @@ class ChartWidgetsMixin:
                 template='plotly_white'
             )
             
-            fj = pio.to_json(fig)
+            fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
@@ -689,7 +709,6 @@ class ChartWidgetsMixin:
         
         def builder():
             import plotly.graph_objects as go
-            import plotly.io as pio
             current_data = self._resolve_chart_data(data, cid)
             
             data_points_est = 0
@@ -723,7 +742,7 @@ class ChartWidgetsMixin:
                 template='plotly_white'
             )
             
-            fj = pio.to_json(fig)
+            fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
             html = f'''
             <div id="{cid}" class="js-plotly-plot" style="{container_width} height: {height}px;"></div>
