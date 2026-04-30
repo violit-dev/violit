@@ -84,6 +84,7 @@ _PLOTLY_RENDER_SCRIPT = """
         var el = _vlGetEl();
         if (!el || !_vlIsVisible(el) || !window.Plotly) return;
         if (state.rendering) return;
+        var isInitialMount = !el.querySelector('.plot-container');
 
         var size = _vlMeasure(el);
         var nextHeight = size.height > 10 ? size.height : (explicitHeight || 0);
@@ -95,13 +96,25 @@ _PLOTLY_RENDER_SCRIPT = """
 
         _vlApplyLayout(size);
         state.rendering = true;
+        if (isInitialMount) {{
+            el.style.opacity = '0';
+            el.style.transition = 'opacity 140ms ease-out';
+        }}
         var renderResult = window._vlPlotlyInited.has(cid)
             ? Plotly.react(el, d.data, d.layout, cfg)
             : Plotly.newPlot(el, d.data, d.layout, cfg);
 
-        Promise.resolve(renderResult).then(function() {{
+        return Promise.resolve(renderResult).then(function() {{
             window._vlPlotlyInited.add(cid);
             _vlCommitSize(size);
+            if (isInitialMount) {{
+                requestAnimationFrame(function() {{
+                    var mountedEl = _vlGetEl();
+                    if (mountedEl) {{
+                        mountedEl.style.opacity = '1';
+                    }}
+                }});
+            }}
         }}).finally(function() {{
             state.rendering = false;
         }});
@@ -152,7 +165,19 @@ _PLOTLY_RENDER_SCRIPT = """
 
     function _vlScheduleRender(force) {{
         _vlWaitForStableWidth(function() {{
-            _vlDraw(!!force);
+            if (!window._vlPlotlyQueue) window._vlPlotlyQueue = Promise.resolve();
+            window._vlPlotlyQueue = window._vlPlotlyQueue.then(function() {{
+                return new Promise(function(resolve) {{
+                    requestAnimationFrame(function() {{
+                        var renderPromise = _vlDraw(!!force);
+                        if (renderPromise && typeof renderPromise.finally === 'function') {{
+                            renderPromise.finally(function() {{ setTimeout(resolve, 30); }});
+                        }} else {{
+                            setTimeout(resolve, 30);
+                        }}
+                    }});
+                }});
+            }});
         }});
     }}
 
@@ -224,8 +249,16 @@ _ASYNC_CHART_THRESHOLD = 50000
 class ChartWidgetsMixin:
     """Chart widgets (line, bar, area, scatter, plotly, pyplot, etc.)"""
 
-    def _chart_should_defer_first_render(self, cid):
+    def _chart_should_defer_first_render(self, cid, data_points=0):
         if getattr(self, 'mode', None) != 'ws':
+            return False
+
+        from ..context import initial_render_ctx
+        if not initial_render_ctx.get(False):
+            return False
+
+        _ASYNC_CHART_THRESHOLD = 5000
+        if data_points < _ASYNC_CHART_THRESHOLD:
             return False
 
         store = get_session_store()
@@ -315,7 +348,19 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("plot")
         
         def builder():
-            if self._chart_should_defer_first_render(cid):
+            import plotly.graph_objects as go
+            import plotly.io as pio
+            current_fig = self._resolve_chart_data(fig, cid)
+            
+            data_points_est = 0
+            if current_fig and hasattr(current_fig, "data"):
+                for trace in current_fig.data:
+                    if hasattr(trace, "y") and trace.y is not None:
+                        data_points_est += len(trace.y)
+                    elif hasattr(trace, "x") and trace.x is not None:
+                        data_points_est += len(trace.x)
+
+            if self._chart_should_defer_first_render(cid, data_points=data_points_est):
                 return self._chart_placeholder_component(
                     cid,
                     "plotly_chart",
@@ -325,10 +370,6 @@ class ChartWidgetsMixin:
                     style,
                     "Preparing Plotly chart...",
                 )
-
-            import plotly.graph_objects as go
-            import plotly.io as pio
-            current_fig = self._resolve_chart_data(fig, cid)
             
             if current_fig is None:
                 return Component("div", id=f"{cid}_wrapper", content="No data")
@@ -483,7 +524,17 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("line_chart")
         
         def builder():
-            if self._chart_should_defer_first_render(cid):
+            import plotly.graph_objects as go
+            import plotly.io as pio
+            current_data = self._resolve_chart_data(data, cid)
+            
+            data_points_est = 0
+            if hasattr(current_data, "size"):
+                data_points_est = current_data.size
+            elif isinstance(current_data, list):
+                data_points_est = sum(len(row) if isinstance(row, (list, tuple)) else 1 for row in current_data)
+
+            if self._chart_should_defer_first_render(cid, data_points=data_points_est):
                 return self._chart_placeholder_component(
                     cid,
                     "line_chart",
@@ -493,10 +544,6 @@ class ChartWidgetsMixin:
                     style,
                     "Preparing line chart...",
                 )
-
-            import plotly.graph_objects as go
-            import plotly.io as pio
-            current_data = self._resolve_chart_data(data, cid)
             traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()
@@ -530,7 +577,17 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("bar_chart")
         
         def builder():
-            if self._chart_should_defer_first_render(cid):
+            import plotly.graph_objects as go
+            import plotly.io as pio
+            current_data = self._resolve_chart_data(data, cid)
+            
+            data_points_est = 0
+            if hasattr(current_data, "size"):
+                data_points_est = current_data.size
+            elif isinstance(current_data, list):
+                data_points_est = sum(len(row) if hasattr(row, "__len__") else 1 for row in current_data)
+
+            if self._chart_should_defer_first_render(cid, data_points=data_points_est):
                 return self._chart_placeholder_component(
                     cid,
                     "bar_chart",
@@ -540,10 +597,6 @@ class ChartWidgetsMixin:
                     style,
                     "Preparing bar chart...",
                 )
-
-            import plotly.graph_objects as go
-            import plotly.io as pio
-            current_data = self._resolve_chart_data(data, cid)
             traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()
@@ -581,7 +634,17 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("area_chart")
         
         def builder():
-            if self._chart_should_defer_first_render(cid):
+            import plotly.graph_objects as go
+            import plotly.io as pio
+            current_data = self._resolve_chart_data(data, cid)
+            
+            data_points_est = 0
+            if hasattr(current_data, "size"):
+                data_points_est = current_data.size
+            elif isinstance(current_data, list):
+                data_points_est = sum(len(row) if hasattr(row, "__len__") else 1 for row in current_data)
+
+            if self._chart_should_defer_first_render(cid, data_points=data_points_est):
                 return self._chart_placeholder_component(
                     cid,
                     "area_chart",
@@ -591,10 +654,6 @@ class ChartWidgetsMixin:
                     style,
                     "Preparing area chart...",
                 )
-
-            import plotly.graph_objects as go
-            import plotly.io as pio
-            current_data = self._resolve_chart_data(data, cid)
             traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()
@@ -629,7 +688,17 @@ class ChartWidgetsMixin:
         cid = self._get_next_cid("scatter_chart")
         
         def builder():
-            if self._chart_should_defer_first_render(cid):
+            import plotly.graph_objects as go
+            import plotly.io as pio
+            current_data = self._resolve_chart_data(data, cid)
+            
+            data_points_est = 0
+            if hasattr(current_data, "size"):
+                data_points_est = current_data.size
+            elif isinstance(current_data, list):
+                data_points_est = sum(len(row) if hasattr(row, "__len__") else 1 for row in current_data)
+
+            if self._chart_should_defer_first_render(cid, data_points=data_points_est):
                 return self._chart_placeholder_component(
                     cid,
                     "scatter_chart",
@@ -639,10 +708,6 @@ class ChartWidgetsMixin:
                     style,
                     "Preparing scatter chart...",
                 )
-
-            import plotly.graph_objects as go
-            import plotly.io as pio
-            current_data = self._resolve_chart_data(data, cid)
             traces = self._parse_chart_data(current_data, x, y, color=color)
             
             fig = go.Figure()

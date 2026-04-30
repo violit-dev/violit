@@ -3574,6 +3574,15 @@ HTML_TEMPLATE = r"""
             }
         }
 
+        function restartPageEnterAnimation(pageEl) {
+            if (!pageEl || !pageEl.classList || !pageEl.classList.contains('page-container')) return;
+            if (!document.body.classList.contains('anim-soft')) return;
+            pageEl.style.animation = 'none';
+            pageEl.style.removeProperty('opacity');
+            void pageEl.offsetWidth;
+            pageEl.style.animation = 'fade-in 0.3s ease-out';
+        }
+
         function resolveCssSizeToPx(value) {
             if (!value) return 0;
             if (typeof value === 'number') return value;
@@ -4498,6 +4507,13 @@ HTML_TEMPLATE = r"""
             window.sendAction = (cid, val) => {
                 debugLog(`[sendAction] Called with cid=${cid}, val=${val}`);
 
+                if (cid.startsWith('nav_menu')) {
+                    if (window._pendingPageKey === val || window._currentPageKey === val) {
+                        debugLog(`[sendAction] Skipping duplicate navigation for ${val}`);
+                        return;
+                    }
+                }
+
                 window._pendingScrollRestore = {
                     x: window.scrollX || 0,
                     y: window.scrollY || window.pageYOffset || 0
@@ -4781,17 +4797,9 @@ HTML_TEMPLATE = r"""
                                     purgePlotly(el);
                                     el.outerHTML = item.html;
                                     
-                                    // [FIX] Force animation restart for page transitions
-                                    // When replacing outerHTML with same ID, browser might optimize away the animation.
-                                    // We force a reflow to ensure the fade-in plays.
                                     const newEl = document.getElementById(item.id);
                                     const revealGrid = window._vlHideAgGridDuringScrollRestore(newEl, agGridScrollState);
                                     window._vlRestoreAgGridScroll(newEl, agGridScrollState, revealGrid);
-                                    if (isNavigation && newEl && newEl.classList.contains('page-container') && document.body.classList.contains('anim-soft')) {
-                                        newEl.style.animation = 'none';
-                                        void newEl.offsetWidth; // Trigger reflow
-                                        newEl.style.animation = 'fade-in 0.3s ease-out';
-                                    }
                                     
                                     // Execute scripts
                                     const temp = document.createElement('div');
@@ -4802,6 +4810,10 @@ HTML_TEMPLATE = r"""
                                         document.body.appendChild(script);
                                         script.remove();
                                     });
+
+                                    if (isNavigation && newEl && newEl.classList.contains('page-container')) {
+                                        requestAnimationFrame(() => restartPageEnterAnimation(newEl));
+                                    }
                                 }
                             } else {
                                 // If the element does not exist, it might be a new element that belongs inside a re-rendered parent container.
