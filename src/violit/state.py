@@ -76,14 +76,26 @@ def _get_static_store() -> Dict[str, Any]:
     return STATIC_STORE
 
 
+def _refresh_ttl_entry(cache: TTLCache, key: Any):
+    try:
+        value = cache[key]
+    except KeyError:
+        return None
+
+    cache[key] = value
+    return value
+
+
 def get_browser_session_store() -> Dict[str, Any]:
     sid = session_ctx.get()
     if sid is None:
         return {}
 
-    if sid not in SESSION_STORE:
-        SESSION_STORE[sid] = {}
-    return SESSION_STORE[sid]
+    store = _refresh_ttl_entry(SESSION_STORE, sid)
+    if store is None:
+        store = {}
+        SESSION_STORE[sid] = store
+    return store
 
 
 def get_session_store():
@@ -95,14 +107,31 @@ def get_session_store():
         return _get_static_store()
         
     key: Tuple[str, str] = (sid, current_view_id)
-    if key not in VIEW_STORE:
+    store = _refresh_ttl_entry(VIEW_STORE, key)
+    if store is None:
         static_store = _get_static_store()
         base_count = static_store.get('component_count', 0)
         runtime_store = _create_runtime_store(base_count=base_count)
         runtime_store['interval_callbacks'] = dict(static_store.get('interval_callbacks', {}))
         runtime_store['_interval_count'] = static_store.get('_interval_count', 0)
         VIEW_STORE[key] = runtime_store
-    return VIEW_STORE[key]
+        store = runtime_store
+    return store
+
+
+def touch_runtime_stores(session_id: str | None = None, view_id: str | None = None) -> None:
+    sid = session_id if session_id is not None else session_ctx.get()
+    current_view_id = view_id if view_id is not None else view_ctx.get()
+
+    if sid is None:
+        return
+
+    _refresh_ttl_entry(SESSION_STORE, sid)
+
+    if current_view_id is None:
+        return
+
+    _refresh_ttl_entry(VIEW_STORE, (sid, current_view_id))
 
 
 class Subscription:

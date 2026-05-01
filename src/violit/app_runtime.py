@@ -15,7 +15,7 @@ from .app_shell import build_html_response, build_shell_html, build_user_css
 from .app_template import HTML_TEMPLATE
 from .component import Component
 from .context import action_ctx, initial_render_ctx, session_ctx, view_ctx
-from .state import STATIC_STORE, get_session_store
+from .state import STATIC_STORE, get_session_store, touch_runtime_stores
 
 
 VIEW_RESTORE_COOKIE = "_vl_reload_view"
@@ -617,6 +617,7 @@ class AppRuntimeMixin:
                 while True:
                     data = await ws.receive_json()
                     if data.get("type") == "ping":
+                        touch_runtime_stores(sid, current_view_id)
                         await ws.send_json({"type": "pong"})
                         continue
                     await process_message(data)
