@@ -3357,8 +3357,101 @@ HTML_TEMPLATE = r"""
             box-sizing: border-box;
         }
         wa-callout {
-            display: block;
             margin-bottom: 1.25rem;
+        }
+        wa-callout.vl-alert {
+            --vl-alert-bg: var(--vl-bg-card);
+            --vl-alert-border: var(--vl-border);
+            --vl-alert-accent: var(--vl-primary);
+            --vl-alert-text: var(--vl-text);
+            --vl-alert-icon-bg: color-mix(in srgb, var(--vl-alert-accent) 12%, white 88%);
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            padding: 1rem 1.15rem;
+            border: 1px solid var(--vl-alert-border);
+            border-inline-start: 4px solid var(--vl-alert-accent);
+            border-radius: calc(var(--vl-radius) + 0.35rem);
+            background: var(--vl-alert-bg);
+            color: var(--vl-alert-text);
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+        }
+        wa-callout.vl-alert::part(icon) {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.35rem;
+            min-width: 2.35rem;
+            height: 2.35rem;
+            border-radius: 999px;
+            background: var(--vl-alert-icon-bg);
+            color: var(--vl-alert-accent);
+        }
+        wa-callout.vl-alert::part(message) {
+            flex: 1 1 auto;
+            overflow: visible;
+        }
+        wa-callout.vl-alert[data-vl-has-icon="false"] {
+            gap: 0;
+        }
+        wa-callout.vl-alert[data-vl-has-icon="false"]::part(icon) {
+            display: none;
+        }
+        wa-callout.vl-alert > wa-icon[slot='icon'] {
+            margin: 0;
+            width: 1.15rem;
+            height: 1.15rem;
+            font-size: 1.15rem;
+        }
+        wa-callout.vl-alert.vl-alert--info {
+            --vl-alert-accent: #2563eb;
+            --vl-alert-border: #bfdbfe;
+            --vl-alert-text: #1d4ed8;
+            --vl-alert-bg: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            --vl-alert-icon-bg: rgba(37, 99, 235, 0.12);
+        }
+        wa-callout.vl-alert.vl-alert--success {
+            --vl-alert-accent: #16a34a;
+            --vl-alert-border: #bbf7d0;
+            --vl-alert-text: #166534;
+            --vl-alert-bg: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
+            --vl-alert-icon-bg: rgba(22, 163, 74, 0.14);
+        }
+        wa-callout.vl-alert.vl-alert--warning {
+            --vl-alert-accent: #d97706;
+            --vl-alert-border: #fde68a;
+            --vl-alert-text: #9a6700;
+            --vl-alert-bg: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+            --vl-alert-icon-bg: rgba(217, 119, 6, 0.14);
+        }
+        wa-callout.vl-alert.vl-alert--danger {
+            --vl-alert-accent: #dc2626;
+            --vl-alert-border: #fecaca;
+            --vl-alert-text: #b42318;
+            --vl-alert-bg: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
+            --vl-alert-icon-bg: rgba(220, 38, 38, 0.12);
+        }
+        wa-callout.vl-alert.vl-alert--neutral {
+            --vl-alert-accent: #475569;
+            --vl-alert-border: #cbd5e1;
+            --vl-alert-text: #334155;
+            --vl-alert-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            --vl-alert-icon-bg: rgba(71, 85, 105, 0.12);
+        }
+        .vl-alert__body {
+            display: block;
+            width: 100%;
+            line-height: 1.6;
+        }
+        .vl-alert__body strong {
+            font-weight: 700;
+        }
+        .vl-alert__body code {
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.45rem;
+            background: rgba(15, 23, 42, 0.08);
+            font-size: 0.92em;
         }
         wa-button {
             margin-top: 0.25rem;

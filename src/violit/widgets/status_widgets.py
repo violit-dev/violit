@@ -9,24 +9,57 @@ from ..style_utils import merge_cls, merge_style, resolve_value
 
 class StatusWidgetsMixin:
     """Status display widgets (success, info, warning, error, toast, progress, spinner, status, balloons, snow, exception)"""
+
+    _ALERT_VARIANT_MAP = {
+        "primary": "brand",
+        "danger": "danger",
+    }
+
+    _ALERT_DEFAULT_ICONS = {
+        "brand": "circle-info",
+        "neutral": "circle-info",
+        "success": "circle-check",
+        "warning": "triangle-exclamation",
+        "danger": "circle-xmark",
+    }
+
+    _ALERT_TONE_MAP = {
+        "brand": "info",
+        "neutral": "neutral",
+        "success": "success",
+        "warning": "warning",
+        "danger": "danger",
+    }
+
+    def _normalize_alert_variant(self, variant: str) -> str:
+        return self._ALERT_VARIANT_MAP.get(variant, variant)
+
+    def _resolve_alert_icon(self, variant: str, icon: Optional[Union[str, bool]], show_icon: bool) -> Optional[str]:
+        if not show_icon or icon is False:
+            return None
+        if isinstance(icon, str):
+            normalized_icon = icon.strip()
+            return normalized_icon or None
+        return self._ALERT_DEFAULT_ICONS.get(variant, "circle-info")
     
-    def success(self, *args, icon: str = None, cls: str = "", style: str = ""): 
+    def success(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
         """Display success alert"""
-        self.alert(*args, variant="success", icon=icon or "circle-check", cls=cls, style=style)
+        self.alert(*args, variant="success", icon=icon, show_icon=show_icon, cls=cls, style=style)
     
-    def warning(self, *args, icon: str = None, cls: str = "", style: str = ""): 
+    def warning(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
         """Display warning alert"""
-        self.alert(*args, variant="warning", icon=icon or "triangle-exclamation", cls=cls, style=style)
+        self.alert(*args, variant="warning", icon=icon, show_icon=show_icon, cls=cls, style=style)
     
-    def error(self, *args, icon: str = None, cls: str = "", style: str = ""): 
+    def error(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
         """Display error alert"""
-        self.alert(*args, variant="danger", icon=icon or "circle-xmark", cls=cls, style=style)
+        self.alert(*args, variant="danger", icon=icon, show_icon=show_icon, cls=cls, style=style)
     
-    def info(self, *args, icon: str = None, cls: str = "", style: str = ""): 
+    def info(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
         """Display info alert"""
-        self.alert(*args, variant="primary", icon=icon or "circle-info", cls=cls, style=style)
+        self.alert(*args, variant="primary", icon=icon, show_icon=show_icon, cls=cls, style=style)
     
-    def alert(self, *args, variant="primary", icon=None, cls: str = "", style: str = ""):
+    def alert(self, *args, variant="primary", icon: Optional[Union[str, bool]] = None,
+              show_icon: bool = True, cls: str = "", style: str = ""):
         """Display alert message.
 
         Each positional argument may be a plain value, State, ComputedState,
@@ -51,9 +84,21 @@ class StatusWidgetsMixin:
             escaped_val = _re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', escaped_val)
             escaped_val = _re.sub(r'`(.+?)`', r'<code>\1</code>', escaped_val)
             escaped_val = escaped_val.replace('\n', '<br>')
-            variant_map = {"primary": "brand", "danger": "danger"}.get(variant, variant)
-            icon_html = f'<wa-icon slot="icon" name="{icon}"></wa-icon>' if icon else ""
-            html_output = f'<wa-callout variant="{variant_map}" appearance="filled-outlined">{icon_html}{escaped_val}</wa-callout>'
+            variant_name = self._normalize_alert_variant(variant)
+            tone_name = self._ALERT_TONE_MAP.get(variant_name, "neutral")
+            icon_name = self._resolve_alert_icon(variant_name, icon, show_icon)
+            safe_variant = html_lib.escape(variant_name, quote=True)
+            safe_tone = html_lib.escape(tone_name, quote=True)
+            icon_html = ""
+            if icon_name:
+                safe_icon = html_lib.escape(icon_name, quote=True)
+                icon_html = f'<wa-icon slot="icon" name="{safe_icon}"></wa-icon>'
+            has_icon = "true" if icon_name else "false"
+            html_output = (
+                f'<wa-callout class="vl-alert vl-alert--{safe_tone}" '
+                f'variant="{safe_variant}" appearance="filled-outlined" data-vl-has-icon="{has_icon}">'
+                f'{icon_html}<div class="vl-alert__body">{escaped_val}</div></wa-callout>'
+            )
             _wd = self._get_widget_defaults("alert")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
