@@ -547,6 +547,7 @@ class AppRuntimeMixin:
                 while True:
                     data = await ws.receive_json()
                     if data.get("type") == "ping":
+                        await ws.send_json({"type": "pong"})
                         continue
                     await process_message(data)
             except WebSocketDisconnect:

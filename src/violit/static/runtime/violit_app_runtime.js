@@ -44,12 +44,6 @@
             }
         };
 
-        const stripViewIdFromUrl = () => {
-            replaceCurrentUrl((url) => {
-                url.searchParams.delete(viewParamName);
-            });
-        };
-
         const syncViewIdIntoUrlForReload = () => {
             const activeViewId = window._vlViewId || readStoredViewId();
             if (!activeViewId) {
@@ -62,9 +56,9 @@
 
         window._vlViewId = viewId;
         writeStoredViewId(viewId);
-        if (window.location.search.includes(viewParamName + '=')) {
-            stripViewIdFromUrl();
-        }
+        // Keep the tab-scoped view id on the current URL so browser reloads
+        // reuse the same server-side view before any client JS runs again.
+        syncViewIdIntoUrlForReload();
         window.addEventListener('beforeunload', syncViewIdIntoUrlForReload);
         window.addEventListener('pagehide', syncViewIdIntoUrlForReload);
 
@@ -1004,10 +998,14 @@
             window._ws = null;
             window._vlWsHelloReceived = false;
             window._vlReloadScheduled = false;
+            window._vlRecoveryLoopActive = false;
+            window._vlHeartbeatReplyTimer = null;
+            window._vlLastSocketAckAt = Date.now();
             
             // Page scroll position memory: { pageKey: scrollY }
             window._pageScrollPositions = {};
             window._currentPageKey = null;
+            window._pendingPageKey = null;
             window._pendingScrollRestore = null;
             window._suppressHashRestoreOnce = false;
 
@@ -1149,12 +1147,22 @@
                     debugLog(`Updated hash: #${pageName}`);
                 }
                 
-                if (!window._wsReady || !window._ws) {
+                const socketOpen = !!(window._ws && window._ws.readyState === WebSocket.OPEN);
+                if (!window._wsReady || !socketOpen) {
                     debugLog(`WebSocket not ready, queueing action: ${cid}`);
                     window._actionQueue.push(payload);
+                    if (!socketOpen && (!window._ws || window._ws.readyState !== WebSocket.CONNECTING)) {
+                        window._vlScheduleWsRecovery(`action:${cid}`);
+                    }
                 } else {
                     debugLog(`Sending action to server: ${cid}`);
-                    window._ws.send(JSON.stringify(payload));
+                    try {
+                        window._ws.send(JSON.stringify(payload));
+                    } catch (error) {
+                        debugLog(`[sendAction] WebSocket send failed for ${cid}`, error);
+                        window._actionQueue.push(payload);
+                        window._vlScheduleWsRecovery(`send-failed:${cid}`);
+                    }
                 }
             };
 
@@ -1170,6 +1178,102 @@
                 }
                 window._vlReloadScheduled = true;
                 window.location.replace(window._vlBuildHardReloadUrl());
+            };
+
+            window._vlMarkSocketAck = () => {
+                window._vlLastSocketAckAt = Date.now();
+                if (window._vlHeartbeatReplyTimer) {
+                    clearTimeout(window._vlHeartbeatReplyTimer);
+                    window._vlHeartbeatReplyTimer = null;
+                }
+            };
+
+            window._vlScheduleWsRecovery = (reason) => {
+                if (mode !== 'ws' || window._intentionalDisconnect || window._vlRecoveryLoopActive) {
+                    return;
+                }
+
+                window._wsReady = false;
+                window._vlWsHelloReceived = false;
+                window._vlRecoveryLoopActive = true;
+                debugLog(`[WebSocket] Recovery scheduled (${reason}).`);
+
+                let retryDelay = 50;
+                const maxDelay = 2000;
+
+                const checkServer = () => {
+                    if (window._intentionalDisconnect) {
+                        window._vlRecoveryLoopActive = false;
+                        return;
+                    }
+
+                    const probeUrl = new URL('/__violit_boot', window.location.origin);
+                    probeUrl.searchParams.set('_t', Date.now().toString());
+
+                    fetch(probeUrl.toString(), { cache: 'no-store' })
+                        .then((response) => {
+                            if (response.ok) {
+                                window._vlRecoveryLoopActive = false;
+                                debugLog('[WebSocket] Server reachable during recovery. Reloading...');
+                                window._vlHardReload();
+                            } else {
+                                retryDelay = Math.min(retryDelay * 1.5, maxDelay);
+                                setTimeout(checkServer, retryDelay);
+                            }
+                        })
+                        .catch(() => {
+                            retryDelay = Math.min(retryDelay * 1.5, maxDelay);
+                            setTimeout(checkServer, retryDelay);
+                        });
+                };
+
+                setTimeout(checkServer, retryDelay);
+            };
+
+            window._vlSendHeartbeat = (reason = 'heartbeat') => {
+                if (!window._ws || window._ws.readyState !== WebSocket.OPEN) {
+                    if (!window._intentionalDisconnect && (!window._ws || window._ws.readyState !== WebSocket.CONNECTING)) {
+                        window._vlScheduleWsRecovery(`${reason}:socket-unavailable`);
+                    }
+                    return false;
+                }
+
+                try {
+                    window._ws.send(JSON.stringify({ type: 'ping' }));
+                    if (window._vlHeartbeatReplyTimer) {
+                        clearTimeout(window._vlHeartbeatReplyTimer);
+                    }
+                    window._vlHeartbeatReplyTimer = setTimeout(() => {
+                        if (!window._intentionalDisconnect) {
+                            debugLog(`[WebSocket] Heartbeat timed out (${reason}).`);
+                            window._vlScheduleWsRecovery(`${reason}:heartbeat-timeout`);
+                        }
+                    }, 10000);
+                    return true;
+                } catch (error) {
+                    debugLog(`[WebSocket] Heartbeat send failed (${reason}).`, error);
+                    window._vlScheduleWsRecovery(`${reason}:heartbeat-send-failed`);
+                    return false;
+                }
+            };
+
+            window._vlProbeWsAfterResume = () => {
+                if (mode !== 'ws' || window._intentionalDisconnect) {
+                    return;
+                }
+
+                const socketOpen = !!(window._ws && window._ws.readyState === WebSocket.OPEN);
+                if (!socketOpen || !window._wsReady) {
+                    if (!window._ws || window._ws.readyState !== WebSocket.CONNECTING) {
+                        window._vlScheduleWsRecovery('resume');
+                    }
+                    return;
+                }
+
+                const ackAgeMs = Date.now() - (window._vlLastSocketAckAt || 0);
+                if (ackAgeMs > 30000) {
+                    window._vlSendHeartbeat('resume');
+                }
             };
 
             window._vlFinalizeWsReady = () => {
@@ -1210,13 +1314,19 @@
                         if (window._vlTimeout > 0 && (Date.now() - window._vlLastActivity) > window._vlTimeout * 1000) {
                             debugLog("[WebSocket] Disconnecting due to inactivity timeout.");
                             window._intentionalDisconnect = true;
+                            if (window._vlHeartbeatReplyTimer) {
+                                clearTimeout(window._vlHeartbeatReplyTimer);
+                                window._vlHeartbeatReplyTimer = null;
+                            }
                             window._ws.close();
                             document.body.style.transition = 'opacity 0.5s';
                             document.body.style.opacity = '0.5';
                             document.body.style.pointerEvents = 'none';
                         } else {
-                            window._ws.send(JSON.stringify({ type: 'ping' }));
+                            window._vlSendHeartbeat('interval');
                         }
+                    } else if (!window._intentionalDisconnect && window._ws && window._ws.readyState !== WebSocket.CONNECTING) {
+                        window._vlScheduleWsRecovery('interval:socket-closed');
                     }
                 }, 25000);
 
@@ -1231,40 +1341,19 @@
 
             // Auto-reconnect/reload logic
             window._ws.onclose = () => {
+                if (window._vlHeartbeatReplyTimer) {
+                    clearTimeout(window._vlHeartbeatReplyTimer);
+                    window._vlHeartbeatReplyTimer = null;
+                }
                 if (window._intentionalDisconnect) return;
-                window._wsReady = false;
-                window._vlWsHelloReceived = false;
-                debugLog("[WebSocket] Connection lost. Auto-reloading...");
-
-                let retryDelay = 50;
-                const maxDelay = 2000;
-                
-                const checkServer = () => {
-                   const probeUrl = new URL('/__violit_boot', window.location.origin);
-                   probeUrl.searchParams.set('_t', Date.now().toString());
-
-                   fetch(probeUrl.toString(), { cache: 'no-store' })
-                       .then(r => {
-                           if(r.ok) {
-                               debugLog("[Hot Reload] Server back online. Reloading...");
-                               window._vlHardReload();
-                           } else {
-                               retryDelay = Math.min(retryDelay * 1.5, maxDelay);
-                               setTimeout(checkServer, retryDelay);
-                           }
-                       })
-                       .catch(() => {
-                           retryDelay = Math.min(retryDelay * 1.5, maxDelay);
-                           setTimeout(checkServer, retryDelay);
-                       });
-                };
-                setTimeout(checkServer, retryDelay);
+                window._vlScheduleWsRecovery('close');
             };
             
             // CRITICAL: Restore from hash ONLY after WebSocket is connected
             window._ws.onopen = () => {
                 debugLog("[WebSocket] Connected successfully");
                 window._vlReloadScheduled = false;
+                window._vlRecoveryLoopActive = false;
             };
             
             // Handle WebSocket errors
@@ -1276,8 +1365,14 @@
             window._ws.onmessage = (e) => {
                 debugLog("[WebSocket] Message received");
                 const msg = JSON.parse(e.data);
+                window._vlMarkSocketAck();
                 if (msg.type === 'hello') {
                     window._vlServerBootId = msg.bootId || null;
+                    if (typeof msg.viewId === 'string' && msg.viewId) {
+                        window._vlViewId = msg.viewId;
+                        writeStoredViewId(msg.viewId);
+                        syncViewIdIntoUrlForReload();
+                    }
 
                     if (window._vlBootId && msg.bootId && window._vlBootId !== msg.bootId) {
                         debugLog(`[WebSocket] Boot mismatch detected (${window._vlBootId} != ${msg.bootId}). Hard reloading...`);
@@ -1287,6 +1382,9 @@
 
                     window._vlWsHelloReceived = true;
                     window._vlFinalizeWsReady();
+                    return;
+                }
+                if (msg.type === 'pong') {
                     return;
                 }
                 if(msg.type === 'update') {
@@ -1814,18 +1912,17 @@
             // If no hash, treat it as Home and avoid stale initial navigation state.
             if (!hash || hash === 'home') {
                 debugLog('[Navigation] No hash found, forcing Home page');
-                // Initialize current page key for scroll tracking
-                window._currentPageKey = 'page_home';
                 const tryClickHome = (attempts = 0) => {
                     if (attempts >= 20) return;
                     const navButtons = document.querySelectorAll('#sidebar wa-button');
                     if (navButtons.length > 0) {
                         const homeBtn = navButtons[0]; // First button is Home
                         const homeKey = getNavButtonPageKey(homeBtn);
-                        if (homeKey) window._currentPageKey = homeKey;
                         if (!isNavButtonActive(homeBtn)) {
                             homeBtn.click();
                             debugLog('[Navigation] Clicked Home button');
+                        } else if (homeKey) {
+                            window._currentPageKey = homeKey;
                         }
                     } else {
                         setTimeout(() => tryClickHome(attempts + 1), 100);
@@ -1836,8 +1933,6 @@
             }
             
             const targetKey = 'page_' + hash;
-            // Initialize current page key for scroll tracking
-            window._currentPageKey = targetKey;
             debugLog(`[Navigation] Restoring from hash: "${hash}" (key: ${targetKey})`);
             
             const tryRestore = (attempts = 0) => {
@@ -1860,6 +1955,7 @@
                         
                         // Check if already active to avoid redundant clicks
                         if (isNavButtonActive(btn)) {
+                            window._currentPageKey = targetKey;
                             debugLog('  - Already active, skipping click.');
                             return;
                         }
@@ -1898,4 +1994,11 @@
 
             window.addEventListener('hashchange', handleBrowserHistoryNavigation);
             window.addEventListener('popstate', handleBrowserHistoryNavigation);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    window._vlProbeWsAfterResume();
+                }
+            });
+            window.addEventListener('focus', window._vlProbeWsAfterResume);
+            window.addEventListener('online', window._vlProbeWsAfterResume);
         }
