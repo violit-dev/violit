@@ -145,6 +145,8 @@ class AppLauncherMixin:
                     uvicorn_target,
                     host="0.0.0.0",
                     port=args.port,
+                    ws_ping_interval=None,
+                    ws_ping_timeout=None,
                     reload=True,
                     reload_dirs=[reload_dir],
                     reload_includes=["*.py"],
@@ -393,7 +395,13 @@ class AppLauncherMixin:
                 print(f"INFO:     Violit desktop app running on port {args.port}")
 
             def srv():
-                uvicorn.run(self.fastapi, host="127.0.0.1", port=args.port)
+                uvicorn.run(
+                    self.fastapi,
+                    host="127.0.0.1",
+                    port=args.port,
+                    ws_ping_interval=None,
+                    ws_ping_timeout=None,
+                )
 
             thread = threading.Thread(target=srv, daemon=True)
             thread.start()
@@ -441,7 +449,13 @@ class AppLauncherMixin:
                 logging.getLogger("uvicorn.access").addFilter(_SuppressForbiddenAndRunningFilter())
                 logging.getLogger("uvicorn.error").addFilter(_SuppressForbiddenAndRunningFilter())
                 print(f"INFO:     Violit desktop app running on port {args.port} (hot reload)")
-            uvicorn.run(self.fastapi, host="0.0.0.0", port=args.port)
+            uvicorn.run(
+                self.fastapi,
+                host="0.0.0.0",
+                port=args.port,
+                ws_ping_interval=None,
+                ws_ping_timeout=None,
+            )
         else:
             @self.fastapi.on_event("startup")
             async def _on_web_startup():
@@ -452,4 +466,10 @@ class AppLauncherMixin:
 
                 reload_tag = " (hot reload)" if args.reload else ""
                 print(f"INFO:     Violit web app running on http://localhost:{args.port}{reload_tag}")
-            uvicorn.run(self.fastapi, host="0.0.0.0", port=args.port)
+            uvicorn.run(
+                self.fastapi,
+                host="0.0.0.0",
+                port=args.port,
+                ws_ping_interval=None,
+                ws_ping_timeout=None,
+            )

@@ -1041,6 +1041,7 @@
             window._vlReloadScheduled = false;
             window._vlRecoveryLoopActive = false;
             window._vlHeartbeatReplyTimer = null;
+            window._vlHeartbeatProbeQueuedActions = false;
             window._vlLastSocketAckAt = Date.now();
             
             // Page scroll position memory: { pageKey: scrollY }
@@ -1140,6 +1141,27 @@
 
                 restore();
             };
+
+            window._vlSocketAckAgeMs = () => {
+                const lastAckAt = window._vlLastSocketAckAt || 0;
+                if (lastAckAt <= 0) {
+                    return Number.POSITIVE_INFINITY;
+                }
+                return Date.now() - lastAckAt;
+            };
+
+            window._vlFlushActionQueue = (reason = 'flush') => {
+                if (!window._wsReady || !window._ws || window._ws.readyState !== WebSocket.OPEN || window._actionQueue.length === 0) {
+                    return false;
+                }
+
+                debugLog(`[WebSocket] Flushing ${window._actionQueue.length} queued action(s) after ${reason}.`);
+                const queuedPayloads = window._actionQueue.splice(0, window._actionQueue.length);
+                queuedPayloads.forEach((queuedPayload) => {
+                    window._ws.send(JSON.stringify(queuedPayload));
+                });
+                return true;
+            };
             
             // Define sendAction IMMEDIATELY (before WebSocket connection)
             window.sendAction = (cid, val) => {
@@ -1196,6 +1218,15 @@
                         window._vlScheduleWsRecovery(`action:${cid}`);
                     }
                 } else {
+                    const ackAgeMs = window._vlSocketAckAgeMs();
+                    if (window._vlTimeout <= 0 && ackAgeMs > 45000) {
+                        debugLog(`[sendAction] WebSocket looks stale before ${cid} (${ackAgeMs}ms since last ack); queueing action and probing transport.`);
+                        window._actionQueue.push(payload);
+                        window._vlHeartbeatProbeQueuedActions = true;
+                        window._vlSendHeartbeat('action-stale-probe');
+                        return;
+                    }
+
                     debugLog(`Sending action to server: ${cid}`);
                     try {
                         window._ws.send(JSON.stringify(payload));
@@ -1226,6 +1257,16 @@
                 if (window._vlHeartbeatReplyTimer) {
                     clearTimeout(window._vlHeartbeatReplyTimer);
                     window._vlHeartbeatReplyTimer = null;
+                }
+
+                if (window._vlHeartbeatProbeQueuedActions) {
+                    window._vlHeartbeatProbeQueuedActions = false;
+                    try {
+                        window._vlFlushActionQueue('heartbeat-ack');
+                    } catch (error) {
+                        debugLog('[WebSocket] Failed to flush queued actions after heartbeat ack.', error);
+                        window._vlScheduleWsRecovery('heartbeat-ack-flush-failed');
+                    }
                 }
             };
 
@@ -1281,15 +1322,23 @@
 
                 try {
                     window._ws.send(JSON.stringify({ type: 'ping' }));
-                    if (window._vlHeartbeatReplyTimer) {
-                        clearTimeout(window._vlHeartbeatReplyTimer);
-                    }
-                    window._vlHeartbeatReplyTimer = setTimeout(() => {
-                        if (!window._intentionalDisconnect) {
-                            debugLog(`[WebSocket] Heartbeat timed out (${reason}).`);
-                            window._vlScheduleWsRecovery(`${reason}:heartbeat-timeout`);
+                    const expectsHeartbeatAck = window._vlTimeout > 0 || reason === 'resume' || reason === 'action-stale-probe';
+                    if (expectsHeartbeatAck) {
+                        if (window._vlHeartbeatReplyTimer) {
+                            clearTimeout(window._vlHeartbeatReplyTimer);
                         }
-                    }, 10000);
+                        const heartbeatTimeoutMs = reason === 'action-stale-probe' ? 5000 : 10000;
+                        window._vlHeartbeatReplyTimer = setTimeout(() => {
+                            if (!window._intentionalDisconnect) {
+                                if (window._vlTimeout <= 0 && document.visibilityState === 'hidden' && reason !== 'action-stale-probe') {
+                                    debugLog(`[WebSocket] Heartbeat timeout deferred while page is hidden (${reason}).`);
+                                    return;
+                                }
+                                debugLog(`[WebSocket] Heartbeat timed out (${reason}).`);
+                                window._vlScheduleWsRecovery(`${reason}:heartbeat-timeout`);
+                            }
+                        }, heartbeatTimeoutMs);
+                    }
                     return true;
                 } catch (error) {
                     debugLog(`[WebSocket] Heartbeat send failed (${reason}).`, error);
@@ -1324,13 +1373,7 @@
 
                 window._wsReady = true;
 
-                if (window._actionQueue.length > 0) {
-                    debugLog(`[WebSocket] Processing ${window._actionQueue.length} queued action(s)...`);
-                    window._actionQueue.forEach(payload => {
-                        window._ws.send(JSON.stringify(payload));
-                    });
-                    window._actionQueue.length = 0;
-                }
+                window._vlFlushActionQueue('ws-ready');
 
                 setTimeout(restoreFromHash, 100);
             };
