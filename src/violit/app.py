@@ -3360,11 +3360,16 @@ HTML_TEMPLATE = r"""
             margin-bottom: 1.25rem;
         }
         wa-callout.vl-alert {
-            --vl-alert-bg: var(--vl-bg-card);
-            --vl-alert-border: var(--vl-border);
             --vl-alert-accent: var(--vl-primary);
-            --vl-alert-text: var(--vl-text);
-            --vl-alert-icon-bg: color-mix(in srgb, var(--vl-alert-accent) 12%, white 88%);
+            --vl-alert-border: color-mix(in srgb, var(--vl-alert-accent) 34%, var(--vl-border) 66%);
+            --vl-alert-text: color-mix(in srgb, var(--vl-alert-accent) 38%, var(--vl-text) 62%);
+            --vl-alert-strong: color-mix(in srgb, var(--vl-alert-accent) 74%, var(--vl-text) 26%);
+            --vl-alert-bg-start: color-mix(in srgb, white 84%, var(--vl-alert-accent) 16%);
+            --vl-alert-bg-end: color-mix(in srgb, var(--vl-bg-card) 87%, var(--vl-alert-accent) 13%);
+            --vl-alert-bg: linear-gradient(135deg, var(--vl-alert-bg-start) 0%, var(--vl-alert-bg-end) 100%);
+            --vl-alert-icon-bg: color-mix(in srgb, var(--vl-alert-accent) 14%, white 86%);
+            --vl-alert-inline-bg: color-mix(in srgb, var(--vl-alert-accent) 10%, var(--vl-bg) 90%);
+            --vl-alert-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
             display: flex;
             align-items: center;
             gap: 0.9rem;
@@ -3374,7 +3379,17 @@ HTML_TEMPLATE = r"""
             border-radius: calc(var(--vl-radius) + 0.35rem);
             background: var(--vl-alert-bg);
             color: var(--vl-alert-text);
-            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+            box-shadow: var(--vl-alert-shadow);
+        }
+        html.wa-dark wa-callout.vl-alert {
+            --vl-alert-border: color-mix(in srgb, var(--vl-alert-accent) 44%, var(--vl-border) 56%);
+            --vl-alert-text: color-mix(in srgb, var(--vl-alert-accent) 18%, var(--vl-text) 82%);
+            --vl-alert-strong: color-mix(in srgb, var(--vl-alert-accent) 58%, white 42%);
+            --vl-alert-bg-start: color-mix(in srgb, var(--vl-bg-card) 84%, var(--vl-alert-accent) 16%);
+            --vl-alert-bg-end: color-mix(in srgb, var(--vl-bg) 88%, var(--vl-alert-accent) 12%);
+            --vl-alert-icon-bg: color-mix(in srgb, var(--vl-alert-accent) 22%, var(--vl-bg-card) 78%);
+            --vl-alert-inline-bg: color-mix(in srgb, var(--vl-alert-accent) 16%, var(--vl-bg) 84%);
+            --vl-alert-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
         }
         wa-callout.vl-alert::part(icon) {
             flex: 0 0 auto;
@@ -3406,38 +3421,18 @@ HTML_TEMPLATE = r"""
         }
         wa-callout.vl-alert.vl-alert--info {
             --vl-alert-accent: #2563eb;
-            --vl-alert-border: #bfdbfe;
-            --vl-alert-text: #1d4ed8;
-            --vl-alert-bg: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-            --vl-alert-icon-bg: rgba(37, 99, 235, 0.12);
         }
         wa-callout.vl-alert.vl-alert--success {
-            --vl-alert-accent: #16a34a;
-            --vl-alert-border: #bbf7d0;
-            --vl-alert-text: #166534;
-            --vl-alert-bg: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
-            --vl-alert-icon-bg: rgba(22, 163, 74, 0.14);
+            --vl-alert-accent: var(--vl-success);
         }
         wa-callout.vl-alert.vl-alert--warning {
-            --vl-alert-accent: #d97706;
-            --vl-alert-border: #fde68a;
-            --vl-alert-text: #9a6700;
-            --vl-alert-bg: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
-            --vl-alert-icon-bg: rgba(217, 119, 6, 0.14);
+            --vl-alert-accent: var(--vl-warning);
         }
         wa-callout.vl-alert.vl-alert--danger {
-            --vl-alert-accent: #dc2626;
-            --vl-alert-border: #fecaca;
-            --vl-alert-text: #b42318;
-            --vl-alert-bg: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
-            --vl-alert-icon-bg: rgba(220, 38, 38, 0.12);
+            --vl-alert-accent: var(--vl-danger);
         }
         wa-callout.vl-alert.vl-alert--neutral {
-            --vl-alert-accent: #475569;
-            --vl-alert-border: #cbd5e1;
-            --vl-alert-text: #334155;
-            --vl-alert-bg: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            --vl-alert-icon-bg: rgba(71, 85, 105, 0.12);
+            --vl-alert-accent: color-mix(in srgb, var(--vl-text-muted) 74%, var(--vl-border) 26%);
         }
         .vl-alert__body {
             display: block;
@@ -3446,11 +3441,13 @@ HTML_TEMPLATE = r"""
         }
         .vl-alert__body strong {
             font-weight: 700;
+            color: var(--vl-alert-strong);
         }
         .vl-alert__body code {
             padding: 0.15rem 0.4rem;
             border-radius: 0.45rem;
-            background: rgba(15, 23, 42, 0.08);
+            background: var(--vl-alert-inline-bg);
+            color: var(--vl-alert-strong);
             font-size: 0.92em;
         }
         wa-button {
