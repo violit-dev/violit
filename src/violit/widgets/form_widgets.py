@@ -26,7 +26,7 @@ class FormWidgetsMixin:
     def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None,
                variant="primary", type="primary",
                disabled=False, use_container_width=False, icon=None,
-               cls: str = "", style: str = "", **props):
+               cls: str = "", style: str = "", height: Union[str, int, float] = "auto", **props):
         """Display button
 
         Args:
@@ -34,6 +34,7 @@ class FormWidgetsMixin:
             disabled: If True, button is grayed out
             use_container_width: If True, button spans the full container width
             icon: Icon name (Font Awesome/Web Awesome icon, e.g. "gear", "circle-plus", or emoji)
+            height: Button height - "auto", "fill", or any CSS size value
         """
         # Streamlit compat: map type to variant
         _type_map = {"primary": "primary", "secondary": "default", "tertiary": "text"}
@@ -54,12 +55,19 @@ class FormWidgetsMixin:
             _wd = self._get_widget_defaults("button")
             default_host_cls, default_auto_part_cls = auto_split_widget_cls("button", _wd.get("cls", ""))
             user_host_cls, user_auto_part_cls = auto_split_widget_cls("button", cls)
-            _fc = merge_cls(default_host_cls, user_host_cls)
+            _fc = merge_cls(default_host_cls, user_host_cls, "vl-button-fill" if height == "fill" else "")
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             host_style = _fs
             if use_container_width:
                 host_style = merge_style(host_style, "width:100%;")
+            if height not in (None, "", "auto"):
+                if height == "fill":
+                    host_style = merge_style(host_style, "height:100%;")
+                elif isinstance(height, (int, float)):
+                    host_style = merge_style(host_style, f"height:{int(height)}px;")
+                else:
+                    host_style = merge_style(host_style, f"height:{height};")
             host_props = dict(props)
             part_bridge_script = ""
             if _part_cls:

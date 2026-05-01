@@ -719,7 +719,7 @@ class DataWidgetsMixin:
 
     def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal",
                 help: str = None, label_visibility: str = "visible", border: bool = True,
-                cls: str = "", style: str = ""):
+                cls: str = "", style: str = "", height: Union[str, int, float] = "auto"):
         """Display metric value with Signal support"""
         import html as html_lib
         
@@ -761,9 +761,23 @@ class DataWidgetsMixin:
                 delta_html = f'<div style="color: {color}; font-size: 0.9rem; margin-top: 0.25rem; font-weight: 500;">{icon_html}{escaped_delta}</div>'
 
             border_style = "border:1px solid var(--vl-border);border-radius:0.5rem;" if border else ""
+            resolved_height = None
+            if height not in (None, "", "auto"):
+                if height == "fill":
+                    resolved_height = "100%"
+                elif isinstance(height, (int, float)):
+                    resolved_height = f"{int(height)}px"
+                else:
+                    resolved_height = str(height)
+
+            wrapper_style = f"height: {resolved_height};" if resolved_height else ""
+            card_style = f"padding: 1.25rem;{border_style}"
+            if resolved_height:
+                card_style = f"{card_style}height: {resolved_height};"
+            card_cls = merge_cls("card", "vl-metric-card", "vl-metric-card--fill" if height == "fill" else "")
 
             html_output = f'''
-            <div class="card" style="padding: 1.25rem;{border_style}">
+            <div class="{card_cls}" style="{card_style}">
                 <div style="font-size: 0.875rem; color: var(--vl-text-muted); margin-bottom: 0.5rem; font-weight: 500;{label_style}">{escaped_label}{help_html}</div>
                 <div style="font-size: 1.75rem; font-weight: 700; color: var(--vl-text);">{escaped_val}</div>
                 {delta_html}
@@ -771,7 +785,7 @@ class DataWidgetsMixin:
             '''
             _wd = self._get_widget_defaults("metric")
             _fc = merge_cls(_wd.get("cls", ""), cls)
-            _fs = merge_style(_wd.get("style", ""), style)
+            _fs = merge_style(_wd.get("style", ""), wrapper_style, style)
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
             
         self._register_component(cid, builder)

@@ -3478,6 +3478,38 @@ HTML_TEMPLATE = r"""
             justify-content: flex-start;
             min-width: 0;
         }
+        .columns.columns--bordered > .column-item {
+            padding: 1rem;
+            border: 1px solid var(--vl-border);
+            border-radius: 0.85rem;
+            background: var(--vl-surface);
+        }
+        .columns.columns--equal-height > .column-item {
+            height: 100%;
+        }
+        .columns.columns--equal-height > .column-item > :first-child:last-child {
+            height: 100%;
+        }
+        .vl-metric-card {
+            box-sizing: border-box;
+        }
+        .vl-metric-card--fill {
+            height: 100%;
+        }
+        wa-button.vl-button-fill {
+            display: block;
+            height: 100%;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        wa-button.vl-button-fill::part(base) {
+            width: 100%;
+            min-height: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .column { flex: 1; display: flex; flex-direction: column; gap: 0.75rem; }
         
         /* List container - predefined layout for reactive lists */

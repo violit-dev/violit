@@ -3,7 +3,7 @@
 import hashlib
 import re
 
-from typing import Any, Union, Callable, Optional, List
+from typing import Any, Union, Callable, Optional, List, Sequence
 from ..component import Component
 from ..context import rendering_ctx, fragment_ctx, layout_ctx, session_ctx
 from ..style_utils import merge_cls, merge_style
@@ -39,18 +39,71 @@ def _sanitize_layout_key(value: Any) -> str:
     return f"{normalized[:48]}_{digest}"
 
 
+def _resolve_columns_gap(gap: Any) -> str:
+    gap_tokens = {
+        None: "0",
+        "xxsmall": "0.25rem",
+        "xsmall": "0.5rem",
+        "small": "1rem",
+        "medium": "2rem",
+        "large": "4rem",
+        "xlarge": "6rem",
+        "xxlarge": "8rem",
+    }
+    return gap_tokens.get(gap, str(gap))
+
+
+def _resolve_group_width(width: Any) -> str:
+    if width in (None, "", "stretch"):
+        return ""
+    if isinstance(width, (int, float)):
+        return f"width: min(100%, {int(width)}px);"
+    return f"width: min(100%, {width});"
+
+
+def _resolve_flex_alignment(value: Optional[str], axis: str) -> str:
+    if value is None:
+        return ""
+
+    maps = {
+        "align": {
+            "left": "flex-start",
+            "start": "flex-start",
+            "center": "center",
+            "right": "flex-end",
+            "end": "flex-end",
+            "stretch": "stretch",
+        },
+        "justify": {
+            "top": "flex-start",
+            "start": "flex-start",
+            "center": "center",
+            "bottom": "flex-end",
+            "end": "flex-end",
+            "between": "space-between",
+            "around": "space-around",
+            "evenly": "space-evenly",
+        },
+    }
+    return maps.get(axis, {}).get(value, value)
+
+
 class LayoutWidgetsMixin:
     """Layout widgets (columns, container, expander, tabs, empty, dialog)"""
     
-    def columns(self, spec=2, gap="1rem", vertical_alignment="top", cls: str = "", style: str = ""):
+    def columns(self, spec: Union[int, Sequence[Union[int, float]]] = 2, gap="small", vertical_alignment="top", cls: str = "", style: str = "",
+                border: bool = False, width: Union[str, int] = "stretch", equal_height: bool = False):
         """Create column layout - spec can be an int (equal width) or list of weights
         
         Args:
             spec: Number of equal-width columns (int) or list of weight ratios (e.g. [1, 2, 1])
-            gap: Gap between columns (CSS value, default: "1rem")
+            gap: Gap between columns (token like "small" or a CSS value)
             vertical_alignment: Vertical alignment of column contents - "top", "center", or "bottom"
             cls: Additional CSS classes
             style: Additional inline styles
+            border: Whether to add a border/card surface to each column
+            width: Width of the column group - "stretch" or a fixed width
+            equal_height: Whether sibling columns should stretch to a matching height
         """
         if isinstance(spec, int):
             count = spec
@@ -58,6 +111,9 @@ class LayoutWidgetsMixin:
         else:
             count = len(spec)
             weights = [f"{w}fr" for w in spec]
+
+        resolved_gap = _resolve_columns_gap(gap)
+        width_style = _resolve_group_width(width)
             
         columns_id = self._get_next_cid("columns_container")
         
@@ -72,31 +128,37 @@ class LayoutWidgetsMixin:
             from ..state import get_session_store
             store = get_session_store()
             
-            # Collect HTML from all columns
-            columns_html = []
-            for i in range(count):
-                col_id = f"{columns_id}_col_{i}"
-                col_content = []
-                # Check static
-                for cid, b in self.static_fragment_components.get(col_id, []):
-                    col_content.append(b().render())
-                # Check session
-                for cid, b in store['fragment_components'].get(col_id, []):
-                    col_content.append(b().render())
-                
-                # Use CSS class instead of inline style for column-item
-                columns_html.append(
-                    f'<div class="column-item">'
-                    f'{"".join(col_content)}</div>'
-                )
-            
             grid_tmpl = " ".join(weights)
             # Use CSS variable for grid-template-columns so it can be overridden by CSS
             # The --vl-cols variable and gap are set inline, but display:grid is handled by CSS class
             _va_map = {"top": "start", "center": "center", "bottom": "end"}
             _va = _va_map.get(vertical_alignment, "start")
+            container_cls = merge_cls(
+                "columns",
+                "columns--bordered" if border else "",
+                "columns--equal-height" if equal_height else "",
+            )
+            column_item_cls = merge_cls(
+                "column-item",
+                "column-item--bordered" if border else "",
+            )
+            columns_html = []
+            for i in range(count):
+                col_id = f"{columns_id}_col_{i}"
+                col_content = []
+                for cid, b in self.static_fragment_components.get(col_id, []):
+                    col_content.append(b().render())
+                for cid, b in store['fragment_components'].get(col_id, []):
+                    col_content.append(b().render())
+                columns_html.append(
+                    f'<div class="{column_item_cls}">'
+                    f'{"".join(col_content)}</div>'
+                )
             joined_cols = "".join(columns_html)
-            container_html = f'<div id="{columns_id}" class="columns" style="--vl-cols: {grid_tmpl}; --vl-gap: {gap}; align-items: {_va};">{joined_cols}</div>'
+            container_style = f"--vl-cols: {grid_tmpl}; --vl-gap: {resolved_gap}; align-items: {_va};"
+            if width_style:
+                container_style = f"{container_style} {width_style}"
+            container_html = f'<div id="{columns_id}" class="{container_cls}" style="{container_style}">{joined_cols}</div>'
             _wd = self._get_widget_defaults("columns")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -106,13 +168,18 @@ class LayoutWidgetsMixin:
         
         return column_objects
 
-    def container(self, border=False, height=None, cls: str = "", style: str = "", **kwargs):
+    def container(self, border=False, height=None, cls: str = "", style: str = "",
+                  fill_height: bool = False, align: Optional[str] = None,
+                  justify: Optional[str] = None, **kwargs):
         """
         Create a container for grouping elements
         
         Args:
             border: Whether to show border (card style)
             height: Container height (int for pixels, str for CSS value). Adds scrollbar when content overflows.
+            fill_height: Whether the container should stretch to fill its parent height.
+            align: Cross-axis alignment for children when using flex layout.
+            justify: Main-axis alignment for children when using flex layout.
             **kwargs: Additional HTML attributes (e.g., data_post_id="123", style="...")
         
         Example:
@@ -123,13 +190,17 @@ class LayoutWidgetsMixin:
         cid = self._get_next_cid("container")
         
         class ContainerContext:
-            def __init__(self, app, container_id, border, height, user_cls, user_style, attrs):
+            def __init__(self, app, container_id, border, height, user_cls, user_style,
+                         fill_height, align, justify, attrs):
                 self.app = app
                 self.container_id = container_id
                 self.border = border
                 self.height = height
                 self.user_cls = user_cls
                 self.user_style = user_style
+                self.fill_height = fill_height
+                self.align = align
+                self.justify = justify
                 self.attrs = attrs
                 
             def __enter__(self):
@@ -151,14 +222,26 @@ class LayoutWidgetsMixin:
                     inner_html = "".join(htmls)
                     
                     # Height support (scrollable container)
-                    height_style = ""
+                    layout_styles = []
                     if self.height is not None:
                         h = f"{self.height}px" if isinstance(self.height, (int, float)) else self.height
-                        height_style = f"height: {h}; overflow-y: auto;"
+                        layout_styles.append(f"height: {h}; overflow-y: auto;")
+
+                    if self.fill_height:
+                        layout_styles.append("height: 100%;")
+
+                    align_value = _resolve_flex_alignment(self.align, "align")
+                    justify_value = _resolve_flex_alignment(self.justify, "justify")
+                    if self.fill_height or align_value or justify_value:
+                        layout_styles.append("display: flex; flex-direction: column;")
+                    if align_value:
+                        layout_styles.append(f"align-items: {align_value};")
+                    if justify_value:
+                        layout_styles.append(f"justify-content: {justify_value};")
                     
                     _wd = self.app._get_widget_defaults("container")
                     _fc = merge_cls(_wd.get("cls", ""), border_class, self.user_cls)
-                    _fs = merge_style(_wd.get("style", ""), height_style, self.user_style)
+                    _fs = merge_style(_wd.get("style", ""), " ".join(layout_styles), self.user_style)
                     # Pass kwargs to Component
                     return Component("div", id=self.container_id, content=inner_html, class_=_fc or None, style=_fs or None, **self.attrs)
                 
@@ -177,7 +260,7 @@ class LayoutWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
         
-        return ContainerContext(self, cid, border, height, cls, style, kwargs)
+        return ContainerContext(self, cid, border, height, cls, style, fill_height, align, justify, kwargs)
 
     def expander(self, label, expanded=False, icon=None, cls: str = "", style: str = ""):
         """Create an expandable/collapsible section
