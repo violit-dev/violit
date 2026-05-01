@@ -5,8 +5,13 @@
         const viewId = typeof runtimeConfig.viewId === 'string' && runtimeConfig.viewId
             ? runtimeConfig.viewId
             : null;
+        const viewRestoreToken = typeof runtimeConfig.viewRestoreToken === 'string' && runtimeConfig.viewRestoreToken
+            ? runtimeConfig.viewRestoreToken
+            : null;
         const viewParamName = '_vl_view_id';
         const viewStorageKey = 'violit:view-id:' + window.location.pathname;
+        const viewRestoreTokenStorageKey = 'violit:view-restore-token:' + window.location.pathname;
+        const viewRestoreCookieName = '_vl_reload_view';
         const logViewIdIssue = (...args) => {
             if (window._debug_mode === true) {
                 console.log(...args);
@@ -34,6 +39,27 @@
             }
         };
 
+        const readStoredViewRestoreToken = () => {
+            try {
+                return window.sessionStorage.getItem(viewRestoreTokenStorageKey);
+            } catch (error) {
+                logViewIdIssue('[view-id] failed to read restore token from sessionStorage', error);
+                return null;
+            }
+        };
+
+        const writeStoredViewRestoreToken = (nextToken) => {
+            try {
+                if (nextToken) {
+                    window.sessionStorage.setItem(viewRestoreTokenStorageKey, nextToken);
+                } else {
+                    window.sessionStorage.removeItem(viewRestoreTokenStorageKey);
+                }
+            } catch (error) {
+                logViewIdIssue('[view-id] failed to write restore token to sessionStorage', error);
+            }
+        };
+
         const replaceCurrentUrl = (mutate) => {
             const url = new URL(window.location.href);
             mutate(url);
@@ -44,23 +70,38 @@
             }
         };
 
-        const syncViewIdIntoUrlForReload = () => {
-            const activeViewId = window._vlViewId || readStoredViewId();
-            if (!activeViewId) {
-                return;
-            }
+        const stripLegacyViewIdFromUrl = () => {
             replaceCurrentUrl((url) => {
-                url.searchParams.set(viewParamName, activeViewId);
+                url.searchParams.delete(viewParamName);
             });
         };
 
+        const clearReloadViewCookie = () => {
+            const cookiePath = window.location.pathname || '/';
+            const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+            document.cookie = `${viewRestoreCookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${cookiePath}; SameSite=Lax${secureFlag}`;
+        };
+
+        const syncReloadViewCookie = () => {
+            const activeRestoreToken = window._vlViewRestoreToken || readStoredViewRestoreToken();
+            if (!activeRestoreToken) {
+                return;
+            }
+            const cookiePath = window.location.pathname || '/';
+            const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+            document.cookie = `${viewRestoreCookieName}=${encodeURIComponent(activeRestoreToken)}; path=${cookiePath}; max-age=15; SameSite=Lax${secureFlag}`;
+        };
+
         window._vlViewId = viewId;
+        window._vlViewRestoreToken = viewRestoreToken;
         writeStoredViewId(viewId);
-        // Keep the tab-scoped view id on the current URL so browser reloads
-        // reuse the same server-side view before any client JS runs again.
-        syncViewIdIntoUrlForReload();
-        window.addEventListener('beforeunload', syncViewIdIntoUrlForReload);
-        window.addEventListener('pagehide', syncViewIdIntoUrlForReload);
+        writeStoredViewRestoreToken(viewRestoreToken);
+        clearReloadViewCookie();
+        if (window.location.search.includes(viewParamName + '=')) {
+            stripLegacyViewIdFromUrl();
+        }
+        window.addEventListener('beforeunload', syncReloadViewCookie);
+        window.addEventListener('pagehide', syncReloadViewCookie);
 
         // Honor server-provided debug mode only.
         window._debug_mode = window._debug_mode === true;
@@ -1371,7 +1412,6 @@
                     if (typeof msg.viewId === 'string' && msg.viewId) {
                         window._vlViewId = msg.viewId;
                         writeStoredViewId(msg.viewId);
-                        syncViewIdIntoUrlForReload();
                     }
 
                     if (window._vlBootId && msg.bootId && window._vlBootId !== msg.bootId) {

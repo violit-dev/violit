@@ -18,11 +18,61 @@ from .context import action_ctx, initial_render_ctx, session_ctx, view_ctx
 from .state import STATIC_STORE, get_session_store
 
 
+VIEW_RESTORE_COOKIE = "_vl_reload_view"
+
+
 class AppRuntimeMixin:
-    def _resolve_http_view_id(self, request: Request, *, generate: bool = False) -> Optional[str]:
-        view_id = request.headers.get("X-Violit-View") or request.query_params.get("_vl_view_id")
+    def _generate_view_restore_token(self, session_id: str, view_id: str) -> str:
+        if not session_id or not view_id:
+            return ""
+        message = f"{session_id}:{view_id}:{self.csrf_secret}:view-restore"
+        signature = hmac.new(
+            self.csrf_secret.encode(),
+            message.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        return f"{view_id}.{signature}"
+
+    def _verify_view_restore_token(self, session_id: Optional[str], token: Optional[str]) -> Optional[str]:
+        if not session_id or not token:
+            return None
+        try:
+            view_id, _signature = token.rsplit(".", 1)
+        except ValueError:
+            return None
+        expected = self._generate_view_restore_token(session_id, view_id)
+        if hmac.compare_digest(expected, token):
+            return view_id
+        return None
+
+    def _view_restore_cookie_path(self, request: Request) -> str:
+        path = request.url.path or "/"
+        return path if path.startswith("/") else "/"
+
+    def _resolve_http_view_id(
+        self,
+        request: Request,
+        sid: Optional[str],
+        *,
+        generate: bool = False,
+        allow_query_param: bool = True,
+        allow_reload_cookie: bool = False,
+    ) -> Optional[str]:
+        view_id = request.headers.get("X-Violit-View")
         if view_id:
             return view_id
+
+        if allow_query_param:
+            view_id = request.query_params.get("_vl_view_id")
+            if view_id:
+                return view_id
+
+        if allow_reload_cookie:
+            restore_token = request.cookies.get(VIEW_RESTORE_COOKIE)
+            restored_view_id = self._verify_view_restore_token(sid, restore_token)
+            if restored_view_id:
+                return restored_view_id
+
         if generate:
             return uuid.uuid4().hex
         return None
@@ -177,9 +227,13 @@ class AppRuntimeMixin:
                     self.debug_print(f"  [OK] ACCESS GRANTED - Valid token")
 
             sid = request.cookies.get("ss_sid") or str(uuid.uuid4())
+            is_index_request = request.method == "GET" and request.url.path == "/"
             current_view_id = self._resolve_http_view_id(
                 request,
-                generate=request.method == "GET" and request.url.path == "/",
+                sid,
+                generate=is_index_request,
+                allow_query_param=not is_index_request,
+                allow_reload_cookie=is_index_request,
             )
 
             session_token, view_token = self._set_runtime_context(sid, current_view_id)
@@ -194,6 +248,14 @@ class AppRuntimeMixin:
                 secure=is_https,
                 samesite="lax"
             )
+
+            if request.cookies.get(VIEW_RESTORE_COOKIE):
+                response.delete_cookie(
+                    VIEW_RESTORE_COOKIE,
+                    path=self._view_restore_cookie_path(request),
+                    secure=is_https,
+                    samesite="lax",
+                )
 
             if self.native_token and not request.cookies.get("_native_token"):
                 response.set_cookie(
@@ -265,10 +327,17 @@ class AppRuntimeMixin:
             try:
                 current_view_id = view_ctx.get()
             except LookupError:
-                current_view_id = self._resolve_http_view_id(request, generate=True)
+                current_view_id = self._resolve_http_view_id(
+                    request,
+                    sid,
+                    generate=True,
+                    allow_query_param=False,
+                    allow_reload_cookie=True,
+                )
 
             csrf_token = self._generate_csrf_token(sid) if sid and self.csrf_enabled else ""
             csrf_script = f'<script>window._csrf_token = "{csrf_token}";</script>' if csrf_token else ""
+            view_restore_token = self._generate_view_restore_token(sid, current_view_id) if sid and current_view_id else ""
 
             if self.debug_mode:
                 print(f"[DEBUG] Session ID: {sid[:8] if sid else 'None'}...")
@@ -324,6 +393,7 @@ class AppRuntimeMixin:
                 root_style=root_style,
                 disconnect_timeout=self.disconnect_timeout,
                 view_id=current_view_id or "",
+                view_restore_token=view_restore_token,
             )
             return build_html_response(html)
 
@@ -341,7 +411,7 @@ class AppRuntimeMixin:
         @self.fastapi.get("/lite-stream")
         async def lite_stream(request: Request):
             sid = request.cookies.get("ss_sid")
-            current_view_id = self._resolve_http_view_id(request, generate=False)
+            current_view_id = self._resolve_http_view_id(request, sid, generate=False)
             if not sid or not current_view_id:
                 return HTMLResponse("", status_code=204)
 
@@ -381,7 +451,7 @@ class AppRuntimeMixin:
         @self.fastapi.post("/action/{cid}")
         async def action(request: Request, cid: str):
             sid = request.cookies.get("ss_sid")
-            current_view_id = self._resolve_http_view_id(request, generate=False)
+            current_view_id = self._resolve_http_view_id(request, sid, generate=False)
 
             if self.csrf_enabled:
                 form = await request.form()
