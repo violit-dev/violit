@@ -122,9 +122,15 @@ class IntervalHandle:
         self._id = interval_id
         self._app = app
 
+    def _get_interval_callbacks(self):
+        from .state import get_session_store
+
+        store = get_session_store()
+        return store.setdefault('interval_callbacks', {})
+
     @property
     def state(self) -> str:
-        info = self._app._interval_callbacks.get(self._id)
+        info = self._get_interval_callbacks().get(self._id)
         return info['state'] if info else 'stopped'
 
     @property
@@ -133,24 +139,25 @@ class IntervalHandle:
 
     def pause(self):
         """Pause the timer. Ticks stop until resume() is called."""
-        info = self._app._interval_callbacks.get(self._id)
+        info = self._get_interval_callbacks().get(self._id)
         if info and info['state'] == 'running':
             info['state'] = 'paused'
             self._app._send_interval_ctrl(self._id, 'pause')
 
     def resume(self):
         """Resume a paused timer."""
-        info = self._app._interval_callbacks.get(self._id)
+        info = self._get_interval_callbacks().get(self._id)
         if info and info['state'] == 'paused':
             info['state'] = 'running'
             self._app._send_interval_ctrl(self._id, 'resume')
 
     def stop(self):
         """Permanently stop the timer and unregister the callback."""
-        if self._id in self._app._interval_callbacks:
-            self._app._interval_callbacks[self._id]['state'] = 'stopped'
+        interval_callbacks = self._get_interval_callbacks()
+        if self._id in interval_callbacks:
+            interval_callbacks[self._id]['state'] = 'stopped'
             self._app._send_interval_ctrl(self._id, 'stop')
-            del self._app._interval_callbacks[self._id]
+            del interval_callbacks[self._id]
 
 
 def print_terminal_splash():

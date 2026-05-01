@@ -5,7 +5,7 @@ import re
 import time
 from typing import Optional, Union, Callable, Any, Sequence
 from ..component import Component
-from ..context import fragment_ctx, session_ctx, layout_ctx
+from ..context import fragment_ctx, session_ctx, view_ctx, layout_ctx
 from ..state import get_session_store
 from ..style_utils import merge_cls, merge_style
 
@@ -36,18 +36,19 @@ def _patch_last_chat_item(messages_state, **updates):
 
 def _push_stream_frame(app):
     sid = session_ctx.get()
-    if not sid:
+    current_view_id = view_ctx.get()
+    if not sid or not current_view_id:
         return
 
     dirty = app._get_dirty_rendered()
     if not dirty:
         return
 
-    if app.ws_engine and sid in app.ws_engine.sockets:
+    if app.ws_engine and app.ws_engine.has_socket(sid, current_view_id):
         main_loop = getattr(app, "_main_loop", None)
         if main_loop is not None and main_loop.is_running():
             future = asyncio.run_coroutine_threadsafe(
-                app.ws_engine.push_updates(sid, dirty),
+                app.ws_engine.push_updates(sid, dirty, view_id=current_view_id),
                 main_loop,
             )
             future.result(timeout=5)
@@ -55,7 +56,7 @@ def _push_stream_frame(app):
 
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(app.ws_engine.push_updates(sid, dirty))
+            loop.run_until_complete(app.ws_engine.push_updates(sid, dirty, view_id=current_view_id))
         finally:
             loop.close()
         return
@@ -63,7 +64,7 @@ def _push_stream_frame(app):
     if app.lite_engine:
         payload = app._build_lite_oob_payload(dirty)
         if payload:
-            app._enqueue_lite_stream_payload(sid, payload)
+            app._enqueue_lite_stream_payload(sid, payload, view_id=current_view_id)
 
 
 def _iter_stream_text_fragments(text: str, preferred_size: int = 12, mode: str = "chunk"):

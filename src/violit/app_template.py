@@ -510,7 +510,8 @@ HTML_TEMPLATE = r"""
     <script>
         window.__vlRuntimeConfig = {
             sidebarResizable: %SIDEBAR_RESIZABLE%,
-            disconnectTimeout: %DISCONNECT_TIMEOUT%
+            disconnectTimeout: %DISCONNECT_TIMEOUT%,
+            viewId: "%VIEW_ID%"
         };
     </script>
     <script src="/static/runtime/violit_app_runtime.js"></script>

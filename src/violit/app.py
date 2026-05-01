@@ -22,11 +22,11 @@ from pathlib import Path
 from .app_launcher import AppLauncherMixin
 from .app_runtime import AppRuntimeMixin
 from .app_support import FileWatcher, IntervalHandle, Page, SidebarProxy, print_terminal_splash
-from .context import session_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx
+from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
-from .state import State, get_session_store, STATIC_STORE
+from .state import State, get_session_store, STATIC_STORE, VIEW_STORE, SESSION_STORE
 from .broadcast import Broadcaster
 from .background import BackgroundTask
 import asyncio
@@ -357,8 +357,10 @@ class App(
 
         
         # Static definitions
-        from .state import STATIC_STORE
+        from .state import STATIC_STORE, VIEW_STORE, SESSION_STORE
         STATIC_STORE.clear() # Prevent leakage across hot reloads when forked on Linux
+        VIEW_STORE.clear()
+        SESSION_STORE.clear()
         self.static_builders: Dict[str, Callable] = {}
         self.static_order: List[str] = []
         self.static_sidebar_order: List[str] = []
@@ -395,7 +397,7 @@ class App(
         
         self.ws_engine = WsEngine() if mode == 'ws' else None
         self.lite_engine = LiteEngine() if mode == 'lite' else None
-        self._lite_stream_queues: Dict[str, queue.Queue] = {}
+        self._lite_stream_queues: Dict[tuple[str, str], queue.Queue] = {}
         self._lite_stream_lock = threading.Lock()
         self._main_loop: asyncio.AbstractEventLoop | None = None
         app_instance_ref[0] = self
@@ -1295,12 +1297,15 @@ class App(
             # Conditional:
             app.interval(poll, ms=1000, condition=lambda: is_active.value)
         """
-        interval_id = f"__vl_interval_{self._interval_count}__"
-        self._interval_count += 1
+        store = get_session_store()
+        interval_callbacks = store.setdefault('interval_callbacks', {})
+        interval_count = store.get('_interval_count', 0)
+        interval_id = f"__vl_interval_{interval_count}__"
+        store['_interval_count'] = interval_count + 1
 
         initial_state = 'running' if autostart else 'paused'
 
-        self._interval_callbacks[interval_id] = {
+        interval_callbacks[interval_id] = {
             'callback':  callback,
             'ms':        ms,
             'condition': condition,
@@ -1335,20 +1340,27 @@ class App(
         return IntervalHandle(interval_id, self)
 
     def _send_interval_ctrl(self, interval_id: str, action: str):
-        """Send interval control message (pause/resume/stop) to all connected clients."""
+        """Send interval control message to the current active view."""
         if not self.ws_engine:
             return
 
+        sid = session_ctx.get()
+        current_view_id = view_ctx.get()
+        if not sid or not current_view_id:
+            return
+
         async def _push():
-            for sid, ws_sock in list(self.ws_engine.sockets.items()):
-                try:
-                    await ws_sock.send_json({
-                        'type': 'interval_ctrl',
-                        'id':   interval_id,
-                        'action': action,
-                    })
-                except Exception:
-                    pass
+            ws_sock = self.ws_engine.get_socket(sid, current_view_id)
+            if ws_sock is None:
+                return
+            try:
+                await ws_sock.send_json({
+                    'type': 'interval_ctrl',
+                    'id': interval_id,
+                    'action': action,
+                })
+            except Exception:
+                pass
 
         def _run():
             loop = asyncio.new_event_loop()

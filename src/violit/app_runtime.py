@@ -14,22 +14,47 @@ from .app_assets import get_vendor_resources
 from .app_shell import build_html_response, build_shell_html, build_user_css
 from .app_template import HTML_TEMPLATE
 from .component import Component
-from .context import action_ctx, initial_render_ctx, session_ctx
+from .context import action_ctx, initial_render_ctx, session_ctx, view_ctx
 from .state import STATIC_STORE, get_session_store
 
 
 class AppRuntimeMixin:
-    def _replace_lite_stream_queue(self, sid: str):
+    def _resolve_http_view_id(self, request: Request, *, generate: bool = False) -> Optional[str]:
+        view_id = request.headers.get("X-Violit-View") or request.query_params.get("_vl_view_id")
+        if view_id:
+            return view_id
+        if generate:
+            return uuid.uuid4().hex
+        return None
+
+    def _resolve_ws_view_id(self, ws: WebSocket) -> Optional[str]:
+        return ws.headers.get("X-Violit-View") or ws.query_params.get("_vl_view_id") or None
+
+    def _set_runtime_context(self, sid: Optional[str], current_view_id: Optional[str]):
+        session_token = session_ctx.set(sid)
+        view_token = view_ctx.set(current_view_id)
+        return session_token, view_token
+
+    def _reset_runtime_context(self, session_token, view_token):
+        view_ctx.reset(view_token)
+        session_ctx.reset(session_token)
+
+    def _replace_lite_stream_queue(self, sid: str, current_view_id: str):
+        key = (sid, current_view_id)
         with self._lite_stream_lock:
             stream_queue = queue.Queue()
-            self._lite_stream_queues[sid] = stream_queue
+            self._lite_stream_queues[key] = stream_queue
             return stream_queue
 
-    def _enqueue_lite_stream_payload(self, sid: str, payload: str):
+    def _enqueue_lite_stream_payload(self, sid: str, payload: str, view_id: Optional[str] = None):
         if not sid or not payload or not self.lite_engine:
             return
+        current_view_id = view_id or view_ctx.get()
+        if not current_view_id:
+            return
+        key = (sid, current_view_id)
         with self._lite_stream_lock:
-            stream_queue = self._lite_stream_queues.get(sid)
+            stream_queue = self._lite_stream_queues.get(key)
         if stream_queue is None:
             return
         try:
@@ -152,10 +177,14 @@ class AppRuntimeMixin:
                     self.debug_print(f"  [OK] ACCESS GRANTED - Valid token")
 
             sid = request.cookies.get("ss_sid") or str(uuid.uuid4())
+            current_view_id = self._resolve_http_view_id(
+                request,
+                generate=request.method == "GET" and request.url.path == "/",
+            )
 
-            token = session_ctx.set(sid)
+            session_token, view_token = self._set_runtime_context(sid, current_view_id)
             response = await call_next(request)
-            session_ctx.reset(token)
+            self._reset_runtime_context(session_token, view_token)
 
             is_https = request.url.scheme == "https"
             response.set_cookie(
@@ -233,6 +262,10 @@ class AppRuntimeMixin:
                 sid = session_ctx.get()
             except LookupError:
                 sid = request.cookies.get("ss_sid")
+            try:
+                current_view_id = view_ctx.get()
+            except LookupError:
+                current_view_id = self._resolve_http_view_id(request, generate=True)
 
             csrf_token = self._generate_csrf_token(sid) if sid and self.csrf_enabled else ""
             csrf_script = f'<script>window._csrf_token = "{csrf_token}";</script>' if csrf_token else ""
@@ -290,6 +323,7 @@ class AppRuntimeMixin:
                 user_css=user_css,
                 root_style=root_style,
                 disconnect_timeout=self.disconnect_timeout,
+                view_id=current_view_id or "",
             )
             return build_html_response(html)
 
@@ -307,10 +341,11 @@ class AppRuntimeMixin:
         @self.fastapi.get("/lite-stream")
         async def lite_stream(request: Request):
             sid = request.cookies.get("ss_sid")
-            if not sid:
+            current_view_id = self._resolve_http_view_id(request, generate=False)
+            if not sid or not current_view_id:
                 return HTMLResponse("", status_code=204)
 
-            stream_queue = self._replace_lite_stream_queue(sid)
+            stream_queue = self._replace_lite_stream_queue(sid, current_view_id)
 
             async def event_stream():
                 try:
@@ -328,9 +363,10 @@ class AppRuntimeMixin:
                         yield f"event: oob\ndata: {json.dumps(payload)}\n\n"
                 finally:
                     with self._lite_stream_lock:
-                        current = self._lite_stream_queues.get(sid)
+                        key = (sid, current_view_id)
+                        current = self._lite_stream_queues.get(key)
                         if current is stream_queue:
-                            self._lite_stream_queues.pop(sid, None)
+                            self._lite_stream_queues.pop(key, None)
 
             return StreamingResponse(
                 event_stream(),
@@ -345,6 +381,7 @@ class AppRuntimeMixin:
         @self.fastapi.post("/action/{cid}")
         async def action(request: Request, cid: str):
             sid = request.cookies.get("ss_sid")
+            current_view_id = self._resolve_http_view_id(request, generate=False)
 
             if self.csrf_enabled:
                 form = await request.form()
@@ -358,83 +395,91 @@ class AppRuntimeMixin:
             else:
                 form = await request.form()
 
-            value = form.get("value")
-            store = get_session_store()
-            if value is not None:
-                store.setdefault('submitted_values', {})[cid] = value
-            action_callback = store['actions'].get(cid) or self.static_actions.get(cid)
-            if action_callback:
-                if not callable(action_callback):
-                    self.debug_print(f"ERROR: Action for {cid} is not callable. Got: {type(action_callback)} = {repr(action_callback)}")
-                    return HTMLResponse("")
+            current_view_id = current_view_id or form.get("_vl_view_id")
+            if not sid or not current_view_id:
+                return JSONResponse({"error": "Missing view id"}, status_code=400)
 
-                store['eval_queue'] = []
+            session_token, view_token = self._set_runtime_context(sid, current_view_id)
+            try:
+                value = form.get("value")
+                store = get_session_store()
+                if value is not None:
+                    store.setdefault('submitted_values', {})[cid] = value
+                action_callback = store['actions'].get(cid) or self.static_actions.get(cid)
+                if action_callback:
+                    if not callable(action_callback):
+                        self.debug_print(f"ERROR: Action for {cid} is not callable. Got: {type(action_callback)} = {repr(action_callback)}")
+                        return HTMLResponse("")
 
-                action_token = action_ctx.set(True)
-                try:
-                    action_callback(value) if value is not None else action_callback()
-                finally:
-                    action_ctx.reset(action_token)
+                    store['eval_queue'] = []
 
-                dirty = self._get_dirty_rendered()
+                    action_token = action_ctx.set(True)
+                    try:
+                        action_callback(value) if value is not None else action_callback()
+                    finally:
+                        action_ctx.reset(action_token)
 
-                clicked_component = None
-                other_dirty = []
-                for component in dirty:
-                    if component.id == cid:
-                        clicked_component = component
-                    else:
-                        other_dirty.append(component)
+                    dirty = self._get_dirty_rendered()
 
-                if clicked_component is None:
-                    builder = store['builders'].get(cid) or self.static_builders.get(cid)
-                    if builder:
-                        clicked_component = builder()
+                    clicked_component = None
+                    other_dirty = []
+                    for component in dirty:
+                        if component.id == cid:
+                            clicked_component = component
+                        else:
+                            other_dirty.append(component)
 
-                response_html = clicked_component.render() if clicked_component else ""
-                response_html += self._build_lite_oob_payload(other_dirty)
+                    if clicked_component is None:
+                        builder = store['builders'].get(cid) or self.static_builders.get(cid)
+                        if builder:
+                            clicked_component = builder()
 
-                return HTMLResponse(response_html)
-            return HTMLResponse("")
+                    response_html = clicked_component.render() if clicked_component else ""
+                    response_html += self._build_lite_oob_payload(other_dirty)
+
+                    return HTMLResponse(response_html)
+                return HTMLResponse("")
+            finally:
+                self._reset_runtime_context(session_token, view_token)
 
         @self.fastapi.websocket("/ws")
         async def ws(ws: WebSocket):
             await ws.accept()
 
             sid = ws.cookies.get("ss_sid") or str(uuid.uuid4())
-            store = get_session_store()
+            current_view_id = self._resolve_ws_view_id(ws) or uuid.uuid4().hex
 
             self.debug_print(f"[WEBSOCKET] Session: {sid[:8]}...")
 
             if self._main_loop is None:
                 self._main_loop = asyncio.get_event_loop()
 
-            token = session_ctx.set(sid)
-            self.ws_engine.sockets[sid] = ws
-            await ws.send_json({"type": "hello", "bootId": self.boot_id})
+            session_token, view_token = self._set_runtime_context(sid, current_view_id)
+            self.ws_engine.register_socket(sid, current_view_id, ws)
+            await ws.send_json({"type": "hello", "bootId": self.boot_id, "viewId": current_view_id})
 
             async def process_message(data):
                 msg_type = data.get('type')
                 if msg_type != 'click' and msg_type != 'tick':
                     return
 
-                msg_token = session_ctx.set(sid)
+                msg_session_token, msg_view_token = self._set_runtime_context(sid, current_view_id)
                 try:
                     if msg_type == 'tick':
                         interval_id = data.get('id')
-                        info = self._interval_callbacks.get(interval_id)
+                        store = get_session_store()
+                        info = store.get('interval_callbacks', {}).get(interval_id)
                         if info and info['state'] == 'running':
                             condition = info.get('condition')
                             if condition is None or condition():
-                                store = get_session_store()
                                 store['eval_queue'] = []
                                 info['callback']()
                                 for code in store.get('eval_queue', []):
-                                    await self.ws_engine.push_eval(sid, code)
+                                    await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
                                 store['eval_queue'] = []
                                 dirty = self._get_dirty_rendered()
                                 if dirty:
-                                    await self.ws_engine.push_updates(sid, dirty)
+                                    await self.ws_engine.push_updates(sid, dirty, view_id=current_view_id)
                         return
 
                     self.debug_print(f"[WEBSOCKET ACTION] CID: {data.get('id')}")
@@ -483,7 +528,7 @@ class AppRuntimeMixin:
                         self.debug_print(f"  Action executed")
 
                         for code in store.get('eval_queue', []):
-                            await self.ws_engine.push_eval(sid, code)
+                            await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
                         store['eval_queue'] = []
 
                         dirty = self._get_dirty_rendered()
@@ -491,12 +536,12 @@ class AppRuntimeMixin:
 
                         if dirty:
                             self.debug_print(f"  Sending {len(dirty)} updates via WebSocket (navigation={is_navigation})...")
-                            await self.ws_engine.push_updates(sid, dirty, is_navigation=is_navigation)
+                            await self.ws_engine.push_updates(sid, dirty, is_navigation=is_navigation, view_id=current_view_id)
                             self.debug_print(f"  [OK] Updates sent successfully")
                         else:
                             self.debug_print(f"  [!] No dirty components found - nothing to update")
                 finally:
-                    session_ctx.reset(msg_token)
+                    self._reset_runtime_context(msg_session_token, msg_view_token)
 
             try:
                 while True:
@@ -505,9 +550,8 @@ class AppRuntimeMixin:
                         continue
                     await process_message(data)
             except WebSocketDisconnect:
-                if sid and sid in self.ws_engine.sockets:
-                    del self.ws_engine.sockets[sid]
+                if sid:
+                    self.ws_engine.unregister_socket(sid, current_view_id, ws)
                     self.debug_print(f"[WEBSOCKET] Disconnected: {sid[:8]}...")
             finally:
-                if token is not None:
-                    session_ctx.reset(token)
+                self._reset_runtime_context(session_token, view_token)

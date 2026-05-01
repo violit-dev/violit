@@ -117,8 +117,8 @@ class ViolItAuth:
     # ─────────────────────────────────────────────────────────────────────
 
     def _get_store(self) -> dict:
-        from .state import get_session_store
-        return get_session_store()
+        from .state import get_browser_session_store
+        return get_browser_session_store()
 
     def _get_user_id(self) -> Optional[int]:
         """Return the user_id stored in the current session, or None if not logged in."""

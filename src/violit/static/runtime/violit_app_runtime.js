@@ -2,6 +2,71 @@
         const disconnectTimeout = Number.isFinite(Number(runtimeConfig.disconnectTimeout))
             ? Number(runtimeConfig.disconnectTimeout)
             : -1;
+        const viewId = typeof runtimeConfig.viewId === 'string' && runtimeConfig.viewId
+            ? runtimeConfig.viewId
+            : null;
+        const viewParamName = '_vl_view_id';
+        const viewStorageKey = 'violit:view-id:' + window.location.pathname;
+        const logViewIdIssue = (...args) => {
+            if (window._debug_mode === true) {
+                console.log(...args);
+            }
+        };
+
+        const readStoredViewId = () => {
+            try {
+                return window.sessionStorage.getItem(viewStorageKey);
+            } catch (error) {
+                logViewIdIssue('[view-id] failed to read sessionStorage', error);
+                return null;
+            }
+        };
+
+        const writeStoredViewId = (nextViewId) => {
+            try {
+                if (nextViewId) {
+                    window.sessionStorage.setItem(viewStorageKey, nextViewId);
+                } else {
+                    window.sessionStorage.removeItem(viewStorageKey);
+                }
+            } catch (error) {
+                logViewIdIssue('[view-id] failed to write sessionStorage', error);
+            }
+        };
+
+        const replaceCurrentUrl = (mutate) => {
+            const url = new URL(window.location.href);
+            mutate(url);
+            const nextUrl = url.pathname + url.search + url.hash;
+            const currentUrl = window.location.pathname + window.location.search + window.location.hash;
+            if (nextUrl !== currentUrl) {
+                window.history.replaceState(window.history.state, '', nextUrl);
+            }
+        };
+
+        const stripViewIdFromUrl = () => {
+            replaceCurrentUrl((url) => {
+                url.searchParams.delete(viewParamName);
+            });
+        };
+
+        const syncViewIdIntoUrlForReload = () => {
+            const activeViewId = window._vlViewId || readStoredViewId();
+            if (!activeViewId) {
+                return;
+            }
+            replaceCurrentUrl((url) => {
+                url.searchParams.set(viewParamName, activeViewId);
+            });
+        };
+
+        window._vlViewId = viewId;
+        writeStoredViewId(viewId);
+        if (window.location.search.includes(viewParamName + '=')) {
+            stripViewIdFromUrl();
+        }
+        window.addEventListener('beforeunload', syncViewIdIntoUrlForReload);
+        window.addEventListener('pagehide', syncViewIdIntoUrlForReload);
 
         // Honor server-provided debug mode only.
         window._debug_mode = window._debug_mode === true;
@@ -18,19 +83,27 @@
             }
         };
         
-        // [LOCK] Automatically attach the HTMX CSRF token in Lite mode.
-        if (mode === 'lite' && window._csrf_token) {
-            const attachHtmxCsrf = function() {
-                if (!document.body || document.body.dataset.vlHtmxCsrfBound === 'true') return;
-                document.body.dataset.vlHtmxCsrfBound = 'true';
+        // Attach per-view metadata to HTMX requests in lite mode.
+        if (mode === 'lite' && (window._csrf_token || window._vlViewId)) {
+            const attachHtmxMetadata = function() {
+                if (!document.body || document.body.dataset.vlHtmxMetaBound === 'true') return;
+                document.body.dataset.vlHtmxMetaBound = 'true';
                 document.body.addEventListener('htmx:configRequest', function(evt) {
-                    evt.detail.parameters['_csrf_token'] = window._csrf_token;
+                    evt.detail.parameters = evt.detail.parameters || {};
+                    evt.detail.headers = evt.detail.headers || {};
+                    if (window._csrf_token) {
+                        evt.detail.parameters['_csrf_token'] = window._csrf_token;
+                    }
+                    if (window._vlViewId) {
+                        evt.detail.parameters['_vl_view_id'] = window._vlViewId;
+                        evt.detail.headers['X-Violit-View'] = window._vlViewId;
+                    }
                 });
             };
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', attachHtmxCsrf, { once: true });
+                document.addEventListener('DOMContentLoaded', attachHtmxMetadata, { once: true });
             } else {
-                attachHtmxCsrf();
+                attachHtmxMetadata();
             }
         }
         
@@ -1054,6 +1127,9 @@
                 if (window._csrf_token) {
                     payload._csrf_token = window._csrf_token;
                 }
+                if (window._vlViewId) {
+                    payload._vl_view_id = window._vlViewId;
+                }
                 
                 const urlParams = new URLSearchParams(window.location.search);
                 const nativeToken = urlParams.get('_native_token');
@@ -1117,7 +1193,11 @@
             window._ws = null;
 
             // Now connect WebSocket
-            window._ws = new WebSocket((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + "/ws");
+            const wsUrl = new URL((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + "/ws");
+            if (window._vlViewId) {
+                wsUrl.searchParams.set('_vl_view_id', window._vlViewId);
+            }
+            window._ws = new WebSocket(wsUrl.toString());
             
             window._intentionalDisconnect = false;
             window._vlTimeout = disconnectTimeout;
@@ -1525,7 +1605,11 @@
                         window.__vlLiteEventSource.close();
                     }
 
-                    const eventSource = new EventSource('/lite-stream');
+                    const streamUrl = new URL('/lite-stream', window.location.origin);
+                    if (window._vlViewId) {
+                        streamUrl.searchParams.set('_vl_view_id', window._vlViewId);
+                    }
+                    const eventSource = new EventSource(streamUrl.toString());
                     window.__vlLiteEventSource = eventSource;
 
                     eventSource.addEventListener('oob', (event) => {

@@ -310,11 +310,12 @@ class StatusWidgetsMixin:
     def _enqueue_eval(self, code, **lite_data):
         """Internal helper to enqueue JS evaluation or store for lite mode"""
         import asyncio
-        from ..context import session_ctx
+        from ..context import session_ctx, view_ctx
 
         if self.mode == 'ws':
             sid = session_ctx.get()
-            if sid and getattr(self, 'ws_engine', None) and sid in self.ws_engine.sockets:
+            current_view_id = view_ctx.get()
+            if sid and current_view_id and getattr(self, 'ws_engine', None) and self.ws_engine.has_socket(sid, current_view_id):
                 try:
                     loop = asyncio.get_running_loop()
                     store = get_session_store()
@@ -324,7 +325,7 @@ class StatusWidgetsMixin:
                     # Sync context (e.g. background thread) -> push immediately
                     _loop = asyncio.new_event_loop()
                     try:
-                        _loop.run_until_complete(self.ws_engine.push_eval(sid, code))
+                        _loop.run_until_complete(self.ws_engine.push_eval(sid, code, view_id=current_view_id))
                     finally:
                         _loop.close()
             else:

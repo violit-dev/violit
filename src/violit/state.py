@@ -1,6 +1,6 @@
-from typing import Any, Dict, Set
+from typing import Any, Dict, Set, Tuple
 from cachetools import TTLCache
-from .context import session_ctx, rendering_ctx, app_instance_ref
+from .context import session_ctx, view_ctx, rendering_ctx, app_instance_ref
 from .theme import Theme
 
 class DependencyTracker:
@@ -33,54 +33,76 @@ class DependencyTracker:
 
 # Persistent store for static components (created during app initialization)
 STATIC_STORE = {}
-# TTL-cached store for user sessions (expires after 1800s of inactivity)
-GLOBAL_STORE = TTLCache(maxsize=1000, ttl=1800)
+
+# TTL-cached store for per-view runtime state (expires after 1800s of inactivity)
+VIEW_STORE = TTLCache(maxsize=4000, ttl=1800)
+
+# TTL-cached store for per-browser-session state (expires after 1800s of inactivity)
+SESSION_STORE = TTLCache(maxsize=1000, ttl=1800)
+
+
+def _initial_theme_name() -> str:
+    if app_instance_ref[0]:
+        return app_instance_ref[0].theme_manager.preset_name
+    return 'light'
+
+
+def _create_runtime_store(base_count: int = 0) -> Dict[str, Any]:
+    return {
+        'states': {},
+        'tracker': DependencyTracker(),
+        'builders': {},
+        'actions': {},
+        'submitted_values': {},
+        'component_count': base_count,
+        'fragment_components': {},
+        'order': [],
+        'sidebar_order': [],
+        'theme': Theme(_initial_theme_name()),
+        'dirty_states': set(),
+        'forced_dirty': set(),
+        'eval_queue': [],
+        '_vl_chart_requested': set(),
+        'toasts': [],
+        'effects': [],
+        'interval_callbacks': {},
+        '_interval_count': 0,
+    }
+
+
+def _get_static_store() -> Dict[str, Any]:
+    if not STATIC_STORE:
+        STATIC_STORE.update(_create_runtime_store(base_count=0))
+    return STATIC_STORE
+
+
+def get_browser_session_store() -> Dict[str, Any]:
+    sid = session_ctx.get()
+    if sid is None:
+        return {}
+
+    if sid not in SESSION_STORE:
+        SESSION_STORE[sid] = {}
+    return SESSION_STORE[sid]
+
 
 def get_session_store():
     sid = session_ctx.get()
+    current_view_id = view_ctx.get()
     
     # Static context (initial build)
-    if sid is None:
-        if not STATIC_STORE:
-            initial_theme = 'light'
-            if app_instance_ref[0]:
-                initial_theme = app_instance_ref[0].theme_manager.preset_name
-            
-            STATIC_STORE.update({
-                'states': {}, 
-                'tracker': DependencyTracker(),
-                'builders': {},
-                'actions': {},
-                'submitted_values': {},
-                'component_count': 0,
-                'fragment_components': {},
-                'order': [],
-                'sidebar_order': [],
-                'theme': Theme(initial_theme)
-            })
-        return STATIC_STORE
+    if sid is None or current_view_id is None:
+        return _get_static_store()
         
-    # User Session context
-    if sid not in GLOBAL_STORE:
-        initial_theme = 'light'
-        base_count = STATIC_STORE.get('component_count', 0)
-        
-        if app_instance_ref[0]:
-            initial_theme = app_instance_ref[0].theme_manager.preset_name
-            
-        GLOBAL_STORE[sid] = {
-            'states': {}, 
-            'tracker': DependencyTracker(),
-            'builders': {},
-            'actions': {},
-            'submitted_values': {},
-            'component_count': base_count,  # Start from where initial build left off
-            'fragment_components': {},
-            'order': [],
-            'sidebar_order': [],
-            'theme': Theme(initial_theme)
-        }
-    return GLOBAL_STORE[sid]
+    key: Tuple[str, str] = (sid, current_view_id)
+    if key not in VIEW_STORE:
+        static_store = _get_static_store()
+        base_count = static_store.get('component_count', 0)
+        runtime_store = _create_runtime_store(base_count=base_count)
+        runtime_store['interval_callbacks'] = dict(static_store.get('interval_callbacks', {}))
+        runtime_store['_interval_count'] = static_store.get('_interval_count', 0)
+        VIEW_STORE[key] = runtime_store
+    return VIEW_STORE[key]
 
 
 class Subscription:

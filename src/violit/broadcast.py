@@ -25,27 +25,27 @@ class Broadcaster:
             return []
         return list(self.app.ws_engine.sockets.keys())
     
-    async def _broadcast_eval_async(self, js_code: str, exclude_session: Optional[str] = None):
+    async def _broadcast_eval_async(self, js_code: str, exclude_view: Optional[tuple[str, str]] = None):
         if not hasattr(self.app, 'ws_engine') or not self.app.ws_engine:
             print("[BROADCAST] WebSocket engine not available.")
             return
         
-        active_sids = self.get_active_sessions()
+        active_views = self.get_active_sessions()
         
-        if exclude_session:
-            active_sids = [sid for sid in active_sids if sid != exclude_session]
+        if exclude_view:
+            active_views = [view_key for view_key in active_views if view_key != exclude_view]
         
-        print(f"[BROADCAST] Starting: {len(active_sids)} sessions")
+        print(f"[BROADCAST] Starting: {len(active_views)} views")
         
         success_count = 0
-        for sid in active_sids:
+        for sid, current_view_id in active_views:
             try:
-                await self.app.ws_engine.push_eval(sid, js_code)
+                await self.app.ws_engine.push_eval(sid, js_code, view_id=current_view_id)
                 success_count += 1
             except Exception as e:
                 print(f"[BROADCAST] Failed for session {sid[:8]}...: {e}")
         
-        print(f"[BROADCAST] Completed: {success_count}/{len(active_sids)} successful")
+        print(f"[BROADCAST] Completed: {success_count}/{len(active_views)} successful")
     
     def eval_all(self, js_code: str, exclude_current: bool = False):
         """Send JavaScript code to all clients (low-level API)
@@ -54,12 +54,15 @@ class Broadcaster:
             js_code: JavaScript code to execute
             exclude_current: Exclude current session
         """
-        from .context import session_ctx
+        from .context import session_ctx, view_ctx
         
-        exclude_session = None
+        exclude_view = None
         if exclude_current:
             try:
-                exclude_session = session_ctx.get()
+                sid = session_ctx.get()
+                current_view_id = view_ctx.get()
+                if sid and current_view_id:
+                    exclude_view = (sid, current_view_id)
             except:
                 pass
         
@@ -67,7 +70,7 @@ class Broadcaster:
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(self._broadcast_eval_async(js_code, exclude_session))
+                loop.run_until_complete(self._broadcast_eval_async(js_code, exclude_view))
                 loop.close()
             except Exception as e:
                 print(f"[BROADCAST] Execution failed: {e}")

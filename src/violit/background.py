@@ -17,7 +17,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, Future
 from typing import Any, Callable, Optional
 
-from .context import session_ctx
+from .context import session_ctx, view_ctx
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +141,7 @@ class BackgroundTask:
 
         # Capture session ID from the calling context (on_click handler)
         sid = session_ctx.get()
+        current_view_id = view_ctx.get()
         if sid is None:
             logger.warning("[background] No session context available. Task may not push updates correctly.")
 
@@ -150,7 +151,7 @@ class BackgroundTask:
         self._cancel_event.clear()
 
         pool = _get_executor(self._executor_type, self._max_workers)
-        self._future = pool.submit(self._run, sid)
+        self._future = pool.submit(self._run, sid, current_view_id)
 
     def cancel(self, *args):
         """Cancel the background task.
@@ -183,17 +184,18 @@ class BackgroundTask:
 
     # Internal helpers
 
-    def _run(self, sid: str):
+    def _run(self, sid: str, current_view_id: str):
         """Execute the background function in a worker thread."""
         # Restore session context in the worker thread
         t = session_ctx.set(sid) if sid else None
+        view_token = view_ctx.set(current_view_id) if current_view_id else None
 
         # Start periodic flusher: pushes dirty state updates every 200ms
         # so that progress.set() / status.set() are reflected in real-time
         stop_flusher = threading.Event()
         flusher = threading.Thread(
             target=self._periodic_flush,
-            args=(sid, stop_flusher),
+            args=(sid, current_view_id, stop_flusher),
             daemon=True,
         )
         flusher.start()
@@ -205,25 +207,25 @@ class BackgroundTask:
             if self._cancel_event.is_set():
                 self._state = "cancelled"
                 logger.debug("[background] Task cancelled during execution")
-                self._push_dirty_to_session(sid)
+                self._push_dirty_to_session(sid, current_view_id)
                 return
 
             self._state = "completed"
             logger.debug("[background] Task completed successfully")
 
             # Final flush to ensure last state changes are pushed
-            self._push_dirty_to_session(sid)
+            self._push_dirty_to_session(sid, current_view_id)
 
             # on_complete callback
             if self._on_complete:
                 self._on_complete()
                 # on_complete may have triggered more state changes (e.g. toast)
-                self._push_dirty_to_session(sid)
+                self._push_dirty_to_session(sid, current_view_id)
 
         except CancelledError:
             self._state = "cancelled"
             logger.debug("[background] Task cancelled via check_cancelled()")
-            self._push_dirty_to_session(sid)
+            self._push_dirty_to_session(sid, current_view_id)
 
         except Exception as e:
             self._error = e
@@ -234,38 +236,43 @@ class BackgroundTask:
             if self._on_error:
                 try:
                     self._on_error(e)
-                    self._push_dirty_to_session(sid)
+                    self._push_dirty_to_session(sid, current_view_id)
                 except Exception:
                     pass
 
         finally:
             stop_flusher.set()
             flusher.join(timeout=1)
+            if view_token is not None:
+                view_ctx.reset(view_token)
             if t is not None:
                 session_ctx.reset(t)
 
-    def _periodic_flush(self, sid: str, stop_event: threading.Event):
+    def _periodic_flush(self, sid: str, current_view_id: str, stop_event: threading.Event):
         """Periodically push dirty state updates to the client (runs in a helper thread)."""
         # Restore session context so _get_dirty_rendered works correctly
         t = session_ctx.set(sid) if sid else None
+        view_token = view_ctx.set(current_view_id) if current_view_id else None
         try:
             while not stop_event.is_set():
                 stop_event.wait(self._flush_interval)
                 if not stop_event.is_set():
-                    self._push_dirty_to_session(sid)
+                    self._push_dirty_to_session(sid, current_view_id)
         finally:
+            if view_token is not None:
+                view_ctx.reset(view_token)
             if t is not None:
                 session_ctx.reset(t)
 
-    def _push_dirty_to_session(self, sid: str):
+    def _push_dirty_to_session(self, sid: str, current_view_id: str):
         """Push any dirty component updates to the specific user session."""
-        if not sid:
+        if not sid or not current_view_id:
             return
 
         try:
             dirty = self._app._get_dirty_rendered()
 
-            if self._app.ws_engine and sid in self._app.ws_engine.sockets:
+            if self._app.ws_engine and self._app.ws_engine.has_socket(sid, current_view_id):
                 if not dirty:
                     return
 
@@ -274,7 +281,7 @@ class BackgroundTask:
                     # Submit the coroutine to uvicorn's loop from this worker thread.
                     # run_coroutine_threadsafe is thread-safe and reuses the existing loop.
                     future = asyncio.run_coroutine_threadsafe(
-                        self._app.ws_engine.push_updates(sid, dirty),
+                        self._app.ws_engine.push_updates(sid, dirty, view_id=current_view_id),
                         main_loop,
                     )
                     future.result(timeout=5)  # block until sent (or timeout)
@@ -283,7 +290,7 @@ class BackgroundTask:
                     loop = asyncio.new_event_loop()
                     try:
                         loop.run_until_complete(
-                            self._app.ws_engine.push_updates(sid, dirty)
+                            self._app.ws_engine.push_updates(sid, dirty, view_id=current_view_id)
                         )
                     finally:
                         loop.close()
@@ -295,7 +302,7 @@ class BackgroundTask:
                 payload = self._app._build_lite_oob_payload(dirty)
                 if not payload:
                     return
-                self._app._enqueue_lite_stream_payload(sid, payload)
+                self._app._enqueue_lite_stream_payload(sid, payload, view_id=current_view_id)
                 logger.debug(f"[background] Enqueued lite stream payload for session {sid[:8]}...")
                 return
 

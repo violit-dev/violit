@@ -40,6 +40,7 @@ def build_shell_html(
     user_css: str,
     root_style: str,
     disconnect_timeout: int,
+    view_id: str,
 ) -> str:
     return (
         template.replace("%CONTENT%", content)
@@ -65,6 +66,7 @@ def build_shell_html(
         .replace("%USER_CSS%", user_css)
         .replace("%ROOT_STYLE%", root_style)
         .replace("%DISCONNECT_TIMEOUT%", str(disconnect_timeout))
+        .replace("%VIEW_ID%", view_id)
     )
 
 
