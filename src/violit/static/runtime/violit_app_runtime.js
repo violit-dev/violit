@@ -1053,6 +1053,9 @@
             window._vlHeartbeatReplyTimer = null;
             window._vlHeartbeatProbeQueuedActions = false;
             window._vlLastSocketAckAt = Date.now();
+            window._vlHasEverBeenReady = false;
+            window._vlVisibleStaleSince = 0;
+            window._vlLastInteractionRecoveryAt = 0;
             
             // Page scroll position memory: { pageKey: scrollY }
             window._pageScrollPositions = {};
@@ -1264,6 +1267,7 @@
 
             window._vlMarkSocketAck = () => {
                 window._vlLastSocketAckAt = Date.now();
+                window._vlVisibleStaleSince = 0;
                 if (window._vlHeartbeatReplyTimer) {
                     clearTimeout(window._vlHeartbeatReplyTimer);
                     window._vlHeartbeatReplyTimer = null;
@@ -1448,12 +1452,78 @@
                 window._vlScheduleResumeChecks(reason);
             };
 
+            window._vlEnsureLivePage = (reason = 'watchdog') => {
+                if (mode !== 'ws' || window._intentionalDisconnect || !window._vlHasEverBeenReady) {
+                    return;
+                }
+
+                if (document.visibilityState !== 'visible') {
+                    window._vlVisibleStaleSince = 0;
+                    return;
+                }
+
+                const socket = window._ws;
+                const socketState = socket ? socket.readyState : WebSocket.CLOSED;
+                const socketOpen = socketState === WebSocket.OPEN;
+                const ackAgeMs = window._vlSocketAckAgeMs();
+                const transportStale = !socketOpen || !window._wsReady || ackAgeMs > 45000;
+
+                if (!transportStale) {
+                    window._vlVisibleStaleSince = 0;
+                    return;
+                }
+
+                if (window._vlVisibleStaleSince <= 0) {
+                    window._vlVisibleStaleSince = Date.now();
+                }
+
+                if (!socketOpen || !window._wsReady) {
+                    if (!socket || socket.readyState !== WebSocket.CONNECTING) {
+                        window._vlScheduleWsRecovery(`${reason}:not-ready`);
+                    }
+                } else if (!window._vlHeartbeatReplyTimer) {
+                    window._vlSendHeartbeat(reason);
+                }
+
+                const staleVisibleMs = Date.now() - window._vlVisibleStaleSince;
+                if (staleVisibleMs > 20000 && navigator.onLine !== false) {
+                    debugLog(`[WebSocket] Visible page stayed stale for ${staleVisibleMs}ms (${reason}). Hard reloading...`);
+                    window._vlHardReload();
+                }
+            };
+
+            window._vlRevivePageOnInteraction = (reason = 'interaction') => {
+                if (mode !== 'ws' || window._intentionalDisconnect || !window._vlHasEverBeenReady) {
+                    return;
+                }
+
+                if (document.visibilityState !== 'visible') {
+                    return;
+                }
+
+                const socketOpen = !!(window._ws && window._ws.readyState === WebSocket.OPEN);
+                const ackAgeMs = window._vlSocketAckAgeMs();
+                if (socketOpen && window._wsReady && ackAgeMs <= 10000) {
+                    return;
+                }
+
+                const now = Date.now();
+                if (now - window._vlLastInteractionRecoveryAt < 1000) {
+                    return;
+                }
+
+                window._vlLastInteractionRecoveryAt = now;
+                window._vlEnsureLivePage(reason);
+            };
+
             window._vlFinalizeWsReady = () => {
                 if (window._wsReady) {
                     return;
                 }
 
                 window._wsReady = true;
+                window._vlHasEverBeenReady = true;
+                window._vlVisibleStaleSince = 0;
 
                 window._vlFlushActionQueue('ws-ready');
 
@@ -1849,6 +1919,10 @@
                     }
                 }, 25000);
 
+                setInterval(() => {
+                    window._vlEnsureLivePage('interval-watchdog');
+                }, 5000);
+
                 if (window._vlTimeout > 0) {
                     const resetActivity = () => { window._vlLastActivity = Date.now(); };
                     document.addEventListener('mousemove', resetActivity, {passive: true});
@@ -2140,4 +2214,7 @@
             window.addEventListener('focus', () => window._vlHandleResume('focus'));
             window.addEventListener('online', () => window._vlHandleResume('online'));
             window.addEventListener('pageshow', () => window._vlHandleResume('pageshow'));
+            document.addEventListener('pointerdown', () => window._vlRevivePageOnInteraction('pointerdown'), { passive: true, capture: true });
+            document.addEventListener('touchstart', () => window._vlRevivePageOnInteraction('touchstart'), { passive: true, capture: true });
+            document.addEventListener('keydown', () => window._vlRevivePageOnInteraction('keydown'), { passive: true, capture: true });
         }
