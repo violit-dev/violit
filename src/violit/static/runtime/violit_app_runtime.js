@@ -151,6 +151,109 @@
                 attachHtmxMetadata();
             }
         }
+
+        function applyLiteStreamPayload(payload) {
+            if (!payload) return;
+
+            const temp = document.createElement('div');
+            temp.innerHTML = payload;
+            const roots = Array.from(temp.children);
+
+            roots.forEach((incomingRoot) => {
+                if (!(incomingRoot instanceof Element)) return;
+
+                incomingRoot.removeAttribute('hx-swap-oob');
+
+                const targetId = incomingRoot.id;
+                let updatedRoot = null;
+
+                if (targetId) {
+                    const currentRoot = document.getElementById(targetId);
+                    if (currentRoot) {
+                        let smartUpdated = false;
+                        if (targetId.endsWith('_wrapper') && currentRoot.querySelector('.js-plotly-plot')) {
+                            smartUpdated = trySmartUpdatePlotlyWrapper(currentRoot, incomingRoot.outerHTML);
+                        }
+
+                        if (!smartUpdated) {
+                            const agGridScrollState = window._vlCaptureAgGridScroll
+                                ? window._vlCaptureAgGridScroll(currentRoot)
+                                : null;
+                            purgePlotly(currentRoot);
+                            currentRoot.outerHTML = incomingRoot.outerHTML;
+                            updatedRoot = document.getElementById(targetId);
+                            if (window._vlRestoreAgGridScroll && agGridScrollState) {
+                                const revealGrid = window._vlHideAgGridDuringScrollRestore
+                                    ? window._vlHideAgGridDuringScrollRestore(updatedRoot, agGridScrollState)
+                                    : null;
+                                window._vlRestoreAgGridScroll(updatedRoot, agGridScrollState, revealGrid);
+                            }
+                        } else {
+                            updatedRoot = currentRoot;
+                        }
+                    }
+                }
+
+                if (!updatedRoot) {
+                    document.body.appendChild(incomingRoot);
+                    updatedRoot = incomingRoot;
+                }
+
+                executeInlineScripts(updatedRoot);
+            });
+
+            if (window.htmx && typeof window.htmx.process === 'function') {
+                window.htmx.process(document.body);
+            }
+            if (typeof window._vlApplyPartBridge === 'function') {
+                window._vlApplyPartBridge(document);
+            }
+            if (typeof hljs !== 'undefined') {
+                document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
+                    hljs.highlightElement(block);
+                });
+            }
+        }
+
+        function connectLiteStream() {
+            if (mode !== 'lite' || typeof window.EventSource === 'undefined') return null;
+
+            if (window._vlLiteStream) {
+                try {
+                    window._vlLiteStream.close();
+                } catch (error) {
+                    debugLog('[lite-stream] Failed to close previous EventSource', error);
+                }
+            }
+
+            const streamUrl = new URL('/lite-stream', window.location.origin);
+            if (window._vlViewId) {
+                streamUrl.searchParams.set('_vl_view_id', window._vlViewId);
+            }
+
+            const eventSource = new EventSource(streamUrl.toString(), { withCredentials: true });
+            window._vlLiteStream = eventSource;
+
+            eventSource.addEventListener('oob', function(event) {
+                if (!event || typeof event.data !== 'string' || !event.data) return;
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (typeof payload === 'string' && payload) {
+                        applyLiteStreamPayload(payload);
+                    }
+                } catch (error) {
+                    debugLog('[lite-stream] Failed to process OOB payload', error);
+                }
+            });
+
+            eventSource.onerror = function(error) {
+                debugLog('[lite-stream] EventSource error', error);
+            };
+
+            return eventSource;
+        }
+
+        window.connectLiteStream = connectLiteStream;
         
         // Helper to clean up Plotly instances before removing elements
         function purgePlotly(container) {
