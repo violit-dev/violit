@@ -32,6 +32,12 @@ HTML_TEMPLATE = r"""
                --wa-color-brand-border-loud: color-mix(in srgb, var(--vl-primary), black 10%);
              caret-color: transparent;
         }
+        wa-badge {
+            padding: 0.4em 0.7em;
+            line-height: 1.1;
+            border-width: var(--wa-border-width-s, 1px);
+            border-style: solid;
+        }
         html {
             overflow-y: scroll;
             scrollbar-gutter: stable;
