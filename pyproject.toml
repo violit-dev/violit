@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "violit"
-version = "0.7.10"
+version = "0.7.11"
 description = "Violit: Faster than Light, Beautiful as Violet. Pure Python Web Framework. Streamlit simplicity, no reruns."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -63,8 +63,8 @@ dependencies = [
 violit = "violit.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/violit-dev/violit"
-Documentation = "https://github.com/violit-dev/violit"
+Homepage = "https://violit.cloud"
+Documentation = "https://doc.violit.cloud"
 Repository = "https://github.com/violit-dev/violit"
 Issues = "https://github.com/violit-dev/violit/issues"
 
