@@ -9,6 +9,7 @@
             ? runtimeConfig.viewRestoreToken
             : null;
         const viewParamName = '_vl_view_id';
+        const reloadParamName = '_vlr';
         const viewStorageKey = 'violit:view-id:' + window.location.pathname;
         const viewRestoreTokenStorageKey = 'violit:view-restore-token:' + window.location.pathname;
         const viewRestoreCookieName = '_vl_reload_view';
@@ -76,6 +77,13 @@
             });
         };
 
+        const stripTransientRuntimeParamsFromUrl = () => {
+            replaceCurrentUrl((url) => {
+                url.searchParams.delete(viewParamName);
+                url.searchParams.delete(reloadParamName);
+            });
+        };
+
         const clearReloadViewCookie = () => {
             const cookiePath = window.location.pathname || '/';
             const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
@@ -97,8 +105,8 @@
         writeStoredViewId(viewId);
         writeStoredViewRestoreToken(viewRestoreToken);
         clearReloadViewCookie();
-        if (window.location.search.includes(viewParamName + '=')) {
-            stripLegacyViewIdFromUrl();
+        if (window.location.search.includes(viewParamName + '=') || window.location.search.includes(reloadParamName + '=')) {
+            stripTransientRuntimeParamsFromUrl();
         }
         window.addEventListener('beforeunload', syncReloadViewCookie);
         window.addEventListener('pagehide', syncReloadViewCookie);
@@ -1240,7 +1248,7 @@
 
             window._vlBuildHardReloadUrl = () => {
                 const url = new URL(window.location.href);
-                url.searchParams.set('_vlr', Date.now().toString());
+                url.searchParams.set(reloadParamName, Date.now().toString());
                 return url.toString();
             };
 
@@ -1293,11 +1301,25 @@
                     probeUrl.searchParams.set('_t', Date.now().toString());
 
                     fetch(probeUrl.toString(), { cache: 'no-store' })
-                        .then((response) => {
+                        .then(async (response) => {
                             if (response.ok) {
+                                let nextBootId = null;
+                                try {
+                                    const payload = await response.json();
+                                    nextBootId = typeof payload.bootId === 'string' ? payload.bootId : null;
+                                } catch (error) {
+                                    debugLog('[WebSocket] Failed to parse boot probe response.', error);
+                                }
+
                                 window._vlRecoveryLoopActive = false;
-                                debugLog('[WebSocket] Server reachable during recovery. Reloading...');
-                                window._vlHardReload();
+                                if (window._vlBootId && nextBootId && window._vlBootId !== nextBootId) {
+                                    debugLog(`[WebSocket] Server boot changed during recovery (${window._vlBootId} != ${nextBootId}). Reloading...`);
+                                    window._vlHardReload();
+                                    return;
+                                }
+
+                                debugLog('[WebSocket] Server reachable during recovery. Reconnecting socket...');
+                                window._vlReconnectWebSocket(reason);
                             } else {
                                 retryDelay = Math.min(retryDelay * 1.5, maxDelay);
                                 setTimeout(checkServer, retryDelay);
@@ -1378,18 +1400,370 @@
                 setTimeout(restoreFromHash, 100);
             };
 
-            window._ws = null;
+            window._vlBuildWsUrl = () => {
+                const wsUrl = new URL((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + "/ws");
+                if (window._vlViewId) {
+                    wsUrl.searchParams.set('_vl_view_id', window._vlViewId);
+                }
+                return wsUrl;
+            };
 
-            // Now connect WebSocket
-            const wsUrl = new URL((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + "/ws");
-            if (window._vlViewId) {
-                wsUrl.searchParams.set('_vl_view_id', window._vlViewId);
-            }
-            window._ws = new WebSocket(wsUrl.toString());
+            window._vlDisposeSocket = (socket) => {
+                if (!socket) {
+                    return;
+                }
+
+                socket.onclose = null;
+                socket.onopen = null;
+                socket.onerror = null;
+                socket.onmessage = null;
+
+                if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+                    try {
+                        socket.close();
+                    } catch (error) {
+                        debugLog('[WebSocket] Failed to close previous socket.', error);
+                    }
+                }
+            };
+
+            window._vlAttachWebSocketHandlers = (socket) => {
+                socket.onclose = () => {
+                    if (window._ws !== socket) {
+                        return;
+                    }
+                    if (window._vlHeartbeatReplyTimer) {
+                        clearTimeout(window._vlHeartbeatReplyTimer);
+                        window._vlHeartbeatReplyTimer = null;
+                    }
+                    if (window._intentionalDisconnect) return;
+                    window._vlScheduleWsRecovery('close');
+                };
+
+                socket.onopen = () => {
+                    if (window._ws !== socket) {
+                        return;
+                    }
+                    debugLog('[WebSocket] Connected successfully');
+                    window._vlReloadScheduled = false;
+                    window._vlRecoveryLoopActive = false;
+                };
+
+                socket.onerror = (error) => {
+                    if (window._ws !== socket) {
+                        return;
+                    }
+                    window._wsReady = false;
+                    debugLog('[WebSocket] Error:', error);
+                };
+
+                socket.onmessage = (e) => {
+                    if (window._ws !== socket) {
+                        return;
+                    }
+                    debugLog('[WebSocket] Message received');
+                    const msg = JSON.parse(e.data);
+                    window._vlMarkSocketAck();
+                    if (msg.type === 'hello') {
+                        window._vlServerBootId = msg.bootId || null;
+                        if (typeof msg.viewId === 'string' && msg.viewId) {
+                            window._vlViewId = msg.viewId;
+                            writeStoredViewId(msg.viewId);
+                        }
+
+                        if (window._vlBootId && msg.bootId && window._vlBootId !== msg.bootId) {
+                            debugLog(`[WebSocket] Boot mismatch detected (${window._vlBootId} != ${msg.bootId}). Hard reloading...`);
+                            window._vlHardReload();
+                            return;
+                        }
+
+                        window._vlWsHelloReceived = true;
+                        window._vlFinalizeWsReady();
+                        return;
+                    }
+                    if (msg.type === 'pong') {
+                        return;
+                    }
+                    if(msg.type === 'update') {
+                        // Check if this is a navigation update (page transition)
+                        // Server sends isNavigation flag based on action type
+                        const isNavigation = msg.isNavigation === true;
+                    
+                        const applyUpdates = (payload) => {
+                            payload.forEach(item => {
+                                const el = document.getElementById(item.id);
+                            
+                                // Focus Guard: Skip update if element is focused input to prevent interrupting typing
+                                // BUT allow page navigation updates to proceed.
+                                if (!isNavigation && el && document.activeElement && el.contains(document.activeElement)) {
+                                     const tag = document.activeElement.tagName.toLowerCase();
+                                     const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('wa-input') || tag.startsWith('wa-textarea') || tag.startsWith('wa-slider');
+                                     
+                                     // If it's an input, block update. If it's a button (nav menu), ALLOW update.
+                                     if (isInput) {
+                                         return;
+                                     }
+                                }
+
+                                if(el) {
+                                    // Smart update for specific widget types to preserve animations/instances
+                                    const widgetType = item.id.split('_')[0];
+                                    let smartUpdated = false;
+                                    
+                                    // Checkbox/Toggle: Update checked property only (preserve animation)
+                                    if (widgetType === 'checkbox' || widgetType === 'toggle') {
+                                        // Parse new HTML to extract checked state
+                                        const temp = document.createElement('div');
+                                        temp.innerHTML = item.html;
+                                        const newCheckbox = temp.querySelector('wa-checkbox, wa-switch');
+                                        
+                                        if (newCheckbox) {
+                                            // Find the actual checkbox element (may be direct or nested)
+                                            const checkboxEl = el.tagName && (el.tagName.toLowerCase() === 'wa-checkbox' || el.tagName.toLowerCase() === 'wa-switch')
+                                                ? el 
+                                                : el.querySelector('wa-checkbox, wa-switch');
+                                            
+                                            if (checkboxEl) {
+                                                const shouldBeChecked = newCheckbox.hasAttribute('checked');
+                                                // Only update if different to avoid interrupting user interaction
+                                                if (checkboxEl.checked !== shouldBeChecked) {
+                                                    checkboxEl.checked = shouldBeChecked;
+                                                }
+                                                smartUpdated = true;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Slider: Update value property only (preserve drag interaction)
+                                    if (widgetType === 'slider') {
+                                        const temp = document.createElement('div');
+                                        temp.innerHTML = item.html;
+                                        const newRange = temp.querySelector('wa-slider');
+                                        if (newRange) {
+                                            const rangeEl = el.tagName && el.tagName.toLowerCase() === 'wa-slider'
+                                                ? el : el.querySelector('wa-slider');
+                                            if (rangeEl) {
+                                                const newVal = newRange.getAttribute('value');
+                                                if (newVal !== null && rangeEl.value !== parseFloat(newVal)) {
+                                                    rangeEl.value = parseFloat(newVal);
+                                                }
+                                                smartUpdated = true;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // AG Grid-backed widgets: update rowData without replacing the whole DOM.
+                                    // This avoids the destroy/recreate flash that happens when dataframe widgets
+                                    // are rerendered reactively after a click.
+                                    if (widgetType === 'df' || (widgetType === 'data' && item.id.includes('editor'))) {
+                                        const baseCid = item.id.replace('_wrapper', '');
+                                        const gridApi = window['gridApi_' + baseCid];
+                                        if (gridApi) {
+                                            const match = item.html.match(/rowData:\s*(\[.*?\])/s);
+                                            if (match) {
+                                                try {
+                                                    const newData = JSON.parse(match[1]);
+                                                    const gridRoot = document.getElementById(baseCid) || el.querySelector(`#${baseCid}`) || el;
+                                                    const agGridScrollState = window._vlCaptureAgGridScroll(gridRoot);
+
+                                                    if (typeof gridApi.setGridOption === 'function') {
+                                                        gridApi.setGridOption('rowData', newData);
+                                                    } else if (typeof gridApi.setRowData === 'function') {
+                                                        gridApi.setRowData(newData);
+                                                    }
+
+                                                    window._vlRestoreAgGridScroll(gridRoot, agGridScrollState);
+                                                    smartUpdated = true;
+                                                } catch (e) {
+                                                    console.error('Failed to parse AG Grid data:', e);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Tabs: when only the active panel changed, preserve the existing DOM
+                                    // so nested chart/widget instances don't get torn down and redrawn.
+                                    if (!smartUpdated && widgetType === 'tabs') {
+                                        const temp = document.createElement('div');
+                                        temp.innerHTML = item.html;
+                                        const nextGroup = temp.querySelector('wa-tab-group');
+                                        const currentGroup = el.tagName && el.tagName.toLowerCase() === 'wa-tab-group'
+                                            ? el
+                                            : el.querySelector('wa-tab-group');
+
+                                        if (currentGroup && nextGroup) {
+                                            const currentPanels = Array.from(currentGroup.querySelectorAll(':scope > wa-tab-panel'));
+                                            const nextPanels = Array.from(nextGroup.querySelectorAll(':scope > wa-tab-panel'));
+                                            const currentTabs = Array.from(currentGroup.querySelectorAll(':scope > wa-tab[slot="nav"]'));
+                                            const nextTabs = Array.from(nextGroup.querySelectorAll(':scope > wa-tab[slot="nav"]'));
+
+                                            const samePanelMarkup = currentPanels.length === nextPanels.length && currentPanels.every((panel, index) => {
+                                                const nextPanel = nextPanels[index];
+                                                return !!nextPanel && panel.getAttribute('name') === nextPanel.getAttribute('name') && panel.innerHTML === nextPanel.innerHTML;
+                                            });
+
+                                            const sameTabMarkup = currentTabs.length === nextTabs.length && currentTabs.every((tab, index) => {
+                                                const nextTab = nextTabs[index];
+                                                return !!nextTab && tab.getAttribute('panel') === nextTab.getAttribute('panel') && tab.textContent === nextTab.textContent;
+                                            });
+
+                                            if (samePanelMarkup && sameTabMarkup) {
+                                                const nextActive = nextGroup.getAttribute('active');
+                                                if (nextActive) {
+                                                    currentGroup.setAttribute('active', nextActive);
+                                                    requestAnimationFrame(() => {
+                                                        currentGroup.setAttribute('active', nextActive);
+                                                        if (typeof currentGroup.updateActiveTab === 'function') {
+                                                            currentGroup.updateActiveTab();
+                                                        }
+                                                    });
+                                                }
+                                                smartUpdated = true;
+                                            }
+                                        }
+                                    }
+
+                                    // Plotly chart wrappers: keep the existing plot DOM and rerun the incoming
+                                    // render script so Plotly.react updates traces without nuking the background.
+                                    if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('.js-plotly-plot')) {
+                                        smartUpdated = trySmartUpdatePlotlyWrapper(el, item.html);
+                                    }
+                                    
+                                    // Default: Full DOM replacement
+                                    if (!smartUpdated) {
+                                        const agGridScrollState = window._vlCaptureAgGridScroll(el);
+                                        purgePlotly(el);
+                                        el.outerHTML = item.html;
+                                        
+                                        const newEl = document.getElementById(item.id);
+                                        const revealGrid = window._vlHideAgGridDuringScrollRestore(newEl, agGridScrollState);
+                                        window._vlRestoreAgGridScroll(newEl, agGridScrollState, revealGrid);
+                                        
+                                        // Execute scripts
+                                        const temp = document.createElement('div');
+                                        temp.innerHTML = item.html;
+                                        executeInlineScripts(temp);
+
+                                        if (isNavigation && newEl && newEl.classList.contains('page-container')) {
+                                            requestAnimationFrame(() => restartPageEnterAnimation(newEl));
+                                        }
+                                    }
+                                } else {
+                                    // If the element does not exist, it might be a new element that belongs inside a re-rendered parent container.
+                                    // It will automatically be created when its parent container replaces its innerHTML.
+                                    // But if we are in Lite mode or handled via generic layout, we might need to append it if it's top-level or absolute (like dialogs)
+                                    if (item.id.includes('dialog')) {
+                                        debugLog("[WebSocket] Element not found for dialog, appending to body: " + item.id);
+                                        const container = document.createElement('div');
+                                        container.id = item.id;
+                                        container.innerHTML = item.html;
+                                        document.body.appendChild(container);
+
+                                        // Trigger scripts for the newly appended dialog
+                                        container.querySelectorAll('script').forEach(s => {
+                                            const script = document.createElement('script');
+                                            script.textContent = s.textContent;
+                                            document.body.appendChild(script);
+                                            script.remove();
+                                        });
+                                    } else {
+                                        debugLog("[WebSocket] Element not found for update, skipping appending to end: " + item.id);
+                                    }
+                                }
+                            });
+                        };
+                        
+                        // Apply updates immediately (no View Transition).
+                        // CSS fade-in on .page-container handles the smooth entrance.
+                        applyUpdates(msg.payload);
+                        window._vlApplyPartBridge(document);
+
+                        // Preserve the user's viewport position for same-page reactive updates.
+                        if (!isNavigation && window._pendingScrollRestore) {
+                            const restore = window._pendingScrollRestore;
+                            const restoreScroll = () => {
+                                window.scrollTo(restore.x || 0, restore.y || 0);
+                            };
+
+                            requestAnimationFrame(() => {
+                                restoreScroll();
+                                requestAnimationFrame(() => {
+                                    restoreScroll();
+                                    setTimeout(restoreScroll, 80);
+                                });
+                            });
+
+                            debugLog(`[Scroll] Restored viewport to y=${restore.y}px after reactive update`);
+                            window._pendingScrollRestore = null;
+                        }
+                        
+                        // Page scroll position management after navigation
+                        if (isNavigation && window._pendingPageKey) {
+                            const targetKey = window._pendingPageKey;
+                            window._currentPageKey = targetKey;
+                            window._pendingPageKey = null;
+                            window._pendingScrollRestore = null;
+                            
+                            // Restore saved scroll position, or scroll to top for first visit
+                            const savedScroll = window._pageScrollPositions[targetKey];
+                            // Use requestAnimationFrame to ensure DOM is updated before scrolling
+                            requestAnimationFrame(() => {
+                                if (savedScroll !== undefined && savedScroll > 0) {
+                                    window.scrollTo(0, savedScroll);
+                                    debugLog(`[Navigation] Restored scroll ${savedScroll}px for page: ${targetKey}`);
+                                } else {
+                                    window.scrollTo(0, 0);
+                                    debugLog(`[Navigation] Scroll to top for page: ${targetKey}`);
+                                }
+                            });
+                        }
+                        
+                        // Re-highlight code blocks after DOM update
+                        if (typeof hljs !== 'undefined') {
+                            document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
+                                hljs.highlightElement(block);
+                            });
+                        }
+                    } else if (msg.type === 'eval') {
+                        const func = new Function(msg.code);
+                        func();
+                    } else if (msg.type === 'interval_ctrl') {
+                        // Server-initiated interval control (pause/resume/stop)
+                        const ctrl = window._vlIntervals && window._vlIntervals[msg.id];
+                        if (ctrl) {
+                            if      (msg.action === 'pause')  ctrl.pause();
+                            else if (msg.action === 'resume') ctrl.resume();
+                            else if (msg.action === 'stop')   ctrl.stop();
+                        }
+                    }
+                };
+            };
+
+            window._vlConnectWebSocket = () => {
+                const socket = new WebSocket(window._vlBuildWsUrl().toString());
+                window._ws = socket;
+                window._intentionalDisconnect = false;
+                window._vlAttachWebSocketHandlers(socket);
+                return socket;
+            };
+
+            window._vlReconnectWebSocket = (reason = 'reconnect') => {
+                debugLog(`[WebSocket] Reconnecting socket (${reason})...`);
+                if (window._vlHeartbeatReplyTimer) {
+                    clearTimeout(window._vlHeartbeatReplyTimer);
+                    window._vlHeartbeatReplyTimer = null;
+                }
+                window._wsReady = false;
+                window._vlWsHelloReceived = false;
+                window._vlDisposeSocket(window._ws);
+                return window._vlConnectWebSocket();
+            };
+
+            window._ws = null;
             
-            window._intentionalDisconnect = false;
             window._vlTimeout = disconnectTimeout;
             window._vlLastActivity = Date.now();
+            window._vlConnectWebSocket();
 
             if (window._vlTimeout >= 0) {
                 // Send ping every 25 seconds to prevent network timeout
@@ -1422,393 +1796,9 @@
                     document.addEventListener('scroll', resetActivity, {passive: true});
                 }
             }
-
-            // Auto-reconnect/reload logic
-            window._ws.onclose = () => {
-                if (window._vlHeartbeatReplyTimer) {
-                    clearTimeout(window._vlHeartbeatReplyTimer);
-                    window._vlHeartbeatReplyTimer = null;
-                }
-                if (window._intentionalDisconnect) return;
-                window._vlScheduleWsRecovery('close');
-            };
-            
-            // CRITICAL: Restore from hash ONLY after WebSocket is connected
-            window._ws.onopen = () => {
-                debugLog("[WebSocket] Connected successfully");
-                window._vlReloadScheduled = false;
-                window._vlRecoveryLoopActive = false;
-            };
-            
-            // Handle WebSocket errors
-            window._ws.onerror = (error) => {
-                window._wsReady = false;
-                debugLog("[WebSocket] Error:", error);
-            };
-
-            window._ws.onmessage = (e) => {
-                debugLog("[WebSocket] Message received");
-                const msg = JSON.parse(e.data);
-                window._vlMarkSocketAck();
-                if (msg.type === 'hello') {
-                    window._vlServerBootId = msg.bootId || null;
-                    if (typeof msg.viewId === 'string' && msg.viewId) {
-                        window._vlViewId = msg.viewId;
-                        writeStoredViewId(msg.viewId);
-                    }
-
-                    if (window._vlBootId && msg.bootId && window._vlBootId !== msg.bootId) {
-                        debugLog(`[WebSocket] Boot mismatch detected (${window._vlBootId} != ${msg.bootId}). Hard reloading...`);
-                        window._vlHardReload();
-                        return;
-                    }
-
-                    window._vlWsHelloReceived = true;
-                    window._vlFinalizeWsReady();
-                    return;
-                }
-                if (msg.type === 'pong') {
-                    return;
-                }
-                if(msg.type === 'update') {
-                    // Check if this is a navigation update (page transition)
-                    // Server sends isNavigation flag based on action type
-                    const isNavigation = msg.isNavigation === true;
-                    
-                    // Helper function to apply updates
-                    const applyUpdates = (items) => {
-                        items.forEach(item => {
-                            const el = document.getElementById(item.id);
-                            
-                            // Focus Guard: Skip update if element is focused input to prevent interrupting typing
-                            if (document.activeElement && el) {
-                                 const isSelfOrChild = document.activeElement.id === item.id || el.contains(document.activeElement);
-                                 const isShadowChild = document.activeElement.closest && document.activeElement.closest(`#${item.id}`);
-                                 
-                                 if (isSelfOrChild || isShadowChild) {
-                                     // Check if it's actually an input that needs protection
-                                     const tag = document.activeElement.tagName.toLowerCase();
-                                     const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('wa-input') || tag.startsWith('wa-textarea') || tag.startsWith('wa-slider');
-                                     
-                                     // If it's an input, block update. If it's a button (nav menu), ALLOW update.
-                                     if (isInput) {
-                                         return;
-                                     }
-                                 }
-                            }
-
-                            if(el) {
-                                // Smart update for specific widget types to preserve animations/instances
-                                const widgetType = item.id.split('_')[0];
-                                let smartUpdated = false;
-                                
-                                // Checkbox/Toggle: Update checked property only (preserve animation)
-                                if (widgetType === 'checkbox' || widgetType === 'toggle') {
-                                    // Parse new HTML to extract checked state
-                                    const temp = document.createElement('div');
-                                    temp.innerHTML = item.html;
-                                    const newCheckbox = temp.querySelector('wa-checkbox, wa-switch');
-                                    
-                                    if (newCheckbox) {
-                                        // Find the actual checkbox element (may be direct or nested)
-                                        const checkboxEl = el.tagName && (el.tagName.toLowerCase() === 'wa-checkbox' || el.tagName.toLowerCase() === 'wa-switch')
-                                            ? el 
-                                            : el.querySelector('wa-checkbox, wa-switch');
-                                        
-                                        if (checkboxEl) {
-                                            const shouldBeChecked = newCheckbox.hasAttribute('checked');
-                                            // Only update if different to avoid interrupting user interaction
-                                            if (checkboxEl.checked !== shouldBeChecked) {
-                                                checkboxEl.checked = shouldBeChecked;
-                                            }
-                                            smartUpdated = true;
-                                        }
-                                    }
-                                }
-                                
-                                // Slider: Update value property only (preserve drag interaction)
-                                if (widgetType === 'slider') {
-                                    const temp = document.createElement('div');
-                                    temp.innerHTML = item.html;
-                                    const newRange = temp.querySelector('wa-slider');
-                                    if (newRange) {
-                                        const rangeEl = el.tagName && el.tagName.toLowerCase() === 'wa-slider'
-                                            ? el : el.querySelector('wa-slider');
-                                        if (rangeEl) {
-                                            const newVal = newRange.getAttribute('value');
-                                            if (newVal !== null && rangeEl.value !== parseFloat(newVal)) {
-                                                rangeEl.value = parseFloat(newVal);
-                                            }
-                                            smartUpdated = true;
-                                        }
-                                    }
-                                }
-                                
-                                // AG Grid-backed widgets: update rowData without replacing the whole DOM.
-                                // This avoids the destroy/recreate flash that happens when dataframe widgets
-                                // are rerendered reactively after a click.
-                                if (widgetType === 'df' || (widgetType === 'data' && item.id.includes('editor'))) {
-                                    const baseCid = item.id.replace('_wrapper', '');
-                                    const gridApi = window['gridApi_' + baseCid];
-                                    if (gridApi) {
-                                        const match = item.html.match(/rowData:\s*(\[.*?\])/s);
-                                        if (match) {
-                                            try {
-                                                const newData = JSON.parse(match[1]);
-                                                const gridRoot = document.getElementById(baseCid) || el.querySelector(`#${baseCid}`) || el;
-                                                const agGridScrollState = window._vlCaptureAgGridScroll(gridRoot);
-
-                                                if (typeof gridApi.setGridOption === 'function') {
-                                                    gridApi.setGridOption('rowData', newData);
-                                                } else if (typeof gridApi.setRowData === 'function') {
-                                                    gridApi.setRowData(newData);
-                                                }
-
-                                                window._vlRestoreAgGridScroll(gridRoot, agGridScrollState);
-                                                smartUpdated = true;
-                                            } catch (e) {
-                                                console.error('Failed to parse AG Grid data:', e);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Tabs: when only the active panel changed, preserve the existing DOM
-                                // so nested chart/widget instances don't get torn down and redrawn.
-                                if (!smartUpdated && widgetType === 'tabs') {
-                                    const temp = document.createElement('div');
-                                    temp.innerHTML = item.html;
-                                    const nextGroup = temp.querySelector('wa-tab-group');
-                                    const currentGroup = el.tagName && el.tagName.toLowerCase() === 'wa-tab-group'
-                                        ? el
-                                        : el.querySelector('wa-tab-group');
-
-                                    if (currentGroup && nextGroup) {
-                                        const currentPanels = Array.from(currentGroup.querySelectorAll(':scope > wa-tab-panel'));
-                                        const nextPanels = Array.from(nextGroup.querySelectorAll(':scope > wa-tab-panel'));
-                                        const currentTabs = Array.from(currentGroup.querySelectorAll(':scope > wa-tab[slot="nav"]'));
-                                        const nextTabs = Array.from(nextGroup.querySelectorAll(':scope > wa-tab[slot="nav"]'));
-
-                                        const samePanelMarkup = currentPanels.length === nextPanels.length && currentPanels.every((panel, index) => {
-                                            const nextPanel = nextPanels[index];
-                                            return !!nextPanel && panel.getAttribute('name') === nextPanel.getAttribute('name') && panel.innerHTML === nextPanel.innerHTML;
-                                        });
-
-                                        const sameTabMarkup = currentTabs.length === nextTabs.length && currentTabs.every((tab, index) => {
-                                            const nextTab = nextTabs[index];
-                                            return !!nextTab && tab.getAttribute('panel') === nextTab.getAttribute('panel') && tab.textContent === nextTab.textContent;
-                                        });
-
-                                        if (samePanelMarkup && sameTabMarkup) {
-                                            const nextActive = nextGroup.getAttribute('active');
-                                            if (nextActive) {
-                                                currentGroup.setAttribute('active', nextActive);
-                                                requestAnimationFrame(() => {
-                                                    currentGroup.setAttribute('active', nextActive);
-                                                    if (typeof currentGroup.updateActiveTab === 'function') {
-                                                        currentGroup.updateActiveTab();
-                                                    }
-                                                });
-                                            }
-                                            smartUpdated = true;
-                                        }
-                                    }
-                                }
-
-                                // Plotly chart wrappers: keep the existing plot DOM and rerun the incoming
-                                // render script so Plotly.react updates traces without nuking the background.
-                                if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('.js-plotly-plot')) {
-                                    smartUpdated = trySmartUpdatePlotlyWrapper(el, item.html);
-                                }
-                                
-                                // Default: Full DOM replacement
-                                if (!smartUpdated) {
-                                    const agGridScrollState = window._vlCaptureAgGridScroll(el);
-                                    purgePlotly(el);
-                                    el.outerHTML = item.html;
-                                    
-                                    const newEl = document.getElementById(item.id);
-                                    const revealGrid = window._vlHideAgGridDuringScrollRestore(newEl, agGridScrollState);
-                                    window._vlRestoreAgGridScroll(newEl, agGridScrollState, revealGrid);
-                                    
-                                    // Execute scripts
-                                    const temp = document.createElement('div');
-                                    temp.innerHTML = item.html;
-                                    executeInlineScripts(temp);
-
-                                    if (isNavigation && newEl && newEl.classList.contains('page-container')) {
-                                        requestAnimationFrame(() => restartPageEnterAnimation(newEl));
-                                    }
-                                }
-                            } else {
-                                // If the element does not exist, it might be a new element that belongs inside a re-rendered parent container.
-                                // It will automatically be created when its parent container replaces its innerHTML.
-                                // But if we are in Lite mode or handled via generic layout, we might need to append it if it's top-level or absolute (like dialogs)
-                                if (item.id.includes('dialog')) {
-                                    debugLog("[WebSocket] Element not found for dialog, appending to body: " + item.id);
-                                    const container = document.createElement('div');
-                                    container.id = item.id;
-                                    container.innerHTML = item.html;
-                                    document.body.appendChild(container);
-
-                                    // Trigger scripts for the newly appended dialog
-                                    container.querySelectorAll('script').forEach(s => {
-                                        const script = document.createElement('script');
-                                        script.textContent = s.textContent;
-                                        document.body.appendChild(script);
-                                        script.remove();
-                                    });
-                                } else {
-                                    debugLog("[WebSocket] Element not found for update, skipping appending to end: " + item.id);
-                                }
-                            }
-                        });
-                    };
-                    
-                    // Apply updates immediately (no View Transition).
-                    // CSS fade-in on .page-container handles the smooth entrance.
-                    applyUpdates(msg.payload);
-                    window._vlApplyPartBridge(document);
-
-                    // Preserve the user's viewport position for same-page reactive updates.
-                    if (!isNavigation && window._pendingScrollRestore) {
-                        const restore = window._pendingScrollRestore;
-                        const restoreScroll = () => {
-                            window.scrollTo(restore.x || 0, restore.y || 0);
-                        };
-
-                        requestAnimationFrame(() => {
-                            restoreScroll();
-                            requestAnimationFrame(() => {
-                                restoreScroll();
-                                setTimeout(restoreScroll, 80);
-                            });
-                        });
-
-                        debugLog(`[Scroll] Restored viewport to y=${restore.y}px after reactive update`);
-                        window._pendingScrollRestore = null;
-                    }
-                    
-                    // Page scroll position management after navigation
-                    if (isNavigation && window._pendingPageKey) {
-                        const targetKey = window._pendingPageKey;
-                        window._currentPageKey = targetKey;
-                        window._pendingPageKey = null;
-                        window._pendingScrollRestore = null;
-                        
-                        // Restore saved scroll position, or scroll to top for first visit
-                        const savedScroll = window._pageScrollPositions[targetKey];
-                        // Use requestAnimationFrame to ensure DOM is updated before scrolling
-                        requestAnimationFrame(() => {
-                            if (savedScroll !== undefined && savedScroll > 0) {
-                                window.scrollTo(0, savedScroll);
-                                debugLog(`[Navigation] Restored scroll ${savedScroll}px for page: ${targetKey}`);
-                            } else {
-                                window.scrollTo(0, 0);
-                                debugLog(`[Navigation] Scroll to top for page: ${targetKey}`);
-                            }
-                        });
-                    }
-                    
-                    // Re-highlight code blocks after DOM update
-                    if (typeof hljs !== 'undefined') {
-                        document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
-                            hljs.highlightElement(block);
-                        });
-                    }
-                } else if (msg.type === 'eval') {
-                    const func = new Function(msg.code);
-                    func();
-                } else if (msg.type === 'interval_ctrl') {
-                    // Server-initiated interval control (pause/resume/stop)
-                    const ctrl = window._vlIntervals && window._vlIntervals[msg.id];
-                    if (ctrl) {
-                        if      (msg.action === 'pause')  ctrl.pause();
-                        else if (msg.action === 'resume') ctrl.resume();
-                        else if (msg.action === 'stop')   ctrl.stop();
-                    }
-                }
-            };
         } else {
              // Lite Mode (HTMX) specifics
             document.addEventListener('DOMContentLoaded', () => {
-                const reviveScripts = (root) => {
-                    if (!root) return;
-                    root.querySelectorAll('script').forEach((oldScript) => {
-                        const script = document.createElement('script');
-                        Array.from(oldScript.attributes).forEach((attr) => script.setAttribute(attr.name, attr.value));
-                        script.textContent = oldScript.textContent;
-                        oldScript.parentNode.replaceChild(script, oldScript);
-                    });
-                };
-
-                const applyLiteStreamPayload = (html) => {
-                    if (!html) return;
-                    const template = document.createElement('template');
-                    template.innerHTML = html.trim();
-                    const nodes = Array.from(template.content.children);
-
-                    nodes.forEach((node) => {
-                        const targetId = node.id;
-
-                        if (targetId) {
-                            const existing = document.getElementById(targetId);
-                            if (existing && existing !== node) {
-                                purgePlotly(existing);
-                                existing.replaceWith(node);
-                            } else {
-                                document.body.appendChild(node);
-                            }
-                        } else {
-                            document.body.appendChild(node);
-                        }
-
-                        if (window.htmx && typeof window.htmx.process === 'function') {
-                            window.htmx.process(node);
-                        }
-                        reviveScripts(node);
-                    });
-
-                    if (typeof window._vlApplyPartBridge === 'function') {
-                        window._vlApplyPartBridge(document);
-                    }
-
-                    if (typeof hljs !== 'undefined') {
-                        document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
-                            hljs.highlightElement(block);
-                        });
-                    }
-                };
-
-                const connectLiteStream = () => {
-                    if (!window.EventSource) return;
-                    if (window.__vlLiteEventSource) {
-                        window.__vlLiteEventSource.close();
-                    }
-
-                    const streamUrl = new URL('/lite-stream', window.location.origin);
-                    if (window._vlViewId) {
-                        streamUrl.searchParams.set('_vl_view_id', window._vlViewId);
-                    }
-                    const eventSource = new EventSource(streamUrl.toString());
-                    window.__vlLiteEventSource = eventSource;
-
-                    eventSource.addEventListener('oob', (event) => {
-                        window._vlLastActivity = Date.now();
-                        try {
-                            applyLiteStreamPayload(JSON.parse(event.data));
-                        } catch (err) {
-                            console.error('[Lite Stream] Failed to apply payload', err);
-                        }
-                    });
-
-                    window.addEventListener('beforeunload', () => {
-                        if (window.__vlLiteEventSource) {
-                            window.__vlLiteEventSource.close();
-                        }
-                    }, { once: true });
-                };
-
                 connectLiteStream();
 
                 document.body.addEventListener('htmx:beforeSwap', function(evt) {
