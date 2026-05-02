@@ -64,6 +64,7 @@ class InputWidgetsMixin:
         return '', ''  # "visible"
 
     def text_input(self, label, value="", key=None, on_change=None,
+                   on_submit=None, submit_on_enter=False,
                    type="default", max_chars=None, placeholder="",
                    autocomplete=None, disabled=False,
                    label_visibility="visible", help=None,
@@ -76,6 +77,8 @@ class InputWidgetsMixin:
             placeholder: Placeholder text when empty
             autocomplete: HTML autocomplete attribute
             disabled: If True, widget is grayed out
+            on_submit: Callback when Enter submits the current value
+            submit_on_enter: If True, pressing Enter triggers on_submit
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text shown below the input
         """
@@ -88,6 +91,7 @@ class InputWidgetsMixin:
         if disabled: extra["disabled"] = True
         if help: extra["hint"] = help
         return self._input_component("input", "wa-input", label, value, on_change, key,
+                         on_submit=on_submit, submit_on_enter=submit_on_enter,
                                      cls=cls, style=style, label_visibility=label_visibility,
                                      **extra, **props)
 
@@ -1314,7 +1318,7 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, cls: str = "", style: str = "", live_update=False, label_visibility="visible", **props):
+    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, on_submit=None, submit_on_enter=False, cls: str = "", style: str = "", live_update=False, label_visibility="visible", **props):
         """Generic input component builder"""
         cid = self._get_next_cid(type_name)
         user_part_cls = props.pop("part_cls", None)
@@ -1323,10 +1327,31 @@ class InputWidgetsMixin:
         s = self.state(value, key=state_key)
         
         def action(v):
+            payload = v
+            if isinstance(v, str):
+                stripped = v.strip()
+                if stripped.startswith("{") or stripped.startswith("["):
+                    try:
+                        payload = json.loads(stripped)
+                    except Exception:
+                        payload = v
+
+            submitted = isinstance(payload, dict) and payload.get("eventType") == "submit"
+            if submitted:
+                v = payload.get("value", "")
+            else:
+                v = payload
+
             if type_name == 'slider': 
                 v = float(v) if '.' in str(v) else int(v)
             s.set(v)
-            if on_change: on_change(v)
+            if submitted:
+                if on_submit:
+                    on_submit(v)
+                elif on_change:
+                    on_change(v)
+            elif on_change:
+                on_change(v)
         
         # Web Awesome form controls emit native input/change events.
         input_event = 'input' if live_update else 'change'
@@ -1335,10 +1360,68 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
+            submit_on_enter_js = "true" if submit_on_enter else "false"
             
             if self.mode == 'lite':
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="{input_event}" hx-swap="none" name="value"'
-                listener_script = ""
+                listener_script = f'''
+                <script>
+                (function() {{
+                    const el = document.getElementById('{cid}');
+                    if (!el) return;
+                    const shouldSkipEcho = function() {{
+                        if (!Object.prototype.hasOwnProperty.call(el, '_vlSkipNextInputEventValue')) return false;
+                        const skipValue = el._vlSkipNextInputEventValue;
+                        delete el._vlSkipNextInputEventValue;
+                        return el.value === skipValue;
+                    }};
+
+                    if (!el.hasAttribute('data-vl-echo-guard')) {{
+                        el.setAttribute('data-vl-echo-guard', 'true');
+                        el.addEventListener('{input_event}', function(event) {{
+                            if (!shouldSkipEcho()) return;
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }}, true);
+                    }}
+
+                    const bindSubmitOnEnter = function(attempts) {{
+                        if (!{submit_on_enter_js}) return;
+                        const inner = el.shadowRoot ? el.shadowRoot.querySelector('input, textarea') : null;
+                        const target = inner || (attempts >= 10 ? el : null);
+                        if (!target) {{
+                            setTimeout(function() {{ bindSubmitOnEnter(attempts + 1); }}, 80);
+                            return;
+                        }}
+                        if (target.hasAttribute('data-vl-submit-listener')) return;
+                        target.setAttribute('data-vl-submit-listener', 'true');
+                        const allowFocusedUpdateTree = function() {{
+                            if (!window._vlAllowNextFocusedUpdate) return;
+                            let current = el;
+                            while (current) {{
+                                if (current.id) {{
+                                    window._vlAllowNextFocusedUpdate(current.id);
+                                }}
+                                current = current.parentElement;
+                            }}
+                        }};
+                        target.addEventListener('keydown', function(event) {{
+                            if (event.key !== 'Enter') return;
+                            event.preventDefault();
+                            el._vlSkipNextInputEventValue = el.value;
+                            allowFocusedUpdateTree();
+                            const payload = JSON.stringify({{ eventType: 'submit', value: el.value }});
+                            htmx.ajax('POST', '/action/{cid}', {{
+                                values: {{ value: payload }},
+                                swap: 'none'
+                            }});
+                        }});
+                    }};
+
+                    bindSubmitOnEnter(0);
+                }})();
+                </script>
+                '''
             else:
                 # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
@@ -1346,12 +1429,51 @@ class InputWidgetsMixin:
                 <script>
                 (function() {{
                     const el = document.getElementById('{cid}');
+                    const shouldSkipEcho = function() {{
+                        if (!el || !Object.prototype.hasOwnProperty.call(el, '_vlSkipNextInputEventValue')) return false;
+                        const skipValue = el._vlSkipNextInputEventValue;
+                        delete el._vlSkipNextInputEventValue;
+                        return el.value === skipValue;
+                    }};
+
                     if (el && !el.hasAttribute('data-ws-listener')) {{
                         el.setAttribute('data-ws-listener', 'true');
                         el.addEventListener('{input_event}', function(e) {{
+                            if (shouldSkipEcho()) return;
                             window.sendAction('{cid}', el.value);
                         }});
                     }}
+
+                    const bindSubmitOnEnter = function(attempts) {{
+                        if (!el || !{submit_on_enter_js}) return;
+                        const inner = el.shadowRoot ? el.shadowRoot.querySelector('input, textarea') : null;
+                        const target = inner || (attempts >= 10 ? el : null);
+                        if (!target) {{
+                            setTimeout(function() {{ bindSubmitOnEnter(attempts + 1); }}, 80);
+                            return;
+                        }}
+                        if (target.hasAttribute('data-vl-submit-listener')) return;
+                        target.setAttribute('data-vl-submit-listener', 'true');
+                        const allowFocusedUpdateTree = function() {{
+                            if (!window._vlAllowNextFocusedUpdate) return;
+                            let current = el;
+                            while (current) {{
+                                if (current.id) {{
+                                    window._vlAllowNextFocusedUpdate(current.id);
+                                }}
+                                current = current.parentElement;
+                            }}
+                        }};
+                        target.addEventListener('keydown', function(event) {{
+                            if (event.key !== 'Enter') return;
+                            event.preventDefault();
+                            el._vlSkipNextInputEventValue = el.value;
+                            allowFocusedUpdateTree();
+                            window.sendAction('{cid}', {{ eventType: 'submit', value: el.value }});
+                        }});
+                    }};
+
+                    bindSubmitOnEnter(0);
                 }})();
                 </script>
                 '''

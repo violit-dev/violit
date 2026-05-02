@@ -1177,8 +1177,18 @@
             };
             
             // Define sendAction IMMEDIATELY (before WebSocket connection)
+            window._vlAllowFocusedUpdates = window._vlAllowFocusedUpdates || {};
+            window._vlAllowNextFocusedUpdate = (cid) => {
+                if (!cid) return;
+                window._vlAllowFocusedUpdates[cid] = true;
+            };
+
             window.sendAction = (cid, val) => {
                 debugLog(`[sendAction] Called with cid=${cid}, val=${val}`);
+
+                if (val && typeof val === 'object' && val.eventType === 'submit') {
+                    window._vlAllowNextFocusedUpdate(cid);
+                }
 
                 if (cid.startsWith('nav_menu')) {
                     if (window._pendingPageKey === val || window._currentPageKey === val) {
@@ -1629,10 +1639,11 @@
                         const applyUpdates = (payload) => {
                             payload.forEach(item => {
                                 const el = document.getElementById(item.id);
+                                const allowFocusedUpdate = !!(window._vlAllowFocusedUpdates && window._vlAllowFocusedUpdates[item.id]);
                             
                                 // Focus Guard: Skip update if element is focused input to prevent interrupting typing
                                 // BUT allow page navigation updates to proceed.
-                                if (!isNavigation && el && document.activeElement && el.contains(document.activeElement)) {
+                                if (!isNavigation && !allowFocusedUpdate && el && document.activeElement && el.contains(document.activeElement)) {
                                      const tag = document.activeElement.tagName.toLowerCase();
                                      const isInput = tag === 'input' || tag === 'textarea' || tag.startsWith('wa-input') || tag.startsWith('wa-textarea') || tag.startsWith('wa-slider');
                                      
@@ -1640,6 +1651,10 @@
                                      if (isInput) {
                                          return;
                                      }
+                                }
+
+                                if (allowFocusedUpdate && window._vlAllowFocusedUpdates) {
+                                    delete window._vlAllowFocusedUpdates[item.id];
                                 }
 
                                 if(el) {
