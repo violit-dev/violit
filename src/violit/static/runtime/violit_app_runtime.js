@@ -200,6 +200,7 @@
             const nextPlot = temp.querySelector('.js-plotly-plot');
 
             if (!nextWrapper || !currentPlot || !nextPlot) return false;
+            if (currentPlot.parentElement !== el || nextPlot.parentElement !== nextWrapper) return false;
             if (currentPlot.id !== nextPlot.id) return false;
             if (nextPlot.hasAttribute('data-vl-deferred-chart')) return false;
 
