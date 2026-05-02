@@ -125,6 +125,8 @@
                 console.log(...args);
             }
         };
+        window._vlLastHiddenAt = document.visibilityState === 'hidden' ? Date.now() : 0;
+        window._vlResumeCheckTimers = [];
         
         // Attach per-view metadata to HTMX requests in lite mode.
         if (mode === 'lite' && (window._csrf_token || window._vlViewId)) {
@@ -1388,6 +1390,64 @@
                 }
             };
 
+            window._vlClearResumeCheckTimers = () => {
+                if (!Array.isArray(window._vlResumeCheckTimers) || window._vlResumeCheckTimers.length === 0) {
+                    return;
+                }
+                window._vlResumeCheckTimers.forEach((timerId) => clearTimeout(timerId));
+                window._vlResumeCheckTimers = [];
+            };
+
+            window._vlScheduleResumeChecks = (reason = 'resume') => {
+                window._vlClearResumeCheckTimers();
+
+                [1000, 4000].forEach((delayMs) => {
+                    const timerId = setTimeout(() => {
+                        if (document.visibilityState !== 'visible' || window._intentionalDisconnect) {
+                            return;
+                        }
+
+                        const socketOpen = !!(window._ws && window._ws.readyState === WebSocket.OPEN);
+                        const ackAgeMs = window._vlSocketAckAgeMs();
+                        if (!socketOpen || !window._wsReady || ackAgeMs > 45000) {
+                            debugLog(`[WebSocket] Running follow-up resume probe (${reason}, ${delayMs}ms).`);
+                            window._vlProbeWsAfterResume();
+                        }
+                    }, delayMs);
+                    window._vlResumeCheckTimers.push(timerId);
+                });
+            };
+
+            window._vlHandleResume = (reason = 'resume') => {
+                if (mode !== 'ws' || window._intentionalDisconnect) {
+                    return;
+                }
+
+                const hiddenDurationMs = window._vlLastHiddenAt > 0 ? Date.now() - window._vlLastHiddenAt : 0;
+                window._vlLastHiddenAt = 0;
+
+                const socketOpen = !!(window._ws && window._ws.readyState === WebSocket.OPEN);
+                const socketConnecting = !!(window._ws && window._ws.readyState === WebSocket.CONNECTING);
+                const ackAgeMs = window._vlSocketAckAgeMs();
+
+                if (hiddenDurationMs > 60000 && !socketConnecting && (!window._wsReady || ackAgeMs > 45000)) {
+                    debugLog(`[WebSocket] Page resumed after ${hiddenDurationMs}ms hidden; forcing soft reconnect (${reason}).`);
+                    window._vlReconnectWebSocket(`${reason}:long-hidden`);
+                    window._vlScheduleResumeChecks(`${reason}:post-reconnect`);
+                    return;
+                }
+
+                if (socketOpen && window._wsReady) {
+                    // Even after a shorter hidden interval, mobile browsers can keep the
+                    // WebSocket looking OPEN while having already dropped the transport.
+                    // Always verify liveness on resume instead of relying on the long-hidden threshold.
+                    window._vlSendHeartbeat('resume');
+                } else {
+                    window._vlProbeWsAfterResume();
+                }
+                window._vlScheduleResumeChecks(reason);
+            };
+
             window._vlFinalizeWsReady = () => {
                 if (window._wsReady) {
                     return;
@@ -1753,6 +1813,7 @@
                     clearTimeout(window._vlHeartbeatReplyTimer);
                     window._vlHeartbeatReplyTimer = null;
                 }
+                window._vlClearResumeCheckTimers();
                 window._wsReady = false;
                 window._vlWsHelloReceived = false;
                 window._vlDisposeSocket(window._ws);
@@ -2068,10 +2129,15 @@
             window.addEventListener('hashchange', handleBrowserHistoryNavigation);
             window.addEventListener('popstate', handleBrowserHistoryNavigation);
             document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    window._vlLastHiddenAt = Date.now();
+                    return;
+                }
                 if (document.visibilityState === 'visible') {
-                    window._vlProbeWsAfterResume();
+                    window._vlHandleResume('visibilitychange');
                 }
             });
-            window.addEventListener('focus', window._vlProbeWsAfterResume);
-            window.addEventListener('online', window._vlProbeWsAfterResume);
+            window.addEventListener('focus', () => window._vlHandleResume('focus'));
+            window.addEventListener('online', () => window._vlHandleResume('online'));
+            window.addEventListener('pageshow', () => window._vlHandleResume('pageshow'));
         }
