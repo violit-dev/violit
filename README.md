@@ -40,7 +40,7 @@ Violit is designed for developers who love the immediate productivity of Streaml
 - **Built-in ORM** ready to use with `vl.App(db=...)`.
 - **Tailwind-like styling** via the `cls` parameter.
 - **Async friendly** with built-in `app.background(...)` and `app.interval(...)`.
-- **Flexible Runtimes**: Runs in the Browser, HTMX Lite mode, and as Desktop Native apps.
+- **Flexible Runtimes**: Runs in the Browser, HTMX Lite mode for higher concurrency, and as Desktop Native apps.
 - **Rich ecosystem**: Out-of-the-box support for powerful widgets, themes, and animations.
 
 ## Architectural Difference
@@ -269,7 +269,6 @@ Violit is evolving rapidly. The core reactive foundation is solid, and several f
 - ⏳ **Violit.Cloud**: One-click cloud deployment service
 - ⏳ **Expansion**: Deeper integration with third-party libraries
 
-
 ## Installation
 
 Getting started is as simple as installing the package. The Violit CLI is automatically included.
@@ -286,6 +285,8 @@ Violit ships with a powerful CLI. The recommended way to run your apps is via `v
 
 `violit run` forwards the same runtime flags that `app.run()` accepts. If a command works with `python app.py ...`, the same flags work with `violit run app.py ...`.
 
+`--lite` runs the app in HTMX-based HTTP mode instead of the default WebSocket runtime. This is often the better choice when you want to handle more concurrent users or deploy in environments where WebSockets are limited.
+
 ```bash
 python app.py --reload --localhost
 violit run app.py --reload --localhost
@@ -294,7 +295,7 @@ violit run app.py --help       # Show runtime flags accepted by app.run()
 violit run app.py --reload     # Auto-reload on code changes
 violit run app.py --localhost  # Bind to 127.0.0.1 and print localhost URL
 violit run app.py --native     # Launch as a Desktop App
-violit run app.py --lite       # Run in HTMX lite mode
+violit run app.py --lite       # Run in HTMX-based lite mode for higher concurrency
 violit run app.py --port 8020
 violit run app.py --make-migration "add_users"
 ```

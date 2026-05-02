@@ -18,16 +18,26 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 
 - Always create `app = vl.App(...)` before using widgets.
 - Always end runnable examples with `app.run()`.
+- Prefer showing run commands as `violit run app.py ...`; `python app.py ...` still works, but the CLI is now the recommended default.
 - Prefer `app.state()` over ad-hoc globals or `session_state`-style dict code.
 - Pass `State` objects directly to widgets when you want reactivity.
+- Input `on_change` callbacks receive the new decoded value directly, not a `State` object.
 - Use `lambda:` when formatting `state.value` inside strings.
 - For complex reactive blocks, prefer `@app.reactivity`.
 - Do not generate `@app.fragment`; `fragment` is deprecated.
 - After defining a `@app.reactivity` function, call it once to register/render it.
 - Buttons do not return booleans. Use `on_click=`.
+- Use `app.text_input(..., type="password")` for password fields; do not invent `app.password_input(...)`.
+- For grouped submit UIs, prefer `with app.form(...):` + `app.form_submit_button(...)`.
+- For navigation from callbacks, prefer `app.switch_page(...)`.
+- For downloads and links, prefer `app.download_button(...)`, `app.link_button(...)`, and `app.page_link(...)` over hand-written HTML.
+- For public examples that need API keys, never hardcode secrets. Prefer `app.text_input(..., type="password")` or environment loading only if the user explicitly asks for it.
+- For LLM chat apps, prefer `app.chat_messages(...)` + `app.chat_input(messages=..., on_submit=...)` over inventing a custom chat stack.
+- For custom chat transcript layout, prefer `app.chat_thread(...)` + `with app.chat_message(...):` over raw HTML string assembly.
 - For database apps, prefer `vl.App(db="./app.db")` and `app.db` CRUD.
 - For auth, prefer `app.setup_auth(User)` instead of inventing a custom login stack.
 - For styling, start with `cls`. Use `style`, `configure_widget()`, `add_css()`, and `part_cls` only as needed.
+- For runtime theming and UX toggles, prefer `app.set_theme(...)`, `app.set_animation_mode(...)`, `app.set_primary_color(...)`, and `app.set_selection_mode(...)`.
 - For long-running work, prefer `app.background(...)`.
 - For polling and live tickers, prefer `app.interval(...)`.
 
@@ -41,6 +51,13 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 - Do not use `@app.reactivity` when a direct `State` pass, `lambda:`, `app.If()`, or `app.For()` already solves the problem more simply.
 - Do not treat styling as UnoCSS-first or invent framework-specific CSS DSLs.
 - Do not assume ORM and auth require external integration first; Violit already has built-in paths.
+- Do not generate `app.password_input(...)`; use `app.text_input(..., type="password")`.
+- Do not assume `on_change` receives a `State`; it receives the current decoded value.
+- Do not hand-roll `<a download>` or custom JS download snippets when `app.download_button(...)` already solves it.
+- Do not hand-roll modal HTML when `@app.dialog(...)` fits the task.
+- Do not hardcode API keys or other secrets into examples intended for GitHub or docs.
+- Do not put `app.chat_input(...)` inside a reactive block when its props are static.
+- Do not manually append both user and assistant messages when using the built-in `chat_input(messages=..., on_submit=...)` flow; return the assistant reply instead.
 
 ---
 
@@ -72,17 +89,21 @@ app = vl.App(
     title="My App",             # Browser/window title
     theme="ocean",              # Theme preset (dark, light, ocean, cyberpunk, etc.)
     container_width="800px",    # Content max-width ("none" for full-width)
-    mode="ws",                  # "ws" (WebSocket, default) or "lite" (HTMX)
+    mode="ws",                  # "ws" (WebSocket, default) or "lite" (HTMX; often better for higher concurrency)
 )
 ```
 
-**Running:**
+**Running (recommended):**
 ```bash
-python app.py                # Web mode (default)
-python app.py --native       # Desktop app mode (pywebview)
-python app.py --port 8020    # Custom port
-python app.py --reload       # Hot reload on file change
+violit run app.py                             # Web mode (default)
+violit run app.py --reload --localhost        # Hot reload on localhost
+violit run app.py --lite --localhost          # HTMX-based Lite mode; often better for higher concurrency
+violit run app.py --native                    # Desktop app mode (pywebview)
+violit run app.py --host 0.0.0.0 --port 8020 # LAN/server bind
+violit run app.py --help                      # Show runtime flags
 ```
+
+`python app.py [args]` still works, but `violit run ...` is the preferred default for generated docs and examples.
 
 ---
 
@@ -226,6 +247,48 @@ file     = app.file_uploader("Upload", accept=".csv,.txt", multiple=False)
 
 All return `State` objects. Access current value via `.value`.
 
+### Important Input Details
+
+```python
+query = app.text_input(
+    "Search",
+    placeholder="Type and press Enter",
+    on_change=lambda value: app.debug_print(value),
+    on_submit=lambda value: app.toast(f"Searching: {value}"),
+    submit_on_enter=True,
+    help="Press Enter to submit",
+)
+
+secret = app.text_input("Password", type="password")
+priority = app.select_slider("Priority", options=["Low", "Medium", "High"])
+files = app.file_uploader("Upload files", multiple=True, accept=".csv,.txt")
+```
+
+- `on_change` callbacks receive the new value directly.
+- `text_input(...)` supports `on_submit`, `submit_on_enter`, `type="password"`, `label_visibility`, and `help`.
+- `slider(..., live_update=True)` updates continuously while dragging.
+- `select_slider(...)` is for discrete options, not numeric ranges.
+- `file_uploader(...)` returns `UploadedFile` objects with `.name`, `.type`, `.size`, and `.read()` support.
+
+### Forms, Links, and File Actions
+
+```python
+with app.form("login", clear_on_submit=False, enter_to_submit=True):
+    username = app.text_input("Username")
+    password = app.text_input("Password", type="password")
+    app.form_submit_button("Sign in", on_click=do_login)
+
+app.download_button("Export CSV", data=csv_text, file_name="report.csv", mime="text/csv")
+app.link_button("Open Docs", "https://doc.violit.cloud")
+app.page_link("Settings", label="Go to Settings")
+app.button("Back Home", on_click=lambda: app.switch_page("Home"))
+```
+
+- Use `app.form(...)` for grouped submit flows.
+- Use `app.form_submit_button(...)` inside the form instead of a plain button when you want form submission semantics.
+- `app.switch_page(...)` accepts a `Page` object, page function, page title, url path slug, or hash string.
+- Use `download_button`, `link_button`, and `page_link` before inventing custom HTML anchors.
+
 ---
 
 ## 4. Button — on_click Pattern (NOT if-block)
@@ -320,28 +383,93 @@ app.success("Saved!")
 app.info("FYI")
 app.warning("Caution")
 app.error("Failed")
-app.toast("Done!", variant="success")        # Pop-up notification
+app.toast("Done!", variant="success", icon="circle-check")
 app.spinner("Loading...")
 app.progress(75)                             # Progress bar (0-100)
 app.balloons()
 app.snow()
+
+app.callout("Use `app.text()` for escaped output.", variant="info")
+app.callout_warning("This action cannot be undone.")
+app.callout_success("Deployment finished.")
 ```
+
+`app.callout(...)` and the shortcut helpers (`callout_info`, `callout_warning`, `callout_success`, etc.) are the preferred way to generate admonition-style documentation UI.
 
 ---
 
 ## 8. Chat Interface
 
 ```python
-# Chat input with callback
-def on_chat(msg):
-    messages = chat_history.value.copy()
-    messages.append({"role": "user", "content": msg})
-    messages.append({"role": "assistant", "content": "Reply here"})
-    chat_history.set(messages)
+from typing import Any, cast
 
-chat_history = app.state([])
-app.chat_input("Type a message...", on_submit=on_chat)
+messages = app.state([
+    {"role": "assistant", "content": "Hello. Ask anything."}
+], key="chat_messages")
+api_key = app.state("", key="chat_api_key")
+mode = app.state("streaming", key="chat_mode")
+reactivity = cast(Any, app.reactivity)
+
+def _reply_non_streaming():
+    return "Assistant reply"
+
+def _reply_streaming():
+    def stream():
+        yield "Assistant "
+        yield "reply"
+    return stream()
+
+def reply(_prompt: str):
+    key = api_key.value.strip()
+    if not key:
+        raise RuntimeError("Paste your API key above.")
+
+    if mode.value == "streaming":
+        return _reply_streaming()
+    return _reply_non_streaming()
+
+app.text_input("API_KEY", value=api_key.value, key="chat_api_key", type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="chat_mode")
+
+@reactivity
+def render_chat():
+    app.chat_messages(messages, height="60vh")
+
+render_chat()
+app.chat_input(
+    "Type a message...",
+    messages=messages,
+    on_submit=reply,
+    pinned=False,
+    auto_scroll="bottom",
+    stream_speed="smooth",
+)
 ```
+
+**Preferred chat rules:**
+- Use `messages = app.state([...])` and pass it to both `app.chat_messages(...)` and `app.chat_input(...)`.
+- Let `app.chat_input(messages=..., on_submit=...)` manage the conversation flow.
+- `on_submit` can return either a `str` (non-streaming) or a generator yielding `str` chunks (streaming).
+- Keep `app.chat_messages(...)` inside `@app.reactivity` when you want only the message list to rerender.
+- Keep `app.chat_input(...)` outside the reactive block when its props are static.
+- For provider-specific demos, splitting `Gemini` and `OpenAI` into separate files is often clearer than one large branching file.
+
+**When to use manual chat rendering instead:**
+- Only build a custom `app.write(...)` / `app.container(...)` chat UI when the user explicitly wants a fully custom transcript layout.
+- Otherwise, prefer the built-in chat widgets.
+
+**Custom transcript widgets:**
+
+```python
+with app.chat_thread(height="60vh"):
+    with app.chat_message("assistant"):
+        app.markdown("Hello. Ask anything.")
+
+    with app.chat_message("user"):
+        app.markdown("Show me the latest report.")
+```
+
+Use `chat_thread()` and `chat_message()` when you want custom message composition but still want Violit's built-in chat styling.
 
 ---
 
@@ -370,6 +498,9 @@ app.navigation([
     vl.Page(settings, title="Settings", icon="gear"),
 ])
 
+app.button("Go Home", on_click=lambda: app.switch_page("Home"))
+app.page_link("Settings", label="Open Settings")
+
 app.run()
 ```
 
@@ -383,6 +514,9 @@ app = vl.App(theme="cyberpunk")
 
 # Change at runtime
 app.set_theme("ocean")
+app.set_animation_mode("hard")
+app.set_selection_mode(True)
+app.set_primary_color("#2563eb")
 
 # Available themes:
 # dark, light, ocean, sunset, forest, dracula, monokai, nord,
@@ -450,23 +584,28 @@ def work():
 task = app.background(
     work,
     on_complete=lambda: app.toast("Finished", variant="success"),
+    on_error=lambda exc: app.toast(f"Error: {exc}", variant="danger"),
     singleton=True,
 )
 
 timer = app.interval(
     lambda: app.toast("tick", duration=800),
     ms=5000,
+    condition=lambda: status.value == "running",
     autostart=False,
 )
 
 app.button("Start job", on_click=task.start)
 app.button("Pause timer", on_click=timer.pause)
+app.button("Resume timer", on_click=timer.resume)
 app.progress(progress)
 ```
 
 **When to use which:**
 - `app.background(...)`: long-running Python work
 - `app.interval(...)`: periodic callbacks, polling, dashboards, timers
+- `app.background(...)` supports `on_complete`, `on_error`, `singleton`, and returns a handle with `start()` / `cancel()` / `is_running`.
+- `app.interval(...)` supports `condition=...`, `autostart=...`, and returns a handle with `pause()` / `resume()` / `stop()`.
 
 ---
 
@@ -480,6 +619,8 @@ def confirm_dialog():
 
 app.button("Open Dialog", on_click=confirm_dialog)
 ```
+
+Use `@app.dialog(...)` when you need a modal. Prefer it over hand-written modal HTML.
 
 ---
 
@@ -536,6 +677,18 @@ app.text(f"Count: {count.value}")
 # ✅ CORRECT: Use lambda or operator
 app.text(lambda: f"Count: {count.value}")
 app.text("Count: " + count)
+
+# ❌ WRONG: Inventing a widget that does not exist
+app.password_input("Password")
+
+# ✅ CORRECT:
+app.text_input("Password", type="password")
+
+# ❌ WRONG: Assuming on_change gets a State object
+app.text_input("Search", on_change=lambda s: print(s.value))
+
+# ✅ CORRECT:
+app.text_input("Search", on_change=lambda value: print(value))
 
 # ❌ WRONG: Reassigning state variable
 count = count.value + 1
@@ -595,20 +748,27 @@ app.run()
 |----------|-----------|--------|------|
 | Import | `import streamlit as st` | `import violit as vl` | |
 | App init | (implicit) | `app = vl.App(...)` | Required |
-| Run | `streamlit run app.py` | `python app.py` + `app.run()` | |
+| Run | `streamlit run app.py` | `violit run app.py` + `app.run()` | `python app.py` still works, but CLI is preferred |
 | State | `st.session_state.x = 0` | `x = app.state(0)` | Returns reactive State |
 | Read state | `st.session_state.x` | `x.value` or `x()` | |
 | Write state | `st.session_state.x = 5` | `x.set(5)` or `x.value = 5` | |
 | Button | `if st.button("X"):` | `app.button("X", on_click=fn)` | Callback, not if-block |
 | Input return | `val = st.text_input()` (str) | `val = app.text_input()` (State) | |
+| Form | `with st.form(...): ...` | `with app.form(...): ...` | Submit with `app.form_submit_button()` |
+| Download | `st.download_button(...)` | `app.download_button(...)` | Built-in browser/native download flow |
+| Programmatic nav | `st.switch_page(...)` | `app.switch_page(...)` | Page object, function, title, slug, or hash |
+| Link widgets | Markdown / HTML links | `app.link_button(...)`, `app.page_link(...)` | Prefer helper widgets |
 | Rerun | `st.rerun()` | Not needed | Auto partial update |
 | Cache | `@st.cache_data` | Not needed | No full rerun |
 | Reactive block | `@st.fragment` | `@app.reactivity` | `@app.fragment` is deprecated; call the decorated function once |
 | Key | `st.button("X", key="k")` | Usually not needed | Auto-generated |
 | Sidebar | `st.sidebar.xxx()` | `with app.sidebar: app.xxx()` | Context manager |
 | Pages | `st.Page` in `st.navigation` | `vl.Page` in `app.navigation` | |
+| Dialog | `@st.dialog` | `@app.dialog("Title")` | Decorator-based modal |
+| Callout | `st.info/success/warning/error` | `app.callout(...)` + shortcuts | Rich admonition boxes |
 | Theme | `config.toml` | `app = vl.App(theme="ocean")` | 30+ presets |
-| Desktop | Not available | `python app.py --native` | pywebview |
+| Lite mode | Not available | `violit run app.py --lite` | HTMX-based; often better for higher concurrency |
+| Desktop | Not available | `violit run app.py --native` | pywebview |
 | Database | External ORM | `app = vl.App(db="./app.db")` | SQLModel built-in |
 | Auth | External lib | `app.setup_auth(User)` | Session + bcrypt built-in |
 
@@ -655,9 +815,9 @@ app = vl.App(db="./app.db", migrate=False)       # disabled: manage DB yourself
 
 **File-based migration CLI** (when `migrate="files"`):
 ```bash
-python main.py --make-migration "add priority column"  # generate Alembic file
-python main.py --apply                                  # apply pending migrations
-python main.py --rollback 1                            # roll back N steps
+violit run main.py --make-migration "add priority column"  # generate Alembic file
+violit run main.py --apply                                 # apply pending migrations
+violit run main.py --rollback 1                            # roll back N steps
 ```
 
 ### CRUD API (`app.db`)
@@ -855,7 +1015,7 @@ def login_page():
 
     with app.form("login"):
         app.text_input("Username", value=username)
-        app.password_input("Password", value=password)
+        app.text_input("Password", value=password, type="password")
 
         def do_login():
             if app.auth.login(username.value, password.value):
@@ -906,29 +1066,48 @@ app.run()
 Violit provides a built-in CLI to manage your projects seamlessly, much like streamlit run or create-next-app.
 
 ### violit create
-Scaffolds a new Violit project with the recommended boilerplate (main.py, 
-equirements.txt, .gitignore, README.md).
+Scaffolds a new Violit project with the recommended boilerplate (`main.py`, `requirements.txt`, `.gitignore`, `README.md`).
 ```bash
 violit create my-app
 cd my-app
 ```
 
 ### violit run
-Executes your Violit application. It passes any trailing arguments directly to App.run().
+Executes your Violit application. It passes any trailing arguments directly to `app.run()`.
 ```bash
 # Basic run
 violit run main.py
 
-# Hot reload (development)
-violit run main.py --reload
+# Local development (recommended)
+violit run main.py --reload --localhost
+
+# HTMX-based Lite mode (often better for higher concurrency)
+violit run main.py --lite --localhost
 
 # Native desktop mode
 violit run main.py --native
+violit run main.py --native --debug
+violit run main.py --native --on-top
+violit run main.py --native --nosplash
+
+# Custom bind / port
+violit run main.py --host 0.0.0.0 --port 8010
 
 # Database migrations (Alembic)
 violit run main.py --make-migration "add_users"
 violit run main.py --apply
 violit run main.py --rollback 1
+
+# Show supported runtime flags
+violit run main.py --help
 ```
 
-*Note: You can still run python main.py [args]. violit run is simply a convenient, standard wrapper.*
+**CLI rules of thumb:**
+- Prefer `violit run ...` in docs, examples, and generated instructions.
+- Use `--localhost` for local-only development.
+- Use `--host 0.0.0.0` only when you intentionally want LAN or server access.
+- Use `--lite` when you want HTMX-based HTTP updates instead of the default WebSocket runtime.
+- Use `--native`, `--debug`, `--on-top`, and `--nosplash` for desktop app flows.
+- Migration flags require a database app and are most useful with `migrate="files"`.
+
+*Note: You can still run `python main.py [args]`. `violit run` is simply the recommended wrapper and forwards the same runtime flags.*
