@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from fastapi import Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from starlette.websockets import WebSocketState
 
 from .app_assets import get_vendor_resources
 from .app_shell import build_html_response, build_shell_html, build_user_css
@@ -19,6 +20,17 @@ from .state import STATIC_STORE, get_session_store, touch_runtime_stores
 
 
 VIEW_RESTORE_COOKIE = "_vl_reload_view"
+
+
+def _is_expected_websocket_runtime_disconnect(ws: WebSocket, error: RuntimeError) -> bool:
+    if ws.client_state == WebSocketState.DISCONNECTED or ws.application_state == WebSocketState.DISCONNECTED:
+        return True
+
+    message = str(error)
+    return (
+        "WebSocket is not connected" in message
+        or "disconnect message has been received" in message
+    )
 
 
 class AppRuntimeMixin:
@@ -613,17 +625,28 @@ class AppRuntimeMixin:
                 finally:
                     self._reset_runtime_context(msg_session_token, msg_view_token)
 
+            disconnect_reason: Optional[str] = None
             try:
                 while True:
-                    data = await ws.receive_json()
+                    try:
+                        data = await ws.receive_json()
+                    except WebSocketDisconnect:
+                        disconnect_reason = "disconnect"
+                        break
+                    except RuntimeError as error:
+                        if _is_expected_websocket_runtime_disconnect(ws, error):
+                            disconnect_reason = "runtime-disconnect"
+                            break
+                        raise
+
                     if data.get("type") == "ping":
                         touch_runtime_stores(sid, current_view_id)
                         await ws.send_json({"type": "pong"})
                         continue
                     await process_message(data)
-            except WebSocketDisconnect:
+            finally:
                 if sid:
                     self.ws_engine.unregister_socket(sid, current_view_id, ws)
-                    self.debug_print(f"[WEBSOCKET] Disconnected: {sid[:8]}...")
-            finally:
+                    if disconnect_reason is not None:
+                        self.debug_print(f"[WEBSOCKET] Disconnected ({disconnect_reason}): {sid[:8]}...")
                 self._reset_runtime_context(session_token, view_token)
