@@ -44,11 +44,6 @@ There is no database setup and no API key needed.
 ### 1. Mode detection and app setup
 
 ```python
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_ROOT = PROJECT_ROOT / "src"
-if SRC_ROOT.exists():
-    sys.path.insert(0, str(SRC_ROOT))
-
 mode = "lite" if "--lite" in sys.argv else "ws"
 
 app = vl.App(
@@ -59,7 +54,7 @@ app = vl.App(
 )
 ```
 
-The example chooses `ws` by default, switches to `lite` when you pass `--lite`, and makes sure the local repository version of Violit is imported during development.
+The example chooses `ws` by default and switches to `lite` when you pass `--lite`.
 
 ### 2. Shared state
 
@@ -158,13 +153,3 @@ If you only want a quick feel for the updated showcase, start here:
 - `Chat` for the built-in chat widget flow with pseudo replies
 - `Widgets` for Tailwind-friendly button styling, helper widgets, and dialog usage
 - `Reactive Logic` for clear examples of partial UI updates without full reruns
-
-## Notes
-
-- The `Chat` page is safe for GitHub and docs because it does not require any secret or external API.
-- The `Widgets` page includes a tiny Tailwind-friendly preview and `cls`-based buttons to show how styling can stay in Python.
-- The `Settings` page changes theme, primary color, animation mode, and text selection behavior at runtime.
-- The `Home` page uses only in-app markup and stateful controls for the hero area.
-- This example is meant to feel wide and attractive rather than minimal.
-
-If you want the smallest examples, check the other folders in `examples/`.
