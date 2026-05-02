@@ -627,7 +627,7 @@ class ChatWidgetsMixin:
                 spacer_html = ""
             
             html = f'''
-            <div class="chat-input-container" style="
+            <div class="chat-input-container" data-chat-pinned="{'true' if effective_pinned else 'false'}" style="
                 {container_style}
             ">
                 <div data-chat-input-root="{cid}" style="

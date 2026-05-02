@@ -122,10 +122,10 @@ HTML_TEMPLATE = r"""
             transition: margin-left 0.3s ease, padding 0.3s ease;
         }
         #main.sidebar-collapsed { margin-left: 0; }
-        /* Chat input container positioning - respects sidebar */
-        .chat-input-container { left: var(--vl-sidebar-width) !important; transition: left 0.3s ease; }
-        #sidebar.collapsed ~ #main .chat-input-container,
-        #main.sidebar-collapsed .chat-input-container { left: 0 !important; }
+        /* Chat input container positioning - pinned composers respect sidebar */
+        .chat-input-container[data-chat-pinned="true"] { left: var(--vl-sidebar-width) !important; transition: left 0.3s ease; }
+        #sidebar.collapsed ~ #main .chat-input-container[data-chat-pinned="true"],
+        #main.sidebar-collapsed .chat-input-container[data-chat-pinned="true"] { left: 0 !important; }
         
         #header { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; padding: 1rem 0; display: flex; align-items: center; }
         #app { width: 100%; max-width: %CONTAINER_MAX_WIDTH%; display: flex; flex-direction: column; gap: 1.5rem; }
