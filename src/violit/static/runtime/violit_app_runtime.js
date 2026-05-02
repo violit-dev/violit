@@ -158,6 +158,14 @@
             const temp = document.createElement('div');
             temp.innerHTML = payload;
             const roots = Array.from(temp.children);
+            const canAppendLiteRoot = (root) => {
+                if (!(root instanceof Element)) return false;
+                const rootId = root.id || '';
+                if (!rootId) return false;
+                if (rootId.includes('dialog')) return true;
+                if (rootId === 'toast-injector' || rootId === 'effects-injector') return true;
+                return false;
+            };
 
             roots.forEach((incomingRoot) => {
                 if (!(incomingRoot instanceof Element)) return;
@@ -195,6 +203,9 @@
                 }
 
                 if (!updatedRoot) {
+                    if (!canAppendLiteRoot(incomingRoot)) {
+                        return;
+                    }
                     document.body.appendChild(incomingRoot);
                     updatedRoot = incomingRoot;
                 }
