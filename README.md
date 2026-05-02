@@ -284,11 +284,19 @@ pip install git+https://github.com/violit-dev/violit.git
 
 Violit ships with a powerful CLI. The recommended way to run your apps is via `violit run`.
 
+`violit run` forwards the same runtime flags that `app.run()` accepts. If a command works with `python app.py ...`, the same flags work with `violit run app.py ...`.
+
 ```bash
-violit run app.py
-violit run app.py --reload    # Auto-reload on code changes
-violit run app.py --native    # Launch as a Desktop App
+python app.py --reload --localhost
+violit run app.py --reload --localhost
+
+violit run app.py --help       # Show runtime flags accepted by app.run()
+violit run app.py --reload     # Auto-reload on code changes
+violit run app.py --localhost  # Bind to 127.0.0.1 and print localhost URL
+violit run app.py --native     # Launch as a Desktop App
+violit run app.py --lite       # Run in HTMX lite mode
 violit run app.py --port 8020
+violit run app.py --make-migration "add_users"
 ```
 
 You can also scaffold a new project instantly:

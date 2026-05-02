@@ -129,14 +129,51 @@ def create_project(args):
 def main():
     parser = argparse.ArgumentParser(
         prog="violit",
-        description="Violit CLI - Pure Python Web Framework"
+        description="Violit CLI - Pure Python Web Framework",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""\
+            Examples:
+              violit create my_app
+              violit run app.py
+              violit run app.py --reload --localhost
+              violit run app.py --help
+        """)
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # 1. violit run <script> [args...]
-    run_parser = subparsers.add_parser("run", help="Run a violit script")
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run a Violit script",
+        description=textwrap.dedent("""\
+            Run a Violit script.
+
+            Any arguments after the script path are passed directly to app.run().
+            That means the same runtime flags work in both styles:
+
+              python app.py --reload --localhost
+              violit run app.py --reload --localhost
+        """),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""\
+            Common examples:
+              violit run app.py
+              violit run app.py --reload
+              violit run app.py --reload --localhost
+              violit run app.py --port 8010
+              violit run app.py --native
+              violit run app.py --lite
+              violit run app.py --make-migration "add_users"
+              violit run app.py --help
+        """)
+    )
     run_parser.add_argument("script", help="Path to the python script (e.g. main.py)")
-    run_parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments to pass to the script")
+    run_parser.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        metavar="APP_ARGS",
+        help="Arguments passed directly to app.run() (for example: --reload --localhost --port 8010)"
+    )
     
     # 2. violit create <project_name>
     create_parser = subparsers.add_parser("create", help="Create a new violit project")
