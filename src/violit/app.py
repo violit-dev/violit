@@ -83,17 +83,18 @@ class App(
 
         # ── Initialize Auth ────────────────────────────────────────────────
         self.auth = None
-        self.fastapi = FastAPI()
-        self.fastapi.add_middleware(GZipMiddleware, minimum_size=1000)
-        
-        # Background preload: import heavy libraries after server starts
-        # so they're cached in sys.modules before any widget needs them
-        @self.fastapi.on_event("startup")
-        async def _preload_heavy_libs():
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
             def _do():
                 import pandas  # noqa: F401
                 import plotly.graph_objects  # noqa: F401
             threading.Thread(target=_do, daemon=True).start()
+            yield
+
+        self.fastapi = FastAPI(lifespan=lifespan)
+        self.fastapi.add_middleware(GZipMiddleware, minimum_size=1000)
         
         # Mount static files for offline support
         static_path = Path(__file__).parent / "static"

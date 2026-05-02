@@ -14,6 +14,44 @@ from .app_support import FileWatcher, print_terminal_splash
 
 
 class AppLauncherMixin:
+    @staticmethod
+    def _normalize_host_arg(args):
+        if getattr(args, "localhost", False) or args.host == "localhost":
+            args.host = "127.0.0.1"
+
+    @staticmethod
+    def _get_web_launch_urls(host, port):
+        local_url = f"http://localhost:{port}"
+
+        if host in ("127.0.0.1", "localhost"):
+            return local_url, None
+
+        if host == "0.0.0.0":
+            import socket
+
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.connect(("8.8.8.8", 80))
+                    local_ip = sock.getsockname()[0]
+            except Exception:
+                local_ip = None
+
+            return local_url, f"http://{local_ip}:{port}" if local_ip else None
+
+        return local_url, f"http://{host}:{port}"
+
+    def _print_web_launch_urls(self, host, port, reload_tag=""):
+        local_url, network_url = self._get_web_launch_urls(host, port)
+
+        print("")
+        print("  You can now view your Violit app in your browser.")
+        print("")
+        print(f"  Local URL:   {local_url}{reload_tag}")
+        if network_url:
+            label = "Network URL:" if host == "0.0.0.0" else "Server URL:"
+            print(f"  {label} {network_url}{reload_tag}")
+        print("")
+
     def _run_web_reload(self, args):
         """Run with hot reload in web mode using uvicorn's native reload"""
         self.debug_print(f"[HOT RELOAD] Starting with uvicorn native reload...")
@@ -139,11 +177,11 @@ class AppLauncherMixin:
             logging.getLogger("uvicorn.error").addFilter(_SuppressUvicornRunningFilter())
 
             try:
-                print(f"INFO:     Violit web app running on http://localhost:{args.port} (hot reload)")
-                print(f"INFO:     (listening on all interfaces: 0.0.0.0:{args.port})")
+                self._print_web_launch_urls(args.host, args.port, " (hot reload)")
+
                 uvicorn.run(
                     uvicorn_target,
-                    host="0.0.0.0",
+                    host=args.host,
                     port=args.port,
                     ws_ping_interval=None,
                     ws_ping_timeout=None,
@@ -298,6 +336,8 @@ class AppLauncherMixin:
         parser.add_argument("--debug", action="store_true", help="Enable developer tools (native mode)")
         parser.add_argument("--on-top", action="store_true", help="Keep window always on top (native mode)")
         parser.add_argument("--port", type=int, default=8000)
+        parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address to bind to (e.g. 0.0.0.0, 127.0.0.1)")
+        parser.add_argument("--localhost", action="store_true", help="Bind to 127.0.0.1 and show localhost URLs")
         parser.add_argument("--make-migration", metavar="MSG", default=None,
                             help="Generate Alembic migration file and exit (requires migrate='files' mode)")
         parser.add_argument("--apply", action="store_true",
@@ -307,6 +347,7 @@ class AppLauncherMixin:
         args, _ = parser.parse_known_args()
         if port is not None:
             args.port = port
+        self._normalize_host_arg(args)
 
         if self.db is not None:
             if args.make_migration is not None:
@@ -451,24 +492,24 @@ class AppLauncherMixin:
                 print(f"INFO:     Violit desktop app running on port {args.port} (hot reload)")
             uvicorn.run(
                 self.fastapi,
-                host="0.0.0.0",
+                host=args.host,
                 port=args.port,
                 ws_ping_interval=None,
                 ws_ping_timeout=None,
             )
         else:
-            @self.fastapi.on_event("startup")
-            async def _on_web_startup():
-                class _SuppressUvicornRunningFilter(logging.Filter):
-                    def filter(self, record):
-                        return 'Uvicorn running on' not in record.getMessage()
-                logging.getLogger("uvicorn.error").addFilter(_SuppressUvicornRunningFilter())
+            class _SuppressUvicornRunningFilter(logging.Filter):
+                def filter(self, record):
+                    return 'Uvicorn running on' not in record.getMessage()
 
-                reload_tag = " (hot reload)" if args.reload else ""
-                print(f"INFO:     Violit web app running on http://localhost:{args.port}{reload_tag}")
+            logging.getLogger("uvicorn.error").addFilter(_SuppressUvicornRunningFilter())
+
+            reload_tag = " (hot reload)" if args.reload else ""
+            self._print_web_launch_urls(args.host, args.port, reload_tag)
+
             uvicorn.run(
                 self.fastapi,
-                host="0.0.0.0",
+                host=args.host,
                 port=args.port,
                 ws_ping_interval=None,
                 ws_ping_timeout=None,

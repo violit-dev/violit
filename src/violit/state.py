@@ -157,6 +157,10 @@ class Subscription:
 
 
 class State:
+    name: str
+    default_value: Any
+    _subscribers: list
+
     def __init__(self, name: str, default_value: Any):
         object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'default_value', default_value)
