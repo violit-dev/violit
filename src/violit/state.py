@@ -34,11 +34,11 @@ class DependencyTracker:
 # Persistent store for static components (created during app initialization)
 STATIC_STORE = {}
 
-# TTL-cached store for per-view runtime state (expires after 1800s of inactivity)
-VIEW_STORE = TTLCache(maxsize=4000, ttl=1800)
+# TTL-cached store for per-view runtime state (expires after 6 hours [21600s] to survive mobile/PC long suspensions)
+VIEW_STORE = TTLCache(maxsize=4000, ttl=21600)
 
-# TTL-cached store for per-browser-session state (expires after 1800s of inactivity)
-SESSION_STORE = TTLCache(maxsize=1000, ttl=1800)
+# TTL-cached store for per-browser-session state (expires after 6 hours [21600s] to survive mobile/PC long suspensions)
+SESSION_STORE = TTLCache(maxsize=1000, ttl=21600)
 
 
 def _initial_theme_name() -> str:

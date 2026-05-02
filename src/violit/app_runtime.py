@@ -537,8 +537,17 @@ class AppRuntimeMixin:
                 self._main_loop = asyncio.get_event_loop()
 
             session_token, view_token = self._set_runtime_context(sid, current_view_id)
+            
+            from violit.state import VIEW_STORE
+            is_view_alive = (sid, current_view_id) in VIEW_STORE
+            
             self.ws_engine.register_socket(sid, current_view_id, ws)
-            await ws.send_json({"type": "hello", "bootId": self.boot_id, "viewId": current_view_id})
+            await ws.send_json({
+                "type": "hello", 
+                "bootId": self.boot_id, 
+                "viewId": current_view_id,
+                "viewAlive": is_view_alive
+            })
 
             async def process_message(data):
                 msg_type = data.get('type')

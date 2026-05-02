@@ -1596,6 +1596,13 @@
                     window._vlMarkSocketAck();
                     if (msg.type === 'hello') {
                         window._vlServerBootId = msg.bootId || null;
+
+                        if (msg.hasOwnProperty('viewAlive') && msg.viewAlive === false) {
+                            debugLog(`[WebSocket] Server forgot our session/view (TTL expired). Hard reloading into new session...`);
+                            window._vlHardReload();
+                            return;
+                        }
+
                         if (typeof msg.viewId === 'string' && msg.viewId) {
                             window._vlViewId = msg.viewId;
                             writeStoredViewId(msg.viewId);
