@@ -1,19 +1,9 @@
 import os
 import re
 import sqlite3
-import sys
 from datetime import date, datetime
 
 import pandas as pd
-
-
-sys.path.insert(
-    0,
-    os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "src",
-    )
-)
 
 from violit import App
 
@@ -402,6 +392,5 @@ def main() -> None:
         app.caption("No edits yet.")
 
 
-if __name__ == "__main__":
-    main()
-    app.run()
+main()
+app.run()

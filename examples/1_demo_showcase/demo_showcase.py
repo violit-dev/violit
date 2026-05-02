@@ -276,12 +276,11 @@ with app.sidebar:
 
 app.navigation([
     vl.Page(home_page, title="Home", icon="house"),
-    vl.Page(dashboard_page, title="Dashboard", icon="graph-up"),
-    vl.Page(reactive_page, title="Reactive Logic", icon="lightning"),
-    vl.Page(components_page, title="Components", icon="puzzle"),
-    vl.Page(chat_page, title="Chat", icon="chat"),
+    vl.Page(dashboard_page, title="Dashboard", icon="chart-line"),
+    vl.Page(reactive_page, title="Reactive Logic", icon="bolt"),
+    vl.Page(components_page, title="Components", icon="puzzle-piece"),
+    vl.Page(chat_page, title="Chat", icon="comments"),
     vl.Page(settings_page, title="Settings", icon="gear")
 ])
 
-if __name__ == "__main__":
-    app.run()
+app.run()
