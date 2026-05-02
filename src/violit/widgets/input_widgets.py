@@ -804,11 +804,7 @@ class InputWidgetsMixin:
             min_height_rem = max(4.75, 1.35 * effective_rows + 1.2)
             existing_inner_style = local_props.pop("style", "")
             if explicit_height_px is not None:
-                textarea_style = merge_style(
-                    existing_inner_style,
-                    f"min-height: {explicit_height_px}px;",
-                    f"height: {explicit_height_px}px;",
-                )
+                textarea_style = merge_style(existing_inner_style, f"--wa-form-control-height: {explicit_height_px}px;")
             elif height_mode == "stretch":
                 textarea_style = merge_style(existing_inner_style, f"min-height: {min_pixel_height}px;", "height: 100%;")
             else:
