@@ -27,7 +27,6 @@ from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
 from .state import State, get_session_store, STATIC_STORE, VIEW_STORE, SESSION_STORE
-from .broadcast import Broadcaster
 from .background import BackgroundTask
 import asyncio
 
@@ -375,9 +374,7 @@ class App(
         # Styling System: configure_widget defaults + user CSS
         self._widget_defaults: Dict[str, Dict[str, Any]] = {}
         self._user_css: List[str] = []
-        
-        # Broadcasting System
-        self.broadcaster = Broadcaster(self)
+
         self._fragment_count = 0 # Used for  App.reactivity (with or decorator)
         
         # Interval System (app.interval API)
@@ -1668,49 +1665,5 @@ class App(
         
         return page_runner
 
-    # --- Routes ---
-    # Broadcasting Methods (WebSocket-based real-time sync)
-    def broadcast_eval(self, js_code: str, exclude_current: bool = False):
-        self.broadcaster.eval_all(js_code, exclude_current=exclude_current)
-    
-    def broadcast_reload(self, exclude_current: bool = False):
-        self.broadcaster.reload_all(exclude_current=exclude_current)
-    
-    def broadcast_dom_update(self, container_id: str, html: str,
-                            position: str = 'prepend', animate: bool = True,
-                            exclude_current: bool = False):
-        self.broadcaster.broadcast_dom_update(
-            container_id, html, position, animate, exclude_current
-        )
-    
-    def broadcast_event(self, event_name: str, data: dict,
-                       exclude_current: bool = False):
-        self.broadcaster.broadcast_event(event_name, data, exclude_current)
-    
-    def broadcast_dom_remove(self, selector: str = None,
-                            element_id: str = None,
-                            data_attribute: tuple = None,
-                            animate: bool = True,
-                            animation_type: str = 'fade-right',
-                            duration: int = 500,
-                            exclude_current: bool = False):
-        """Remove DOM element from all clients with animation
-        
-        Example:
-            # Remove by ID 
-            app.broadcast_dom_remove(element_id='my-element')
-            
-            # Remove by CSS selector
-             app.broadcast_dom_remove(selector='.old-posts')
-        """
-        self.broadcaster.broadcast_dom_remove(
-            selector=selector,
-            element_id=element_id,
-            data_attribute=data_attribute,
-            animate=animate,
-            animation_type=animation_type,
-            duration=duration,
-            exclude_current=exclude_current
-        )
 
 
