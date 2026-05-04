@@ -30,7 +30,15 @@ pip install violit
 This demo illustrates the kind of interaction Violit was built for: Python-first UI code with reactive updates that remain snappy and smooth, even as the interface grows more complex.
 
 <p align="center">
-    <video src="https://github.com/user-attachments/assets/d2e9297b-bfd6-4eb6-abff-10601bc3e735" controls loop muted playsinline width="100%">
+    <video 
+        src="https://github.com/user-attachments/assets/d2e9297b-bfd6-4eb6-abff-10601bc3e735" 
+        poster="https://via.placeholder.com/800x450?text=Violit+Loading..."
+        controls 
+        loop 
+        muted 
+        autoplay
+        playsinline 
+        style="max-width: 100%; height: auto;">
         <a href="https://github.com/user-attachments/assets/d2e9297b-bfd6-4eb6-abff-10601bc3e735">Watch the Violit showcase demo</a>
     </video>
 </p>
