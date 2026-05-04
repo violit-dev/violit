@@ -489,6 +489,7 @@ class AppRuntimeMixin:
             session_token, view_token = self._set_runtime_context(sid, current_view_id)
             try:
                 value = form.get("value")
+                force_lite_stream_dirty = form.get("_vl_lite_stream_dirty") == "true"
                 store = get_session_store()
                 if value is not None:
                     store.setdefault('submitted_values', {})[cid] = value
@@ -522,6 +523,23 @@ class AppRuntimeMixin:
                             builder = store['builders'].get(cid) or self.static_builders.get(cid)
                             if builder:
                                 clicked_component = builder()
+
+                        if force_lite_stream_dirty and self.lite_engine:
+                            key = (sid, current_view_id)
+                            with self._lite_stream_lock:
+                                has_lite_stream = key in self._lite_stream_queues
+
+                            if has_lite_stream:
+                                stream_components = list(other_dirty)
+                                if clicked_component is not None:
+                                    stream_components.insert(0, clicked_component)
+                                payload = self._build_lite_oob_payload(stream_components)
+                                if payload:
+                                    self._enqueue_lite_stream_payload(sid, payload, view_id=current_view_id)
+                                pending_views = set(pending_shared_views_ctx.get() or set())
+                                if pending_views:
+                                    self._schedule_scoped_state_flush(pending_views, exclude_current=True)
+                                return HTMLResponse("")
 
                         response_html = clicked_component.render() if clicked_component else ""
                         response_html += self._build_lite_oob_payload(other_dirty)

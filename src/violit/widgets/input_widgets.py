@@ -1408,7 +1408,7 @@ class InputWidgetsMixin:
                             allowFocusedUpdateTree();
                             const payload = JSON.stringify({{ eventType: 'submit', value: el.value }});
                             htmx.ajax('POST', '/action/{cid}', {{
-                                values: {{ value: payload }},
+                                values: {{ value: payload, _vl_lite_stream_dirty: 'true' }},
                                 swap: 'none'
                             }});
                         }});
