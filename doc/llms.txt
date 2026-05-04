@@ -10,7 +10,7 @@
 
 ```
 Streamlit: st.xxx()        → Violit: app.xxx()
-st.session_state            → app.state()
+st.session_state            → app.state() / app.session_state()
 Full script rerun on change → Only affected widgets update (Zero Rerun)
 ```
 
@@ -20,13 +20,16 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 - Always end runnable examples with `app.run()`.
 - Prefer showing run commands as `violit run app.py ...`; `python app.py ...` still works, but the CLI is now the recommended default.
 - Prefer `app.state()` over ad-hoc globals or `session_state`-style dict code.
+- Remember that `app.state()` is view-local by default. Use `session_state`, `app_state`, and `shared_state` when wider sharing is intentional.
 - Pass `State` objects directly to widgets when you want reactivity.
 - Input `on_change` callbacks receive the new decoded value directly, not a `State` object.
 - Use `lambda:` when formatting `state.value` inside strings.
 - For complex reactive blocks, prefer `@app.reactivity`.
+- For reactive list or conditional rendering driven by changing state, prefer `app.For(...)` and `app.If(...)` before writing manual Python loops around `state.value`.
 - Do not generate `@app.fragment`; `fragment` is deprecated.
 - After defining a `@app.reactivity` function, call it once to register/render it.
 - Buttons do not return booleans. Use `on_click=`.
+- `State.subscribe(...)` and `@state.on_change` are for side effects such as logging or persistence, not for normal UI refreshes.
 - Use `app.text_input(..., type="password")` for password fields; do not invent `app.password_input(...)`.
 - For grouped submit UIs, prefer `with app.form(...):` + `app.form_submit_button(...)`.
 - For navigation from callbacks, prefer `app.switch_page(...)`.
@@ -125,12 +128,23 @@ app.button("Click", on_click=lambda: count.set(count.value + 1))
 app.write(count)  # Auto-updates when count changes
 ```
 
+`app.state()` is the default, view-local state. Violit also supports wider scopes when you need sharing beyond the current browser view.
+
 ### State API
 
 ```python
 # Create
-count = app.state(0)                    # Auto key (file_line)
-name = app.state("", key="user_name")   # Explicit key
+count = app.state(0)                       # Default: current view only
+name = app.state("", key="user_name")    # Explicit key
+
+# Recommended explicit wrappers for wider sharing
+theme = app.session_state("light", key="theme")
+online = app.app_state(0, key="online_users")
+messages = app.shared_state([], key="messages", namespace="room:lobby")
+
+# Raw low-level form (same engine underneath)
+draft = app.state("", key="draft", scope="view")
+room = app.state([], key="messages", scope="shared", namespace="room:lobby")
 
 # Read
 count.value    # → 0
@@ -143,6 +157,26 @@ count.value = 5    # Also works
 # ⚠️ NEVER reassign the variable
 count = 5  # ❌ WRONG — State object is lost!
 ```
+
+### State Scopes
+
+```python
+draft = app.state("", key="draft")
+theme = app.session_state("light", key="theme")
+online_count = app.app_state(0, key="online_count")
+room_messages = app.shared_state([], key="messages", namespace="room:lobby")
+```
+
+- `app.state(...)` / `app.view_state(...)`: current browser view only. Best for page-local UI state.
+- `app.session_state(...)`: shared across tabs in the same browser session.
+- `app.app_state(...)`: shared across all users in the current Violit process.
+- `app.shared_state(..., namespace=...)`: shared across all users connected to the same named room / board / workspace.
+
+Important scope notes:
+
+- `app_state()` and `shared_state()` are process-local memory. They do not automatically sync across multiple workers or servers.
+- `shared_state()` is a collaboration primitive, not an auth boundary. Your app still decides who may enter or write a namespace.
+- App/shared values have a size safety limit, and inactive shared namespaces are cleaned up automatically.
 
 ### Passing State to Widgets (Reactivity)
 
@@ -167,6 +201,21 @@ app.text(f"Count: {count.value}")          # Just passes string "Count: 0"
 - Pass `state.value` to widgets → frozen (not reactive)
 - Use `lambda:` when you need f-string formatting or complex logic
 - Use `.value` only in callbacks/calculations, not in widget arguments
+
+### Reactive Lists and Conditional Blocks
+
+When the number of rendered widgets changes with state, do not rely on a top-level Python `for` loop over `state.value`.
+Use `app.For(...)`, `app.If(...)`, or `@app.reactivity` so Violit can rerender that block correctly.
+
+```python
+messages = app.shared_state([], key="messages", namespace="room:lobby")
+
+app.For(
+    lambda: messages.value,
+    render=lambda item, index: app.text(f"{index + 1}. {item}"),
+    empty=lambda: app.caption("No messages yet."),
+)
+```
 
 ### Complex Reactivity: `@app.reactivity`
 
@@ -207,6 +256,30 @@ def old_block():
 ```
 
 Do not generate that pattern in new Violit code.
+
+### State Side Effects
+
+State already updates dependent widgets automatically. Use subscriptions only when you need side effects outside normal rendering.
+
+```python
+count = app.state(0)
+
+def log_change(new_value, old_value):
+    print(f"count changed: {old_value} -> {new_value}")
+
+subscription = count.subscribe(log_change)
+
+@count.on_change
+def _(new_value):
+    print("new count:", new_value)
+
+# Later, if needed
+subscription.cancel()
+```
+
+- `subscribe(callback)` supports `callback(new_value)` or `callback(new_value, old_value)`.
+- `@state.on_change` is decorator sugar for `subscribe(...)`.
+- Prefer subscriptions for logging, persistence, analytics, or background coordination, not for normal UI redraws.
 
 ---
 
