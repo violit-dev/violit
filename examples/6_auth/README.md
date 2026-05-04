@@ -85,18 +85,15 @@ current_user = app.auth.current_user()
 
 The page switches its UI based on whether `current_user` exists.
 
-### 6. Reactive refresh
+### 6. Reactive auth
 
 ```python
-auth_tick = app.state(0, key="auth_example_tick")
-
 @reactivity
 def render_auth_example() -> None:
-    auth_tick.value
     current_user = app.auth.current_user()
 ```
 
-The example uses a small refresh state so the screen updates right after sign up, login, and logout.
+`app.auth.current_user()` now participates in render-time dependency tracking, so the screen updates right after sign up, login, and logout without a manual helper state.
 
 ## Why This Example Is Small
 

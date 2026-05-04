@@ -475,7 +475,12 @@ class ChatWidgetsMixin:
         store = get_session_store()
         callback_args = tuple(args or ())
         callback_kwargs = dict(kwargs or {})
-        effective_pinned = (layout_ctx.get() == "main") if pinned is None else bool(pinned)
+        if pinned is None:
+            # Treat chat_input like a regular widget when it is nested inside
+            # a layout fragment (columns, containers, tabs, forms, etc.).
+            effective_pinned = layout_ctx.get() == "main" and fragment_ctx.get() is None
+        else:
+            effective_pinned = bool(pinned)
         # Register action handler in session store (not static_actions)
         # This ensures each session has its own handler
         def handler(val):

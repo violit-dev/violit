@@ -37,6 +37,7 @@ T = TypeVar("T")
 
 # Session store key used to persist user_id inside violit's internal session
 _AUTH_USER_ID_KEY = "auth_user_id"
+_AUTH_REACTIVE_DEPENDENCY_NAME = "__violit_auth__"
 
 
 def _check_bcrypt():
@@ -132,6 +133,34 @@ class ViolItAuth:
         else:
             store[_AUTH_USER_ID_KEY] = user_id
 
+    def _register_render_dependency(self) -> None:
+        from .context import page_ctx, rendering_ctx, session_ctx, view_ctx
+        from .state import get_browser_session_state_store
+
+        component_id = rendering_ctx.get() or page_ctx.get()
+        session_id = session_ctx.get()
+        current_view_id = view_ctx.get()
+        if not component_id or not session_id or not current_view_id:
+            return
+
+        tracker = get_browser_session_state_store().get("tracker")
+        if tracker is None:
+            return
+        tracker.register_dependency(_AUTH_REACTIVE_DEPENDENCY_NAME, session_id, current_view_id, component_id)
+
+    def _notify_auth_changed(self) -> None:
+        from .context import action_ctx, pending_shared_views_ctx
+        from .state import STATE_SCOPE_SESSION, mark_scoped_views_dirty
+
+        affected_views = mark_scoped_views_dirty(STATE_SCOPE_SESSION, _AUTH_REACTIVE_DEPENDENCY_NAME)
+        pending_views = pending_shared_views_ctx.get()
+        if pending_views is not None:
+            pending_views.update(affected_views)
+            return
+
+        if affected_views:
+            self._app._schedule_scoped_state_flush(affected_views, exclude_current=action_ctx.get(False))
+
     # ─────────────────────────────────────────────────────────────────────
     # Internal: page navigation
     # ─────────────────────────────────────────────────────────────────────
@@ -192,6 +221,7 @@ class ViolItAuth:
             return False
 
         self._set_user_id(user.id)
+        self._notify_auth_changed()
         logger.info(f"[violit.auth] Login successful: {username}")
         return True
 
@@ -206,6 +236,7 @@ class ViolItAuth:
         uid = self._get_user_id()
         self._set_user_id(None)
         if uid is not None:
+            self._notify_auth_changed()
             logger.info("[violit.auth] Logged out")
 
     def current_user(self) -> Optional[T]:
@@ -218,6 +249,7 @@ class ViolItAuth:
             if user:
                 app.text(f"Hello, {user.username}!")
         """
+        self._register_render_dependency()
         user_id = self._get_user_id()
         if user_id is None:
             return None
@@ -234,6 +266,7 @@ class ViolItAuth:
             if app.auth.is_authenticated():
                 app.text("You are logged in")
         """
+        self._register_render_dependency()
         return self._get_user_id() is not None
 
     def has_role(self, role: str) -> bool:

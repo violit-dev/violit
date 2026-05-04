@@ -25,14 +25,9 @@ app = vl.App(
 )
 app.setup_auth(User)
 
-auth_tick = app.state(0, key="auth_example_tick")
-
-
-def refresh_auth_ui() -> None:
-    auth_tick.set(auth_tick.value + 1)
-
-
 reactivity = cast(Any, app.reactivity)
+auth = cast(Any, app.auth)
+db = cast(Any, app.db)
 
 
 app.html(
@@ -50,9 +45,8 @@ app.html(
 
 @reactivity
 def render_auth_example() -> None:
-    auth_tick.value
-    current_user = app.auth.current_user()
-    total_users = app.db.count(User)
+    current_user = auth.current_user()
+    total_users = db.count(User)
 
     app.caption(f"Database: {DB_PATH.name} | users: {total_users}")
 
@@ -65,8 +59,7 @@ def render_auth_example() -> None:
             app.text("This box is the protected part of the page. It only appears after login.")
 
             def do_logout() -> None:
-                app.auth.logout()
-                refresh_auth_ui()
+                auth.logout()
                 app.toast("Logged out.", variant="success")
 
             app.button("Logout", on_click=do_logout, variant="neutral")
@@ -101,14 +94,13 @@ def render_auth_example() -> None:
                 if not username or not password:
                     app.toast("Enter a username and password.", variant="danger")
                     return
-                if app.db.exists(User, User.username == username):
+                if db.exists(User, User.username == username):
                     app.toast("That username already exists.", variant="danger")
                     return
-                app.auth.create_user(username, password)
-                app.auth.login(username, password)
+                auth.create_user(username, password)
+                auth.login(username, password)
                 signup_username.set("")
                 signup_password.set("")
-                refresh_auth_ui()
                 app.toast("Account created. You are now logged in.", variant="success")
 
             app.button("Create Account", on_click=do_signup)
@@ -131,10 +123,9 @@ def render_auth_example() -> None:
                 if not username or not password:
                     app.toast("Enter a username and password.", variant="danger")
                     return
-                if app.auth.login(username, password):
+                if auth.login(username, password):
                     login_username.set("")
                     login_password.set("")
-                    refresh_auth_ui()
                     app.toast("Login successful.", variant="success")
                 else:
                     app.toast("Invalid username or password.", variant="danger")
