@@ -496,22 +496,60 @@ class App(
         """Get default cls/style/part_cls for a widget type (internal helper)."""
         return self._widget_defaults.get(widget_type, {})
 
+    def _resolve_state_name(self, key=None, *, stack_depth: int = 1) -> str:
+        if key is not None:
+            return key
+
+        frame = inspect.currentframe()
+        try:
+            caller_frame = frame
+            for _ in range(stack_depth):
+                if caller_frame is None:
+                    break
+                caller_frame = caller_frame.f_back
+
+            if caller_frame is None:
+                self.state_count += 1
+                return f"state_{self.state_count}"
+
+            filename = os.path.basename(caller_frame.f_code.co_filename)
+            lineno = caller_frame.f_lineno
+            return f"state_{filename}_{lineno}"
+        finally:
+            del frame
+
     def state(self, default_value, key=None, *, scope: str = 'view', namespace: str | None = None) -> State:
-        """Create a reactive state variable"""
-        if key is None:
-            # Streamlit-style: Generate stable key from caller's location
-            frame = inspect.currentframe()
-            try:
-                caller_frame = frame.f_back
-                filename = os.path.basename(caller_frame.f_code.co_filename)
-                lineno = caller_frame.f_lineno
-                # Create stable key: filename_linenumber
-                name = f"state_{filename}_{lineno}"
-            finally:
-                del frame  # Avoid reference cycles
-        else:
-            name = key
+        """Create a reactive state variable.
+
+        Defaults to view-local state. Prefer the dedicated helpers for wider scopes:
+        ``session_state()``, ``app_state()``, and ``shared_state()``.
+        """
+        name = self._resolve_state_name(key, stack_depth=1)
         return State(name, default_value, scope=scope, namespace=namespace)
+
+    def view_state(self, default_value, key=None) -> State:
+        """Create view-local state explicitly.
+
+        This is an alias for ``state(...)`` and exists for symmetry with the
+        wider-scope helpers.
+        """
+        name = self._resolve_state_name(key, stack_depth=2)
+        return State(name, default_value, scope='view', namespace=None)
+
+    def session_state(self, default_value, key=None) -> State:
+        """Create browser-session state shared across tabs in one session."""
+        name = self._resolve_state_name(key, stack_depth=2)
+        return State(name, default_value, scope='session', namespace=None)
+
+    def app_state(self, default_value, key=None) -> State:
+        """Create process-local app-wide state shared across all users."""
+        name = self._resolve_state_name(key, stack_depth=2)
+        return State(name, default_value, scope='app', namespace=None)
+
+    def shared_state(self, default_value, key=None, *, namespace: str) -> State:
+        """Create namespace-scoped shared state for rooms, boards, and similar spaces."""
+        name = self._resolve_state_name(key, stack_depth=2)
+        return State(name, default_value, scope='shared', namespace=namespace)
 
     def _get_next_cid(self, prefix: str) -> str:
         """Generate next component ID
