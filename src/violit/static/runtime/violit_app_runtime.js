@@ -125,6 +125,115 @@
                 console.log(...args);
             }
         };
+
+        function getTextLikeHost(root) {
+            if (!(root instanceof Element)) return null;
+            const tag = root.tagName ? root.tagName.toLowerCase() : '';
+            if (tag === 'wa-input' || tag === 'wa-textarea') {
+                return root;
+            }
+            return root.querySelector('wa-input, wa-textarea');
+        }
+
+        function syncElementAttributes(target, source) {
+            if (!target || !source) return;
+            const preserve = new Set(['id', 'data-ws-listener', 'data-vl-echo-guard']);
+            const sourceAttrs = new Map(Array.from(source.attributes).map((attr) => [attr.name, attr.value]));
+
+            Array.from(target.attributes).forEach((attr) => {
+                if (preserve.has(attr.name)) return;
+                if (!sourceAttrs.has(attr.name)) {
+                    target.removeAttribute(attr.name);
+                }
+            });
+
+            sourceAttrs.forEach((value, name) => {
+                if (name === 'id') return;
+                target.setAttribute(name, value);
+            });
+        }
+
+        function trySmartUpdateTextLikeWidget(currentRoot, incomingMarkupOrRoot) {
+            const currentHost = getTextLikeHost(currentRoot);
+            if (!currentHost) return false;
+
+            let nextHost = null;
+            if (typeof incomingMarkupOrRoot === 'string') {
+                const temp = document.createElement('div');
+                temp.innerHTML = incomingMarkupOrRoot;
+                nextHost = getTextLikeHost(temp);
+            } else {
+                nextHost = getTextLikeHost(incomingMarkupOrRoot);
+            }
+
+            if (!nextHost) return false;
+
+            const currentTag = currentHost.tagName ? currentHost.tagName.toLowerCase() : '';
+            const nextTag = nextHost.tagName ? nextHost.tagName.toLowerCase() : '';
+            if (!currentTag || currentTag !== nextTag) return false;
+
+            const currentInner = currentHost.shadowRoot
+                ? currentHost.shadowRoot.querySelector('input, textarea')
+                : null;
+            const shadowActive = currentHost.shadowRoot ? currentHost.shadowRoot.activeElement : null;
+            const focusSnapshot = {
+                isFocused: document.activeElement === currentHost || !!shadowActive || (document.activeElement && currentHost.contains(document.activeElement)),
+                selectionStart: currentInner && typeof currentInner.selectionStart === 'number' ? currentInner.selectionStart : null,
+                selectionEnd: currentInner && typeof currentInner.selectionEnd === 'number' ? currentInner.selectionEnd : null,
+                selectionDirection: currentInner && typeof currentInner.selectionDirection === 'string' ? currentInner.selectionDirection : 'none',
+            };
+
+            syncElementAttributes(currentHost, nextHost);
+
+            const nextValue = nextHost.getAttribute('value') ?? (typeof nextHost.value === 'string' ? nextHost.value : '');
+            currentHost.value = nextValue;
+            currentHost.setAttribute('value', nextValue);
+
+            const restoreFocus = (attempt = 0) => {
+                const liveInner = currentHost.shadowRoot
+                    ? currentHost.shadowRoot.querySelector('input, textarea')
+                    : null;
+                const focusTarget = liveInner || currentHost;
+
+                if (!liveInner && currentTag.startsWith('wa-') && attempt < 8) {
+                    setTimeout(() => restoreFocus(attempt + 1), 40);
+                    return;
+                }
+
+                if (liveInner && typeof liveInner.value === 'string' && liveInner.value !== nextValue) {
+                    liveInner.value = nextValue;
+                }
+
+                if (focusSnapshot.isFocused && typeof focusTarget.focus === 'function') {
+                    focusTarget.focus({ preventScroll: true });
+                }
+
+                if (
+                    focusSnapshot.isFocused
+                    && liveInner
+                    && typeof liveInner.setSelectionRange === 'function'
+                    && focusSnapshot.selectionStart !== null
+                    && focusSnapshot.selectionEnd !== null
+                ) {
+                    const valueLength = typeof liveInner.value === 'string' ? liveInner.value.length : 0;
+                    const start = Math.min(focusSnapshot.selectionStart, valueLength);
+                    const end = Math.min(focusSnapshot.selectionEnd, valueLength);
+                    liveInner.setSelectionRange(start, end, focusSnapshot.selectionDirection || 'none');
+                }
+            };
+
+            if (currentHost.hasAttribute('data-vl-part-cls') && currentHost.shadowRoot && window.applyPartStyles) {
+                requestAnimationFrame(() => window.applyPartStyles(currentHost));
+            }
+
+            if (focusSnapshot.isFocused) {
+                requestAnimationFrame(() => restoreFocus());
+            } else {
+                restoreFocus();
+            }
+
+            return true;
+        }
         window._vlLastHiddenAt = document.visibilityState === 'hidden' ? Date.now() : 0;
         window._vlResumeCheckTimers = [];
         
@@ -178,7 +287,7 @@
                 if (targetId) {
                     const currentRoot = document.getElementById(targetId);
                     if (currentRoot) {
-                        let smartUpdated = false;
+                        let smartUpdated = trySmartUpdateTextLikeWidget(currentRoot, incomingRoot);
                         if (targetId.endsWith('_wrapper') && currentRoot.querySelector('.js-plotly-plot')) {
                             smartUpdated = trySmartUpdatePlotlyWrapper(currentRoot, incomingRoot.outerHTML);
                         }
@@ -1799,6 +1908,10 @@
                                                 smartUpdated = true;
                                             }
                                         }
+                                    }
+
+                                    if (!smartUpdated && (widgetType === 'input' || widgetType === 'textarea')) {
+                                        smartUpdated = trySmartUpdateTextLikeWidget(el, item.html);
                                     }
                                     
                                     // Slider: Update value property only (preserve drag interaction)

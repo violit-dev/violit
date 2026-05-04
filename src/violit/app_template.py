@@ -521,7 +521,7 @@ HTML_TEMPLATE = r"""
             viewRestoreToken: "%VIEW_RESTORE_TOKEN%"
         };
     </script>
-    <script src="/static/runtime/violit_app_runtime.js"></script>
+    <script src="/static/runtime/violit_app_runtime.js?v=%RUNTIME_ASSET_VERSION%"></script>
 </body>
 </html>
 """

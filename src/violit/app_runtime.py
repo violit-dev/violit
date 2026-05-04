@@ -410,6 +410,7 @@ class AppRuntimeMixin:
                 disconnect_timeout=self.disconnect_timeout,
                 view_id=current_view_id or "",
                 view_restore_token=view_restore_token,
+                runtime_asset_version=self.boot_id,
             )
             return build_html_response(html)
 
