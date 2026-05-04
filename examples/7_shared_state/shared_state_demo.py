@@ -37,7 +37,6 @@ message = app.text_input(
     key="quick_demo_message",
     placeholder="Type a short message",
     on_submit=lambda value: post_message(name.value, value),
-    submit_on_enter=True,
 )
 
 app.button(

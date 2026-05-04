@@ -69,11 +69,10 @@ That is enough to create and use the SQLite database.
 new_title = app.text_input(
     "New todo",
     on_submit=add_todo,
-    submit_on_enter=True,
 )
 ```
 
-This lets the example work with both Enter and the button.
+With `on_submit` present, Enter submits automatically, so the example works with both Enter and the button.
 
 ### 4. Database actions
 

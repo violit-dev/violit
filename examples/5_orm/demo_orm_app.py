@@ -64,7 +64,6 @@ with app.container(border=True):
         key="orm_example_title",
         placeholder="Write one short task",
         on_submit=add_todo,
-        submit_on_enter=True,
     )
     controls = app.columns(3)
 

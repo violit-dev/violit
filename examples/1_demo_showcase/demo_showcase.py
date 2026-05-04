@@ -368,7 +368,6 @@ def widgets_page():
         title = app.text_input(
             "Launch title",
             value="Violit Studio",
-            submit_on_enter=True,
             on_submit=lambda value: app.toast(f"Saved: {value}", variant="success"),
         )
         mood = app.select_slider(

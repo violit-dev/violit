@@ -64,7 +64,7 @@ class InputWidgetsMixin:
         return '', ''  # "visible"
 
     def text_input(self, label, value="", key=None, on_change=None,
-                   on_submit=None, submit_on_enter=False,
+                   on_submit=None,
                    type="default", max_chars=None, placeholder="",
                    autocomplete=None, disabled=False,
                    label_visibility="visible", help=None,
@@ -78,7 +78,6 @@ class InputWidgetsMixin:
             autocomplete: HTML autocomplete attribute
             disabled: If True, widget is grayed out
             on_submit: Callback when Enter submits the current value
-            submit_on_enter: If True, pressing Enter triggers on_submit
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text shown below the input
         """
@@ -91,7 +90,7 @@ class InputWidgetsMixin:
         if disabled: extra["disabled"] = True
         if help: extra["hint"] = help
         return self._input_component("input", "wa-input", label, value, on_change, key,
-                         on_submit=on_submit, submit_on_enter=submit_on_enter,
+                         on_submit=on_submit,
                                      cls=cls, style=style, label_visibility=label_visibility,
                                      **extra, **props)
 
@@ -1314,7 +1313,7 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, on_submit=None, submit_on_enter=False, cls: str = "", style: str = "", live_update=False, label_visibility="visible", **props):
+    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, on_submit=None, cls: str = "", style: str = "", live_update=False, label_visibility="visible", **props):
         """Generic input component builder"""
         cid = self._get_next_cid(type_name)
         user_part_cls = props.pop("part_cls", None)
@@ -1356,6 +1355,7 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
+            submit_on_enter = type_name == "input" and bool(on_submit)
             submit_on_enter_js = "true" if submit_on_enter else "false"
             
             if self.mode == 'lite':

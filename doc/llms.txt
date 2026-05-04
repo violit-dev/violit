@@ -328,7 +328,6 @@ query = app.text_input(
     placeholder="Type and press Enter",
     on_change=lambda value: app.debug_print(value),
     on_submit=lambda value: app.toast(f"Searching: {value}"),
-    submit_on_enter=True,
     help="Press Enter to submit",
 )
 
@@ -338,7 +337,8 @@ files = app.file_uploader("Upload files", multiple=True, accept=".csv,.txt")
 ```
 
 - `on_change` callbacks receive the new value directly.
-- `text_input(...)` supports `on_submit`, `submit_on_enter`, `type="password"`, `label_visibility`, and `help`.
+- `text_input(...)` supports `on_submit`, `type="password"`, `label_visibility`, and `help`.
+- When `on_submit` is provided, `text_input(...)` submits on Enter by default.
 - `slider(..., live_update=True)` updates continuously while dragging.
 - `select_slider(...)` is for discrete options, not numeric ranges.
 - `file_uploader(...)` returns `UploadedFile` objects with `.name`, `.type`, `.size`, and `.read()` support.
