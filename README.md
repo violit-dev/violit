@@ -29,7 +29,11 @@ pip install violit
 
 This demo illustrates the kind of interaction Violit was built for: Python-first UI code with reactive updates that remain snappy and smooth, even as the interface grows more complex.
 
-![Violit Showcase Demo](https://raw.githubusercontent.com/violit-dev/violit/refs/heads/main/assets/demo_show_main_small.gif)
+<p align="center">
+    <video src="https://raw.githubusercontent.com/violit-dev/violit/refs/heads/main/assets/demo_violit_showcase.webm" controls loop muted playsinline width="100%">
+        <a href="https://raw.githubusercontent.com/violit-dev/violit/refs/heads/main/assets/demo_violit_showcase.webm">Watch the Violit showcase demo</a>
+    </video>
+</p>
 
 ## Why Violit?
 
