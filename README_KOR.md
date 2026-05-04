@@ -30,8 +30,8 @@ pip install violit
 이 데모는 Violit이 어떤 상호작용을 위해 만들어졌는지 보여줍니다. Python 중심의 UI 코드로 작성하면서도, 인터페이스가 복잡해져도 반응형 업데이트는 빠르고 부드럽게 유지됩니다.
 
 <p align="center">
-    <video src="https://raw.githubusercontent.com/violit-dev/violit/refs/heads/main/assets/demo_violit_showcase.webm" controls loop muted playsinline width="100%">
-        <a href="https://raw.githubusercontent.com/violit-dev/violit/refs/heads/main/assets/demo_violit_showcase.webm">Violit 쇼케이스 데모 보기</a>
+    <video src="https://github.com/user-attachments/assets/962fa0e5-c98b-443d-9d35-76e62ccb819f" controls loop muted playsinline width="100%">
+        <a href="https://github.com/user-attachments/assets/962fa0e5-c98b-443d-9d35-76e62ccb819f">Violit 쇼케이스 데모 보기</a>
     </video>
 </p>
 
