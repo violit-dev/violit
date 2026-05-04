@@ -95,6 +95,7 @@ class AppRuntimeMixin:
     def _set_runtime_context(self, sid: Optional[str], current_view_id: Optional[str]):
         session_token = session_ctx.set(sid)
         view_token = view_ctx.set(current_view_id)
+        touch_runtime_stores(sid, current_view_id)
         return session_token, view_token
 
     def _reset_runtime_context(self, session_token, view_token):

@@ -26,7 +26,7 @@ from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_ins
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
-from .state import APP_STATE_STORE, SHARED_STATE_STORES, State, clear_view_scoped_dependencies, get_session_store, STATIC_STORE, VIEW_STORE, SESSION_STORE, unregister_component_from_scoped_trackers
+from .state import APP_STATE_STORE, SHARED_STATE_LAST_TOUCH, SHARED_STATE_STORES, State, clear_view_scoped_dependencies, get_session_store, STATIC_STORE, VIEW_STORE, SESSION_STORE, unregister_component_from_scoped_trackers
 from .background import BackgroundTask
 import asyncio
 
@@ -364,6 +364,7 @@ class App(
         APP_STATE_STORE['states'].clear()
         APP_STATE_STORE['tracker'].subscribers.clear()
         SHARED_STATE_STORES.clear()
+        SHARED_STATE_LAST_TOUCH.clear()
         self.static_builders: Dict[str, Callable] = {}
         self.static_order: List[str] = []
         self.static_sidebar_order: List[str] = []

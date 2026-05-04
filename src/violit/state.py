@@ -1,3 +1,5 @@
+import json
+import time
 from typing import Any, Dict, Optional, Set, Tuple, cast
 from cachetools import TTLCache
 from .context import action_ctx, pending_shared_views_ctx, session_ctx, view_ctx, rendering_ctx, app_instance_ref
@@ -15,6 +17,9 @@ VALID_STATE_SCOPES = {
 }
 
 _SESSION_STATE_BUCKET_KEY = '__violit_session_state_bucket__'
+SHARED_STATE_NAMESPACE_TTL_SECONDS = 21600
+MAX_SHARED_STATE_NAMESPACES = 256
+MAX_SCOPED_STATE_VALUE_BYTES = 262144
 
 class DependencyTracker:
     def __init__(self):
@@ -98,6 +103,7 @@ APP_STATE_STORE: Dict[str, Any] = {
 
 # Process-local namespace stores for room/board/workspace-style shared state.
 SHARED_STATE_STORES: Dict[str, Dict[str, Any]] = {}
+SHARED_STATE_LAST_TOUCH: Dict[str, float] = {}
 
 
 def _initial_theme_name() -> str:
@@ -150,6 +156,48 @@ def _refresh_ttl_entry(cache: TTLCache, key: Any):
 
     cache[key] = value
     return value
+
+
+def _estimate_state_value_size_bytes(value: Any) -> int:
+    try:
+        serialized = json.dumps(value, default=str, ensure_ascii=False)
+    except (TypeError, ValueError):
+        serialized = repr(value)
+    return len(serialized.encode('utf-8'))
+
+
+def _prune_expired_shared_state_stores(now: Optional[float] = None) -> None:
+    current_time = time.monotonic() if now is None else now
+    cutoff = current_time - SHARED_STATE_NAMESPACE_TTL_SECONDS
+    expired_namespaces = [
+        namespace
+        for namespace, last_touch in SHARED_STATE_LAST_TOUCH.items()
+        if last_touch < cutoff
+    ]
+    for namespace in expired_namespaces:
+        SHARED_STATE_LAST_TOUCH.pop(namespace, None)
+        SHARED_STATE_STORES.pop(namespace, None)
+
+
+def _touch_shared_state_store(namespace: str, now: Optional[float] = None) -> None:
+    SHARED_STATE_LAST_TOUCH[namespace] = time.monotonic() if now is None else now
+
+
+def _validate_scoped_state_value(scope: str, state_name: str, new_value: Any, namespace: str | None = None) -> None:
+    if scope not in {STATE_SCOPE_APP, STATE_SCOPE_SHARED}:
+        return
+
+    size_bytes = _estimate_state_value_size_bytes(new_value)
+    if size_bytes <= MAX_SCOPED_STATE_VALUE_BYTES:
+        return
+
+    location = f"{scope} state '{state_name}'"
+    if scope == STATE_SCOPE_SHARED and namespace:
+        location = f"shared state '{state_name}' in namespace '{namespace}'"
+    raise ValueError(
+        f"{location} exceeds the {MAX_SCOPED_STATE_VALUE_BYTES}-byte safety limit. "
+        "Store large shared data in a database or external cache instead."
+    )
 
 
 def get_browser_session_store() -> Dict[str, Any]:
@@ -235,10 +283,22 @@ def get_shared_state_store(namespace: str) -> Dict[str, Any]:
     if not namespace:
         raise ValueError("scope='shared' requires a namespace")
 
+    _prune_expired_shared_state_stores()
+
     store = SHARED_STATE_STORES.get(namespace)
-    if store is None:
-        store = _create_scoped_state_store()
-        SHARED_STATE_STORES[namespace] = store
+    if store is not None:
+        _touch_shared_state_store(namespace)
+        return store
+
+    if len(SHARED_STATE_STORES) >= MAX_SHARED_STATE_NAMESPACES:
+        raise ValueError(
+            f"Cannot create shared namespace '{namespace}': reached the "
+            f"{MAX_SHARED_STATE_NAMESPACES}-namespace safety limit."
+        )
+
+    store = _create_scoped_state_store()
+    SHARED_STATE_STORES[namespace] = store
+    _touch_shared_state_store(namespace)
     return store
 
 
@@ -326,6 +386,8 @@ def clear_view_scoped_dependencies(session_id: str | None, current_view_id: str 
 
 
 def touch_runtime_stores(session_id: str | None = None, view_id: str | None = None) -> None:
+    _prune_expired_shared_state_stores()
+
     sid = session_id if session_id is not None else session_ctx.get()
     current_view_id = view_id if view_id is not None else view_ctx.get()
 
@@ -401,6 +463,7 @@ class State:
     def set(self, new_value: Any):
         store = get_state_store(self.scope, self.namespace)
         old_value = store['states'].get(self.name, self.default_value)
+        _validate_scoped_state_value(self.scope, self.name, new_value, self.namespace)
         store['states'][self.name] = new_value
         if self.scope == STATE_SCOPE_VIEW:
             if 'dirty_states' not in store: store['dirty_states'] = set()

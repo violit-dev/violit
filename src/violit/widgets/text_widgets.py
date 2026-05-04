@@ -1,10 +1,94 @@
 """Text widgets"""
 
+import html as html_lib
+import re
 import time
 from typing import Union, Callable, Optional, Any
+from urllib.parse import urlparse
 from ..component import Component
 from ..context import rendering_ctx
 from ..style_utils import merge_cls, merge_style
+
+
+def _sanitize_markdown_href(raw_href: str) -> str | None:
+    href = html_lib.unescape(raw_href).strip()
+    if not href or href.startswith("//"):
+        return None
+
+    scheme = urlparse(href).scheme.lower()
+    if scheme and scheme not in {"http", "https", "mailto", "tel"}:
+        return None
+
+    return html_lib.escape(href, quote=True)
+
+
+def _render_safe_markdown_html(text: str) -> str:
+    escaped_text = html_lib.escape(text)
+    lines = escaped_text.split('\n')
+    result = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if stripped.startswith('### '):
+            result.append(f'<h3>{stripped[4:]}</h3>')
+            i += 1
+        elif stripped.startswith('## '):
+            result.append(f'<h2>{stripped[3:]}</h2>')
+            i += 1
+        elif stripped.startswith('# '):
+            result.append(f'<h1>{stripped[2:]}</h1>')
+            i += 1
+        elif stripped.startswith(('- ', '* ')):
+            list_items = []
+            while i < len(lines):
+                current_line = lines[i].strip()
+                if current_line.startswith(('- ', '* ')):
+                    list_items.append(f'<li>{current_line[2:]}</li>')
+                    i += 1
+                elif not current_line:
+                    i += 1
+                    break
+                else:
+                    break
+            result.append('<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ul>')
+        elif re.match(r'^\d+\.\s', stripped):
+            list_items = []
+            while i < len(lines):
+                current_line = lines[i].strip()
+                if re.match(r'^\d+\.\s', current_line):
+                    clean_item = re.sub(r'^\d+\.\s', '', current_line)
+                    list_items.append(f'<li>{clean_item}</li>')
+                    i += 1
+                elif not current_line:
+                    i += 1
+                    break
+                else:
+                    break
+            result.append('<ol style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ol>')
+        elif not stripped:
+            result.append('<br>')
+            i += 1
+        else:
+            result.append(f'{line}<br>')
+            i += 1
+
+    html = '\n'.join(result)
+    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+    html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
+    html = re.sub(r'`(.+?)`', r'<code style="background:var(--vl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
+
+    def replace_link(match: re.Match[str]) -> str:
+        label = match.group(1)
+        raw_href = match.group(2)
+        safe_href = _sanitize_markdown_href(raw_href)
+        if safe_href is None:
+            return f'{label} ({raw_href})'
+        return f'<a href="{safe_href}" rel="noopener noreferrer" style="color:var(--vl-primary);">{label}</a>'
+
+    return re.sub(r'\[(.+?)\]\((.+?)\)', replace_link, html)
 
 
 class TextWidgetsMixin:
@@ -182,72 +266,7 @@ class TextWidgetsMixin:
     
     def _render_markdown(self, text: str) -> str:
         """Render markdown to HTML (internal helper)"""
-        import re
-        lines = text.split('\n')
-        result = []
-        i = 0
-        
-        while i < len(lines):
-            line = lines[i]
-            stripped = line.strip()
-            
-            # Headers
-            if stripped.startswith('### '):
-                result.append(f'<h3>{stripped[4:]}</h3>')
-                i += 1
-            elif stripped.startswith('## '):
-                result.append(f'<h2>{stripped[3:]}</h2>')
-                i += 1
-            elif stripped.startswith('# '):
-                result.append(f'<h1>{stripped[2:]}</h1>')
-                i += 1
-            # Unordered lists
-            elif stripped.startswith(('- ', '* ')):
-                list_items = []
-                while i < len(lines):
-                    curr = lines[i].strip()
-                    if curr.startswith(('- ', '* ')):
-                        list_items.append(f'<li>{curr[2:]}</li>')
-                        i += 1
-                    elif not curr:
-                        i += 1
-                        break
-                    else:
-                        break
-                result.append('<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ul>')
-            # Ordered lists
-            elif re.match(r'^\d+\.\s', stripped):
-                list_items = []
-                while i < len(lines):
-                    curr = lines[i].strip()
-                    if re.match(r'^\d+\.\s', curr):
-                        clean_item = re.sub(r'^\d+\.\s', '', curr)
-                        list_items.append(f'<li>{clean_item}</li>')
-                        i += 1
-                    elif not curr:
-                        i += 1
-                        break
-                    else:
-                        break
-                result.append('<ol style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ol>')
-            # Empty line
-            elif not stripped:
-                result.append('<br>')
-                i += 1
-            # Regular text
-            else:
-                result.append(line)
-                i += 1
-        
-        html = '\n'.join(result)
-        
-        # Inline elements
-        html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-        html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
-        html = re.sub(r'`(.+?)`', r'<code style="background:var(--vl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
-        html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--vl-primary);">\1</a>', html)
-        
-        return html
+        return _render_safe_markdown_html(text)
     
     def _render_dataframe_html(self, df) -> str:
         """Render pandas DataFrame as HTML table (internal helper)"""
@@ -408,85 +427,15 @@ class TextWidgetsMixin:
             
             content = " ".join(parts)
 
-            if unsafe_allow_html:
-                html = content
-            else:
-                # Enhanced markdown conversion - line-by-line processing
-                import re
-                lines = content.split('\n')
-                result = []
-                i = 0
-            
-                while i < len(lines):
-                    line = lines[i]
-                    stripped = line.strip()
-                
-                    # Headers
-                    if stripped.startswith('### '):
-                        result.append(f'<h3>{stripped[4:]}</h3>')
-                        i += 1
-                    elif stripped.startswith('## '):
-                        result.append(f'<h2>{stripped[3:]}</h2>')
-                        i += 1
-                    elif stripped.startswith('# '):
-                        result.append(f'<h1>{stripped[2:]}</h1>')
-                        i += 1
-                    # Unordered lists
-                    elif stripped.startswith(('- ', '* ')):
-                        list_items = []
-                        while i < len(lines):
-                            curr = lines[i].strip()
-                            if curr.startswith(('- ', '* ')):
-                                list_items.append(f'<li>{curr[2:]}</li>')
-                                i += 1
-                            elif not curr:  # Empty line
-                                i += 1
-                                break
-                            else:
-                                break
-                        result.append('<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ul>')
-                    # Ordered lists
-                    elif re.match(r'^\d+\.\s', stripped):
-                        list_items = []
-                        while i < len(lines):
-                            curr = lines[i].strip()
-                            if re.match(r'^\d+\.\s', curr):
-                                clean_item = re.sub(r'^\d+\.\s', '', curr)
-                                list_items.append(f'<li>{clean_item}</li>')
-                                i += 1
-                            elif not curr:  # Empty line
-                                i += 1
-                                break
-                            else:
-                                break
-                        result.append('<ol style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ol>')
-                    # Empty line
-                    elif not stripped:
-                        result.append('<br>')
-                        i += 1
-                    # Regular text: a single newline produces <br> (GFM-style)
-                    else:
-                        result.append(f'{line}<br>')
-                        i += 1
-            
-                html = '\n'.join(result)
-            
-                # Inline elements (bold, italic, code, links)
-                # Bold **text** (before italic to avoid conflicts)
-                html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-                # Italic *text* (avoid matching list markers)
-                html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
-                # Code `text`
-                html = re.sub(r'`(.+?)`', r'<code style="background:var(--vl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
-                # Links [text](url)
-                html = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2" style="color:var(--vl-primary);">\1</a>', html)
+            html = content if unsafe_allow_html else _render_safe_markdown_html(content)
             
             rendering_ctx.reset(token)
             _wd = self._get_widget_defaults("markdown")
             _fc = merge_cls(_wd.get("cls", ""), "markdown", cls)
             _fs = merge_style(_wd.get("style", ""), style)
             if help:
-                html += f' <wa-tooltip for="{cid}_help" content="{help}"></wa-tooltip><wa-icon id="{cid}_help" name="circle-question" style="font-size:0.85em;vertical-align:middle;cursor:help;"></wa-icon>'
+                safe_help = html_lib.escape(str(help), quote=True)
+                html += f' <wa-tooltip for="{cid}_help" content="{safe_help}"></wa-tooltip><wa-icon id="{cid}_help" name="circle-question" style="font-size:0.85em;vertical-align:middle;cursor:help;"></wa-icon>'
             return Component("div", id=cid, content=html, class_=_fc, style=_fs or None, **props)
         self._register_component(cid, builder)
     
