@@ -16,7 +16,12 @@ from .app_support import FileWatcher, print_terminal_splash
 class AppLauncherMixin:
     @staticmethod
     def _normalize_host_arg(args):
-        if getattr(args, "localhost", False) or args.host == "localhost":
+        host = getattr(args, "host", None)
+        if host is None:
+            args.host = "127.0.0.1" if getattr(args, "localhost", False) else "0.0.0.0"
+            return
+
+        if getattr(args, "localhost", False) or host == "localhost":
             args.host = "127.0.0.1"
 
     @staticmethod

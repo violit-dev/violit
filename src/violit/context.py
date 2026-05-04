@@ -10,6 +10,7 @@ page_ctx: contextvars.ContextVar[Optional[Any]] = contextvars.ContextVar("curren
 layout_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("layout_ctx", default="main")  # "main" or "sidebar"
 action_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar("action_ctx", default=False)
 initial_render_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar("initial_render", default=False) # for large-scale data rendering
+pending_shared_views_ctx: contextvars.ContextVar[Optional[set[tuple[str, str]]]] = contextvars.ContextVar("pending_shared_views", default=None)
 
 # Global Reference for App Instance (used for initial theme sync)
 app_instance_ref: list[Any | None] = [None]

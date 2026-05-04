@@ -15,8 +15,8 @@ from .app_assets import get_vendor_resources
 from .app_shell import build_html_response, build_shell_html, build_user_css
 from .app_template import HTML_TEMPLATE
 from .component import Component
-from .context import action_ctx, initial_render_ctx, session_ctx, view_ctx
-from .state import STATIC_STORE, get_session_store, touch_runtime_stores
+from .context import action_ctx, initial_render_ctx, pending_shared_views_ctx, session_ctx, view_ctx
+from .state import STATIC_STORE, clear_view_scoped_dependencies, get_session_store, touch_runtime_stores
 
 
 VIEW_RESTORE_COOKIE = "_vl_reload_view"
@@ -282,6 +282,9 @@ class AppRuntimeMixin:
 
         @self.fastapi.get("/")
         async def index(request: Request):
+            sid = session_ctx.get()
+            current_view_id = view_ctx.get()
+            clear_view_scoped_dependencies(sid, current_view_id)
             store = get_session_store()
             builders = store.get('builders')
             if builders:
@@ -496,30 +499,37 @@ class AppRuntimeMixin:
                     store['eval_queue'] = []
 
                     action_token = action_ctx.set(True)
+                    pending_token = pending_shared_views_ctx.set(set())
                     try:
                         action_callback(value) if value is not None else action_callback()
                     finally:
                         action_ctx.reset(action_token)
 
-                    dirty = self._get_dirty_rendered()
+                    try:
+                        dirty = self._get_dirty_rendered()
 
-                    clicked_component = None
-                    other_dirty = []
-                    for component in dirty:
-                        if component.id == cid:
-                            clicked_component = component
-                        else:
-                            other_dirty.append(component)
+                        clicked_component = None
+                        other_dirty = []
+                        for component in dirty:
+                            if component.id == cid:
+                                clicked_component = component
+                            else:
+                                other_dirty.append(component)
 
-                    if clicked_component is None:
-                        builder = store['builders'].get(cid) or self.static_builders.get(cid)
-                        if builder:
-                            clicked_component = builder()
+                        if clicked_component is None:
+                            builder = store['builders'].get(cid) or self.static_builders.get(cid)
+                            if builder:
+                                clicked_component = builder()
 
-                    response_html = clicked_component.render() if clicked_component else ""
-                    response_html += self._build_lite_oob_payload(other_dirty)
+                        response_html = clicked_component.render() if clicked_component else ""
+                        response_html += self._build_lite_oob_payload(other_dirty)
+                        pending_views = set(pending_shared_views_ctx.get() or set())
+                        if pending_views:
+                            self._schedule_scoped_state_flush(pending_views, exclude_current=True)
 
-                    return HTMLResponse(response_html)
+                        return HTMLResponse(response_html)
+                    finally:
+                        pending_shared_views_ctx.reset(pending_token)
                 return HTMLResponse("")
             finally:
                 self._reset_runtime_context(session_token, view_token)
@@ -564,13 +574,20 @@ class AppRuntimeMixin:
                             condition = info.get('condition')
                             if condition is None or condition():
                                 store['eval_queue'] = []
-                                info['callback']()
-                                for code in store.get('eval_queue', []):
-                                    await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
-                                store['eval_queue'] = []
-                                dirty = self._get_dirty_rendered()
-                                if dirty:
-                                    await self.ws_engine.push_updates(sid, dirty, view_id=current_view_id)
+                                pending_token = pending_shared_views_ctx.set(set())
+                                try:
+                                    info['callback']()
+                                    for code in store.get('eval_queue', []):
+                                        await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
+                                    store['eval_queue'] = []
+                                    dirty = self._get_dirty_rendered()
+                                    if dirty:
+                                        await self.ws_engine.push_updates(sid, dirty, view_id=current_view_id)
+                                    pending_views = set(pending_shared_views_ctx.get() or set())
+                                    if pending_views:
+                                        self._schedule_scoped_state_flush(pending_views, exclude_current=True)
+                                finally:
+                                    pending_shared_views_ctx.reset(pending_token)
                         return
 
                     self.debug_print(f"[WEBSOCKET ACTION] CID: {data.get('id')}")
@@ -611,26 +628,33 @@ class AppRuntimeMixin:
                         self.debug_print(f"  Executing action for CID: {cid} (navigation={is_navigation})...")
 
                         action_token = action_ctx.set(True)
+                        pending_token = pending_shared_views_ctx.set(set())
                         try:
                             action_callback(value) if value is not None else action_callback()
                         finally:
                             action_ctx.reset(action_token)
 
-                        self.debug_print(f"  Action executed")
+                        try:
+                            self.debug_print(f"  Action executed")
 
-                        for code in store.get('eval_queue', []):
-                            await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
-                        store['eval_queue'] = []
+                            for code in store.get('eval_queue', []):
+                                await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
+                            store['eval_queue'] = []
 
-                        dirty = self._get_dirty_rendered()
-                        self.debug_print(f"  Dirty components: {len(dirty)} ({[c.id for c in dirty]})")
+                            dirty = self._get_dirty_rendered()
+                            self.debug_print(f"  Dirty components: {len(dirty)} ({[c.id for c in dirty]})")
 
-                        if dirty:
-                            self.debug_print(f"  Sending {len(dirty)} updates via WebSocket (navigation={is_navigation})...")
-                            await self.ws_engine.push_updates(sid, dirty, is_navigation=is_navigation, view_id=current_view_id)
-                            self.debug_print(f"  [OK] Updates sent successfully")
-                        else:
-                            self.debug_print(f"  [!] No dirty components found - nothing to update")
+                            if dirty:
+                                self.debug_print(f"  Sending {len(dirty)} updates via WebSocket (navigation={is_navigation})...")
+                                await self.ws_engine.push_updates(sid, dirty, is_navigation=is_navigation, view_id=current_view_id)
+                                self.debug_print(f"  [OK] Updates sent successfully")
+                            else:
+                                self.debug_print(f"  [!] No dirty components found - nothing to update")
+                            pending_views = set(pending_shared_views_ctx.get() or set())
+                            if pending_views:
+                                self._schedule_scoped_state_flush(pending_views, exclude_current=True)
+                        finally:
+                            pending_shared_views_ctx.reset(pending_token)
                 finally:
                     self._reset_runtime_context(msg_session_token, msg_view_token)
 

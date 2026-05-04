@@ -22,11 +22,11 @@ from pathlib import Path
 from .app_launcher import AppLauncherMixin
 from .app_runtime import AppRuntimeMixin
 from .app_support import FileWatcher, IntervalHandle, Page, SidebarProxy, print_terminal_splash
-from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx
+from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx, pending_shared_views_ctx
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
-from .state import State, get_session_store, STATIC_STORE, VIEW_STORE, SESSION_STORE
+from .state import APP_STATE_STORE, SHARED_STATE_STORES, State, clear_view_scoped_dependencies, get_session_store, STATIC_STORE, VIEW_STORE, SESSION_STORE, unregister_component_from_scoped_trackers
 from .background import BackgroundTask
 import asyncio
 
@@ -361,6 +361,9 @@ class App(
         STATIC_STORE.clear() # Prevent leakage across hot reloads when forked on Linux
         VIEW_STORE.clear()
         SESSION_STORE.clear()
+        APP_STATE_STORE['states'].clear()
+        APP_STATE_STORE['tracker'].subscribers.clear()
+        SHARED_STATE_STORES.clear()
         self.static_builders: Dict[str, Callable] = {}
         self.static_order: List[str] = []
         self.static_sidebar_order: List[str] = []
@@ -492,7 +495,7 @@ class App(
         """Get default cls/style/part_cls for a widget type (internal helper)."""
         return self._widget_defaults.get(widget_type, {})
 
-    def state(self, default_value, key=None) -> State:
+    def state(self, default_value, key=None, *, scope: str = 'view', namespace: str | None = None) -> State:
         """Create a reactive state variable"""
         if key is None:
             # Streamlit-style: Generate stable key from caller's location
@@ -507,7 +510,7 @@ class App(
                 del frame  # Avoid reference cycles
         else:
             name = key
-        return State(name, default_value)
+        return State(name, default_value, scope=scope, namespace=namespace)
 
     def _get_next_cid(self, prefix: str) -> str:
         """Generate next component ID
@@ -1071,6 +1074,8 @@ class App(
         """Get components that need updating"""
         store = get_session_store()
         tracker = store['tracker']
+        current_session_id = session_ctx.get()
+        current_view_id = view_ctx.get()
         dirty_states = store.get('dirty_states', set())
         aff = set()
         for s in dirty_states: aff.update(tracker.get_dirty_components(s))
@@ -1091,6 +1096,7 @@ class App(
                 # 1. Dependencies that are no longer read get removed.
                 # 2. The upcoming builder() call re-registers only current deps.
                 tracker.unregister_component(cid)
+                unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
                 
                 # [FIX PHANTOM WIDGETS] Use a token to ensure widgets created 
                 # inside a DIRTY re-render are correctly registered.
@@ -1125,7 +1131,83 @@ class App(
                 # If-block condition flip).  Clean it from the tracker so it
                 # never appears in future dirty sets.
                 tracker.unregister_component(cid)
+                unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
         return res
+
+    async def _flush_view_updates_async(self, session_id: str, current_view_id: str) -> None:
+        if not session_id or not current_view_id:
+            return
+
+        session_token = session_ctx.set(session_id)
+        view_token = view_ctx.set(current_view_id)
+        try:
+            dirty = self._get_dirty_rendered()
+            if not dirty:
+                return
+
+            if self.ws_engine and self.ws_engine.has_socket(session_id, current_view_id):
+                await self.ws_engine.push_updates(session_id, dirty, view_id=current_view_id)
+                return
+
+            if self.lite_engine:
+                payload = self._build_lite_oob_payload(dirty)
+                if payload:
+                    self._enqueue_lite_stream_payload(session_id, payload, view_id=current_view_id)
+        finally:
+            view_ctx.reset(view_token)
+            session_ctx.reset(session_token)
+
+    async def _flush_scoped_state_views_async(
+        self,
+        view_keys: Set[tuple[str, str]],
+        *,
+        exclude_current: bool = False,
+    ) -> None:
+        current_key = (session_ctx.get(), view_ctx.get())
+        for session_id, current_view_id in set(view_keys):
+            if exclude_current and current_key == (session_id, current_view_id):
+                continue
+            await self._flush_view_updates_async(session_id, current_view_id)
+
+    async def _flush_pending_scoped_state_updates_async(self, *, exclude_current: bool = False) -> None:
+        pending_views = pending_shared_views_ctx.get()
+        if not pending_views:
+            return
+        try:
+            await self._flush_scoped_state_views_async(set(pending_views), exclude_current=exclude_current)
+        finally:
+            pending_views.clear()
+
+    def _schedule_scoped_state_flush(
+        self,
+        view_keys: Set[tuple[str, str]],
+        *,
+        exclude_current: bool = False,
+    ) -> None:
+        if not view_keys:
+            return
+
+        coroutine = self._flush_scoped_state_views_async(set(view_keys), exclude_current=exclude_current)
+
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is not None:
+            running_loop.create_task(coroutine)
+            return
+
+        main_loop = getattr(self, '_main_loop', None)
+        if main_loop is not None and main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(coroutine, main_loop)
+            return
+
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(coroutine)
+        finally:
+            loop.close()
 
     # Theme and settings methods
     def set_theme(self, p):
