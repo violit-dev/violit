@@ -1,1 +1,3 @@
 src/violit/static/vendor/** linguist-vendored
+src/violit/static/vendor/* linguist-vendored
+src/violit/static/vendor/**/* linguist-vendored
