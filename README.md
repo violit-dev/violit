@@ -2,6 +2,8 @@
 
 🎉 **Featured on OpenSourceProjects.dev**: ["Stop Overcomplicating Your Data Dashboards"](https://www.opensourceprojects.dev/post/634ad562-83d4-4a7b-8a74-b61e47ad68aa)
 
+<a href="https://www.producthunt.com/products/violit-pure-python-web-framework?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-violit" target="_blank" rel="noopener noreferrer"><img alt="Violit - Pure Python Web Framework: Streamlit simplicity, zero reruns | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1138772&amp;theme=light&amp;t=1777984193990"></a>
+
 > **"Faster than Light, Beautiful as Violet."** **Structure of Streamlit × Performance of React.**
 
 **Violit** is a Python web framework built on a **fine-grained reactive architecture**. It preserves the highly productive, top-down Python authoring style loved by the Streamlit community, but eliminates the performance bottlenecks of the **full script rerun** model.
