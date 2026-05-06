@@ -1033,7 +1033,15 @@ class ChatWidgetsMixin:
 
             messages.set(_clone_chat_items(messages) + [
                 {"role": user_name, "content": val, "status": "done"},
-                {"role": assistant_name, "content": "", "chunks": [], "status": "thinking"},
+                {
+                    "role": assistant_name,
+                    "content": "",
+                    "chunks": [],
+                    "status": "thinking",
+                    "phase": "thinking",
+                    "thinking_label": "Thinking...",
+                    "cursor": None,
+                },
             ])
 
             stream_profile = _resolve_stream_profile(
@@ -1048,7 +1056,15 @@ class ChatWidgetsMixin:
                     reply = result.strip()
                     if not reply:
                         raise RuntimeError("Chat reply was empty.")
-                    _patch_last_chat_item(messages, content=reply, chunks=[], status="done", cursor=None)
+                    _patch_last_chat_item(
+                        messages,
+                        content=reply,
+                        chunks=[],
+                        status="done",
+                        phase="done",
+                        status_text="",
+                        cursor=None,
+                    )
                     return reply
 
                 candidate = result() if callable(result) and not hasattr(result, "__iter__") else result
@@ -1056,7 +1072,15 @@ class ChatWidgetsMixin:
                     reply = str(result).strip()
                     if not reply:
                         raise RuntimeError("Chat reply was empty.")
-                    _patch_last_chat_item(messages, content=reply, chunks=[], status="done", cursor=None)
+                    _patch_last_chat_item(
+                        messages,
+                        content=reply,
+                        chunks=[],
+                        status="done",
+                        phase="done",
+                        status_text="",
+                        cursor=None,
+                    )
                     return reply
 
                 chunks = []
@@ -1120,6 +1144,7 @@ class ChatWidgetsMixin:
                             content="".join(chunks),
                             status="streaming",
                             phase="running",
+                            status_text="",
                             cursor=stream_cursor,
                         )
                         _push_stream_frame(self)
@@ -1135,7 +1160,14 @@ class ChatWidgetsMixin:
                     for fragment in fragments:
                         chunks.append(fragment)
                         pending_emit_chars += len(fragment)
-                        _patch_last_chat_item(messages, chunks=list(chunks), status="streaming", cursor=stream_cursor)
+                        _patch_last_chat_item(
+                            messages,
+                            chunks=list(chunks),
+                            status="streaming",
+                            phase="running",
+                            status_text="",
+                            cursor=stream_cursor,
+                        )
                         if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
                             _push_stream_frame(self)
                             last_emit_at = time.perf_counter()
@@ -1173,7 +1205,15 @@ class ChatWidgetsMixin:
 
                 if not reply:
                     raise RuntimeError("Chat reply was empty.")
-                _patch_last_chat_item(messages, content=reply, chunks=list(chunks), status="done", cursor=None)
+                _patch_last_chat_item(
+                    messages,
+                    content=reply,
+                    chunks=list(chunks),
+                    status="done",
+                    phase="done",
+                    status_text="",
+                    cursor=None,
+                )
                 return reply
 
             def fail_reply(exc):
@@ -1182,6 +1222,8 @@ class ChatWidgetsMixin:
                     content=f"Error:\n\n```text\n{exc}\n```",
                     chunks=[],
                     status="error",
+                    phase="error",
+                    status_text="",
                     cursor=None,
                 )
 

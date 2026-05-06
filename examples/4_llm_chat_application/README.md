@@ -1,20 +1,18 @@
 # 4. Very Simple LLM Chat Application
 
-This folder has three small chat examples:
+This folder contains three small chat examples:
 
 - `demo_app_gemini.py`
 - `demo_app_openai.py`
 - `demo_app_gemini_agent.py`
 
-They have the same structure on purpose.
-
-If you understand one file, the other file should feel familiar.
+They intentionally share the same overall shape, so once you understand one file, the others should feel familiar.
 
 ## Files
 
 - `demo_app_gemini.py`: Gemini chat example
 - `demo_app_openai.py`: OpenAI chat example
-- `demo_app_gemini_agent.py`: Gemini-powered agent example with visible trace and local tools
+- `demo_app_gemini_agent.py`: Gemini-powered agent example with visible trace and local workspace tools
 
 ## Run
 
@@ -41,20 +39,23 @@ python demo_app_gemini_agent.py
 
 ## Configure
 
-There is no `.env` file in these examples.
+These examples do not rely on a local `.env` file.
 
 Open the app and paste your API key into the password input.
+All three examples start with an empty key field, so the credential is entered manually at runtime.
 
 - `demo_app_gemini.py` asks for `GEMINI_API_KEY`
 - `demo_app_gemini_agent.py` asks for `GEMINI_API_KEY`
 - `demo_app_openai.py` asks for `OPENAI_API_KEY`
+
+For Git safety, keep real keys out of source files, screenshots, and committed config files.
 
 Each app also has a simple `Mode` selectbox:
 
 - `streaming`
 - `non-streaming`
 
-That lets you compare the two response styles in the same UI.
+This lets you compare the two response styles in the same UI.
 
 ## What The App Shows
 
@@ -66,7 +67,7 @@ All three examples follow the same pattern:
 - render chat messages in a reactive block
 - keep `app.chat_input(...)` outside the reactive block
 
-This keeps the message list reactive while the input widget stays simple.
+This keeps the message list reactive while the input widget stays simple and stable.
 
 ## Read The Code In This Order
 
@@ -107,7 +108,7 @@ def reply(_prompt: str):
     return _reply_non_streaming(...)
 ```
 
-`reply()` only builds the payload and chooses the correct helper.
+`reply()` mainly builds the payload and chooses the correct helper.
 
 ### 4. Read the UI
 
@@ -122,12 +123,13 @@ app.chat_input(..., messages=messages, on_submit=reply)
 ```
 
 The reactive part only renders the messages.
+The input stays outside that block so it does not get rebuilt with every message update.
 
-## What Is Different Between The Two Files
+## What Is Different Between The Files
 
 The overall shape is the same.
 
-The main difference is only the request and response format:
+The main differences are the provider-specific request format and, in the agent example, the event schema:
 
 - Gemini uses the Gemini API structure
 - OpenAI uses the OpenAI API structure
@@ -150,4 +152,4 @@ app.chat_input(messages=messages, on_submit=reply)
 
 That is the whole idea.
 
-Everything else is provider-specific request formatting.
+Everything else is provider-specific request formatting or, for the agent example, event generation and tool orchestration.

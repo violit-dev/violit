@@ -7,10 +7,11 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, cast
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 import violit as vl
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODEL = "gemini-2.5-flash"
 MAX_AGENT_STEPS = 4
 MAX_SEARCH_RESULTS = 6
@@ -50,7 +51,7 @@ messages = app.state([
         "summary": "Gemini-backed agent demo with local tools and visible trace.",
     }
 ], key="demo_gemini_agent_messages")
-api_key = app.state(os.getenv("GEMINI_API_KEY", ""), key="demo_gemini_agent_api_key")
+api_key = app.state("", key="demo_gemini_agent_api_key")
 mode = app.state("streaming", key="demo_gemini_agent_mode")
 
 
@@ -517,7 +518,7 @@ def reply(prompt: str):
                     raise RuntimeError("Gemini returned an empty final answer.")
             else:
                 yield {"type": "step", "kind": "status", "title": "Answer mode", "text": "Using non-streaming final answer mode."}
-                yield {"type": "text", "text": _generate_gemini_answer(key, final_prompt)}
+                yield {"type": "text", "text": _generate_gemini_answer(key, final_prompt), "stream": False}
 
             seen_titles = set()
             for artifact in artifacts:
