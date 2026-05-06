@@ -22,8 +22,20 @@ def _sanitize_chat_key(value: Any) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", str(value)).strip("_") or "chat"
 
 
+def _clone_chat_item(item: Any):
+    if not isinstance(item, dict):
+        return item
+
+    cloned = dict(item)
+    for field in ("chunks", "trace", "artifacts"):
+        value = cloned.get(field)
+        if isinstance(value, list):
+            cloned[field] = [dict(entry) if isinstance(entry, dict) else entry for entry in value]
+    return cloned
+
+
 def _clone_chat_items(messages_state):
-    return [dict(item) for item in messages_state.value]
+    return [_clone_chat_item(item) for item in messages_state.value]
 
 
 def _patch_last_chat_item(messages_state, **updates):
@@ -154,6 +166,395 @@ def _should_emit_stream_frame(profile: dict[str, float], last_emit_at: float, pe
         return True
     return (time.perf_counter() - last_emit_at) >= min_emit_interval
 
+
+_AGENT_EVENT_TYPES = {
+    "artifact",
+    "artifacts",
+    "done",
+    "error",
+    "observation",
+    "phase",
+    "status",
+    "step",
+    "summary",
+    "text",
+    "tool_call",
+}
+
+
+def _coerce_chat_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _normalize_chat_phase(item: Any) -> str:
+    if not isinstance(item, dict):
+        return ""
+
+    phase = _coerce_chat_text(item.get("phase")).strip().lower()
+    if phase:
+        return phase
+
+    status = _coerce_chat_text(item.get("status")).strip().lower()
+    if status == "streaming":
+        return "running"
+    return status
+
+
+def _is_agent_event(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+
+    event_type = _coerce_chat_text(value.get("type") or value.get("event")).strip().lower()
+    if event_type in _AGENT_EVENT_TYPES:
+        return True
+
+    return any(
+        key in value
+        for key in ("phase", "trace", "artifacts", "summary", "status_text", "thinking_label")
+    )
+
+
+def _normalize_trace_step(step: Any):
+    if isinstance(step, dict):
+        kind = _coerce_chat_text(step.get("kind") or step.get("type") or "step").strip().lower() or "step"
+        title = _coerce_chat_text(step.get("title") or step.get("label"))
+        text = _coerce_chat_text(step.get("text") or step.get("content") or step.get("message"))
+        status = _coerce_chat_text(step.get("status"))
+        normalized = dict(step)
+        normalized["kind"] = kind
+        if title:
+            normalized["title"] = title
+        if text:
+            normalized["text"] = text
+        if status:
+            normalized["status"] = status
+        return normalized
+
+    text = _coerce_chat_text(step).strip()
+    if not text:
+        return None
+    return {"kind": "step", "text": text}
+
+
+def _render_agent_status_html(status_text: str, phase: str) -> str:
+    text = _coerce_chat_text(status_text).strip()
+    if not text:
+        return ""
+
+    safe_text = html_lib.escape(text).replace("\n", "<br>")
+    normalized_phase = (phase or "running").strip().lower() or "running"
+    badge_label = {
+        "thinking": "Thinking",
+        "running": "Running",
+        "done": "Done",
+        "error": "Error",
+    }.get(normalized_phase, normalized_phase.title() or "Status")
+    badge_bg = {
+        "thinking": "rgba(59, 130, 246, 0.10)",
+        "running": "rgba(15, 23, 42, 0.08)",
+        "done": "rgba(34, 197, 94, 0.12)",
+        "error": "rgba(239, 68, 68, 0.12)",
+    }.get(normalized_phase, "rgba(148, 163, 184, 0.16)")
+    badge_color = {
+        "thinking": "#1d4ed8",
+        "running": "#334155",
+        "done": "#166534",
+        "error": "#b91c1c",
+    }.get(normalized_phase, "#334155")
+    spinner_html = ""
+    if normalized_phase in {"thinking", "running"}:
+        spinner_html = '<wa-spinner style="font-size:0.78rem; --indicator-color: currentColor;"></wa-spinner>'
+
+    return f'''
+    <div class="vl-agent-status" style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.8rem;padding:0.75rem 0.85rem;border-radius:14px;background:rgba(248, 250, 252, 0.82);border:1px solid rgba(148, 163, 184, 0.18);">
+        <div style="flex-shrink:0;display:flex;align-items:center;justify-content:center;color:{badge_color};min-height:1.1rem;">{spinner_html}</div>
+        <div style="min-width:0;flex:1;">
+            <div style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.48rem;border-radius:999px;background:{badge_bg};color:{badge_color};font-size:0.72rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;">{html_lib.escape(badge_label)}</div>
+            <div style="margin-top:0.42rem;color:var(--vl-text);font-size:0.94rem;line-height:1.5;">{safe_text}</div>
+        </div>
+    </div>
+    '''
+
+
+def _render_agent_summary_html(summary: str) -> str:
+    text = _coerce_chat_text(summary).strip()
+    if not text:
+        return ""
+
+    safe_text = html_lib.escape(text).replace("\n", "<br>")
+    return f'''
+    <div class="vl-agent-summary" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.92));border:1px solid rgba(148, 163, 184, 0.18);">
+        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--vl-text-muted, #64748b);margin-bottom:0.35rem;">Summary</div>
+        <div style="color:var(--vl-text);font-size:0.95rem;line-height:1.55;">{safe_text}</div>
+    </div>
+    '''
+
+
+def _render_agent_error_html(error_text: str) -> str:
+    text = _coerce_chat_text(error_text).strip()
+    if not text:
+        return ""
+
+    safe_text = html_lib.escape(text).replace("\n", "<br>")
+    return f'''
+    <div class="vl-agent-error" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:rgba(254, 242, 242, 0.9);border:1px solid rgba(248, 113, 113, 0.28);color:#991b1b;">
+        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:0.35rem;">Error</div>
+        <div style="font-size:0.94rem;line-height:1.55;">{safe_text}</div>
+    </div>
+    '''
+
+
+def _render_agent_trace_html(trace: Any, collapsed: bool = True) -> str:
+    if not trace:
+        return ""
+
+    items = trace if isinstance(trace, list) else [trace]
+    rows = []
+    for raw_step in items:
+        step = _normalize_trace_step(raw_step)
+        if not step:
+            continue
+
+        kind = _coerce_chat_text(step.get("kind") or "step").strip().lower() or "step"
+        title = _coerce_chat_text(step.get("title")).strip()
+        text = _coerce_chat_text(step.get("text") or step.get("content") or step.get("message")).strip()
+        status = _coerce_chat_text(step.get("status")).strip()
+        badge_bg = {
+            "status": "rgba(59, 130, 246, 0.10)",
+            "tool_call": "rgba(16, 185, 129, 0.12)",
+            "observation": "rgba(245, 158, 11, 0.14)",
+            "step": "rgba(15, 23, 42, 0.08)",
+        }.get(kind, "rgba(148, 163, 184, 0.16)")
+        badge_color = {
+            "status": "#1d4ed8",
+            "tool_call": "#047857",
+            "observation": "#b45309",
+            "step": "#334155",
+        }.get(kind, "#334155")
+        safe_title = html_lib.escape(title)
+        safe_text = html_lib.escape(text).replace("\n", "<br>")
+        safe_status = html_lib.escape(status)
+        body_html = ""
+        if safe_title or safe_text:
+            body_html = f'<div style="margin-top:0.34rem;color:var(--vl-text);font-size:0.93rem;line-height:1.5;">'
+            if safe_title:
+                body_html += f'<strong style="font-weight:650;">{safe_title}</strong>'
+                if safe_text:
+                    body_html += '<span style="opacity:0.66;">: </span>'
+            if safe_text:
+                body_html += safe_text
+            body_html += '</div>'
+        status_html = f'<div style="margin-top:0.28rem;font-size:0.8rem;color:var(--vl-text-muted, #64748b);">{safe_status}</div>' if safe_status else ''
+        rows.append(
+            f'''
+            <div style="padding:0.72rem 0.15rem;{'' if not rows else 'border-top:1px solid rgba(148, 163, 184, 0.16);'}">
+                <div style="display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">
+                    <span style="display:inline-flex;align-items:center;padding:0.18rem 0.48rem;border-radius:999px;background:{badge_bg};color:{badge_color};font-size:0.72rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;">{html_lib.escape(kind.replace('_', ' '))}</span>
+                </div>
+                {body_html}
+                {status_html}
+            </div>
+            '''
+        )
+
+    if not rows:
+        return ""
+
+    open_attr = "" if collapsed else "open"
+    return f'''
+    <wa-details {open_attr} style="margin-bottom:0.85rem;border-radius:14px;">
+        <span slot="summary" style="font-weight:650;">Trace <span style="margin-left:0.35rem;color:var(--vl-text-muted, #64748b);font-size:0.84rem;">{len(rows)} steps</span></span>
+        <div style="padding:0.2rem 0.1rem 0.1rem;">
+            {''.join(rows)}
+        </div>
+    </wa-details>
+    '''
+
+
+def _render_agent_artifacts_html(artifacts: Any, collapsed: bool = True) -> str:
+    if not artifacts:
+        return ""
+
+    items = artifacts if isinstance(artifacts, list) else [artifacts]
+    cards = []
+    for raw_artifact in items:
+        if isinstance(raw_artifact, dict):
+            kind = _coerce_chat_text(raw_artifact.get("kind") or raw_artifact.get("type") or "artifact").strip() or "artifact"
+            title = _coerce_chat_text(raw_artifact.get("title") or raw_artifact.get("label") or raw_artifact.get("name") or kind).strip() or "artifact"
+            text = _coerce_chat_text(raw_artifact.get("text") or raw_artifact.get("content") or raw_artifact.get("summary")).strip()
+            url = _coerce_chat_text(raw_artifact.get("url") or raw_artifact.get("href")).strip()
+            safe_title = html_lib.escape(title)
+            safe_text = html_lib.escape(text).replace("\n", "<br>") if text else ""
+            link_html = ""
+            if url:
+                safe_url = html_lib.escape(url, quote=True)
+                link_html = f'<div style="margin-top:0.45rem;"><a href="{safe_url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-weight:600;">Open artifact</a></div>'
+            cards.append(
+                f'''
+                <div style="padding:0.72rem 0.82rem;border-radius:12px;background:rgba(248, 250, 252, 0.9);border:1px solid rgba(148, 163, 184, 0.16);">
+                    <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--vl-text-muted, #64748b);margin-bottom:0.28rem;">{html_lib.escape(kind)}</div>
+                    <div style="font-weight:650;color:var(--vl-text);">{safe_title}</div>
+                    {f'<div style="margin-top:0.35rem;color:var(--vl-text);font-size:0.92rem;line-height:1.5;">{safe_text}</div>' if safe_text else ''}
+                    {link_html}
+                </div>
+                '''
+            )
+            continue
+
+        text = _coerce_chat_text(raw_artifact).strip()
+        if text:
+            safe_plain_text = html_lib.escape(text).replace("\n", "<br>")
+            cards.append(
+                f'<div style="padding:0.72rem 0.82rem;border-radius:12px;background:rgba(248, 250, 252, 0.9);border:1px solid rgba(148, 163, 184, 0.16);color:var(--vl-text);font-size:0.92rem;line-height:1.5;">{safe_plain_text}</div>'
+            )
+
+    if not cards:
+        return ""
+
+    open_attr = "" if collapsed else "open"
+    return f'''
+    <wa-details {open_attr} style="margin-top:0.9rem;border-radius:14px;">
+        <span slot="summary" style="font-weight:650;">Artifacts <span style="margin-left:0.35rem;color:var(--vl-text-muted, #64748b);font-size:0.84rem;">{len(cards)}</span></span>
+        <div style="display:grid;gap:0.65rem;padding:0.2rem 0.1rem 0.1rem;">
+            {''.join(cards)}
+        </div>
+    </wa-details>
+    '''
+
+
+def _chat_item_has_visible_content(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return bool(_coerce_chat_text(item).strip())
+
+    content = _coerce_chat_text(item.get("content")).strip()
+    if content:
+        return True
+    if any(item.get(field) for field in ("summary", "trace", "artifacts", "status_text", "error")):
+        return True
+    chunks = item.get("chunks")
+    if isinstance(chunks, list) and any(_coerce_chat_text(chunk).strip() for chunk in chunks):
+        return True
+    return False
+
+
+def _apply_agent_event(item: Any, event: dict[str, Any], *, cursor: Optional[str] = None):
+    next_item: dict[str, Any] = _clone_chat_item(item)
+    if not isinstance(next_item, dict):
+        next_item = {"role": "assistant", "content": _coerce_chat_text(next_item)}
+
+    event_type = _coerce_chat_text(event.get("type") or event.get("event")).strip().lower()
+    text_value = _coerce_chat_text(
+        event.get("text")
+        or event.get("content")
+        or event.get("message")
+        or event.get("status")
+    )
+
+    if event_type == "status":
+        if text_value:
+            next_item["status_text"] = text_value
+            next_item["thinking_label"] = text_value
+        next_item["phase"] = "running" if _chat_item_has_visible_content(next_item) else "thinking"
+        next_item["status"] = "thinking"
+        return next_item
+
+    if event_type in {"step", "tool_call", "observation"}:
+        step = _normalize_trace_step(event)
+        if step:
+            trace: list[Any] = list(next_item.get("trace") or [])
+            trace.append(step)
+            next_item["trace"] = trace
+            step_label = _coerce_chat_text(step.get("title") or step.get("text")).strip()
+            if step_label:
+                next_item["status_text"] = step_label
+                next_item["thinking_label"] = step_label
+        next_item["phase"] = "running"
+        next_item["status"] = "streaming"
+        return next_item
+
+    if event_type == "summary":
+        if text_value:
+            next_item["summary"] = text_value
+        next_item["phase"] = "running"
+        next_item["status"] = "streaming"
+        return next_item
+
+    if event_type == "text":
+        if text_value:
+            chunks: list[str] = list(next_item.get("chunks") or [])
+            chunks.append(text_value)
+            next_item["chunks"] = chunks
+            next_item["content"] = "".join(_coerce_chat_text(chunk) for chunk in chunks)
+            next_item["cursor"] = cursor
+        next_item["phase"] = "running"
+        next_item["status"] = "streaming"
+        return next_item
+
+    if event_type in {"artifact", "artifacts"}:
+        payload = event.get("items") if event_type == "artifacts" else event.get("artifact")
+        if payload is None:
+            payload = event.get("artifacts") if event_type == "artifacts" else dict(event)
+        artifacts: list[Any] = list(next_item.get("artifacts") or [])
+        if isinstance(payload, list):
+            artifacts.extend(payload)
+        elif payload is not None:
+            artifacts.append(payload)
+        next_item["artifacts"] = artifacts
+        next_item["phase"] = "running"
+        next_item["status"] = "streaming"
+        return next_item
+
+    if event_type == "error":
+        if text_value:
+            next_item["error"] = text_value
+            next_item["status_text"] = text_value
+            next_item["thinking_label"] = text_value
+        next_item["cursor"] = None
+        next_item["phase"] = "error"
+        next_item["status"] = "error"
+        return next_item
+
+    if event_type == "done":
+        next_item["cursor"] = None
+        next_item["phase"] = "done"
+        next_item["status"] = "done"
+        next_item["status_text"] = ""
+        return next_item
+
+    if event_type == "phase":
+        phase = _coerce_chat_text(event.get("phase") or text_value).strip().lower()
+        if phase:
+            next_item["phase"] = phase
+            next_item["status"] = "error" if phase == "error" else ("done" if phase == "done" else next_item.get("status", "streaming"))
+        return next_item
+
+    for field in ("phase", "summary", "status_text", "thinking_label", "error"):
+        if field in event and event[field] is not None:
+            next_item[field] = event[field]
+    for field in ("trace", "artifacts"):
+        if field in event and event[field] is not None:
+            next_item[field] = event[field] if isinstance(event[field], list) else [event[field]]
+    if "content" in event and isinstance(event.get("content"), str):
+        next_item["content"] = event["content"]
+    if "chunks" in event and isinstance(event.get("chunks"), list):
+        next_item["chunks"] = list(event["chunks"])
+    if "status" in event and event["status"] is not None:
+        next_item["status"] = event["status"]
+    return next_item
+
+
+def _patch_last_chat_item_with_event(messages_state, event: dict[str, Any], *, cursor: Optional[str] = None):
+    items = _clone_chat_items(messages_state)
+    if not items:
+        return None
+    items[-1] = _apply_agent_event(items[-1], event, cursor=cursor)
+    messages_state.set(items)
+    return items[-1]
+
 class ChatWidgetsMixin:
     """Chat-related widgets"""
 
@@ -215,6 +616,14 @@ class ChatWidgetsMixin:
         style: str = "",
         thinking: bool = False,
         thinking_label: str = "Thinking...",
+        phase: Optional[str] = None,
+        status_text: str = "",
+        summary: str = "",
+        trace: Optional[list[Any]] = None,
+        artifacts: Optional[list[Any]] = None,
+        error_text: str = "",
+        trace_collapsed: bool = True,
+        artifacts_collapsed: bool = True,
         key: Optional[str] = None,
     ):
         """
@@ -225,7 +634,7 @@ class ChatWidgetsMixin:
         cid = self._get_next_cid("chat_message")
         
         class ChatMessageContext:
-            def __init__(self, app, message_id, name, avatar, user_cls="", user_style="", thinking=False, thinking_label="Thinking...", key=None):
+            def __init__(self, app, message_id, name, avatar, user_cls="", user_style="", thinking=False, thinking_label="Thinking...", phase=None, status_text="", summary="", trace=None, artifacts=None, error_text="", trace_collapsed=True, artifacts_collapsed=True, key=None):
                 self.app = app
                 self.message_id = message_id
                 self.name = name
@@ -234,6 +643,14 @@ class ChatWidgetsMixin:
                 self.user_style = user_style
                 self.thinking = thinking
                 self.thinking_label = thinking_label
+                self.phase = phase
+                self.status_text = status_text
+                self.summary = summary
+                self.trace = list(trace or [])
+                self.artifacts = list(artifacts or [])
+                self.error_text = error_text
+                self.trace_collapsed = trace_collapsed
+                self.artifacts_collapsed = artifacts_collapsed
                 self.key = key
                 self.token = None
                 
@@ -268,6 +685,7 @@ class ChatWidgetsMixin:
                     bubble_shadow = "0 12px 28px rgba(15, 23, 42, 0.06)"
                     name_color = "var(--vl-text-muted, #64748b)"
                     avatar_content = ""
+                    normalized_phase = _coerce_chat_text(self.phase).strip().lower()
                     
                     # Icons handling
                     if self.avatar:
@@ -291,12 +709,28 @@ class ChatWidgetsMixin:
                         bubble_border = "1px solid rgba(37, 99, 235, 0.18)"
                         bubble_shadow = "0 12px 28px rgba(37, 99, 235, 0.12)"
                         name_color = "#1d4ed8"
+                    elif normalized_phase == "error":
+                        bubble_bg = "linear-gradient(180deg, rgba(254, 242, 242, 0.96) 0%, rgba(254, 226, 226, 0.9) 100%)"
+                        bubble_border = "1px solid rgba(248, 113, 113, 0.22)"
+                        bubble_shadow = "0 14px 30px rgba(239, 68, 68, 0.08)"
                     elif self.thinking:
                         bubble_bg = "linear-gradient(180deg, rgba(15, 23, 42, 0.06) 0%, rgba(148, 163, 184, 0.10) 100%)"
                         bubble_border = "1px solid rgba(148, 163, 184, 0.30)"
                         bubble_shadow = "0 14px 30px rgba(15, 23, 42, 0.08)"
 
-                    if self.thinking and not inner_html:
+                    before_content_html = "".join(
+                        part
+                        for part in (
+                            _render_agent_status_html(self.status_text, normalized_phase or ("thinking" if self.thinking else "running")),
+                            _render_agent_trace_html(self.trace, collapsed=self.trace_collapsed),
+                            _render_agent_summary_html(self.summary),
+                            _render_agent_error_html(self.error_text),
+                        )
+                        if part
+                    )
+                    after_content_html = _render_agent_artifacts_html(self.artifacts, collapsed=self.artifacts_collapsed)
+
+                    if self.thinking and not inner_html and not before_content_html and not after_content_html:
                         label = html_lib.escape(self.thinking_label)
                         inner_html = f'''
                         <div class="vl-chat-thinking" style="display:flex;align-items:center;gap:0.8rem;min-height:1.4rem;">
@@ -307,6 +741,8 @@ class ChatWidgetsMixin:
                             </div>
                         </div>
                         '''
+
+                    inner_html = f"{before_content_html}{inner_html}{after_content_html}".strip()
 
                     safe_name = html_lib.escape(self.name or "assistant")
 
@@ -355,7 +791,7 @@ class ChatWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
                 
-        return ChatMessageContext(self, cid, name, avatar, cls, style, thinking, thinking_label, key)
+        return ChatMessageContext(self, cid, name, avatar, cls, style, thinking, thinking_label, phase, status_text, summary, trace, artifacts, error_text, trace_collapsed, artifacts_collapsed, key)
 
     def chat_thread(
         self,
@@ -397,19 +833,87 @@ class ChatWidgetsMixin:
         *,
         height: Union[int, str] = "58vh",
         cursor: Optional[str] = "|",
+        show_status: bool = True,
+        show_summary: bool = True,
+        show_trace: bool = True,
+        show_artifacts: bool = True,
         cls: str = "",
         style: str = "",
         border: bool = False,
     ):
-        """Render chat history from a list-like state using Violit chat widgets."""
+        """Render chat history from a list-like state using Violit chat widgets.
+
+        Rich agent fields remain part of the message schema. The show_* flags only
+        control whether those fields are rendered for this view.
+        """
         items = messages.value if hasattr(messages, "value") else messages
         with self.chat_thread(height=height, cls=cls, style=style, border=border):
             for item in items or []:
                 role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
-                with self.chat_message(role):
-                    chunks = item.get("chunks") if isinstance(item, dict) else None
-                    status = item.get("status") if isinstance(item, dict) else None
-                    content = item.get("content") if isinstance(item, dict) else str(item)
+                phase = _normalize_chat_phase(item)
+                status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
+                content = item.get("content") if isinstance(item, dict) else str(item)
+                chunks = item.get("chunks") if isinstance(item, dict) else None
+                thinking_label = item.get("thinking_label", "Thinking...") if isinstance(item, dict) else "Thinking..."
+                summary_value = item.get("summary", "") if isinstance(item, dict) and show_summary else ""
+                trace_value = item.get("trace") if isinstance(item, dict) and show_trace else None
+                artifacts_value = item.get("artifacts") if isinstance(item, dict) and show_artifacts else None
+                error_value = item.get("error", "") if isinstance(item, dict) else ""
+                has_text_output = False
+                if isinstance(chunks, (list, tuple)):
+                    has_text_output = any(_coerce_chat_text(chunk).strip() for chunk in chunks)
+                if not has_text_output:
+                    has_text_output = bool(_coerce_chat_text(content).strip())
+
+                is_agent_item = False
+                if isinstance(item, dict):
+                    is_agent_item = any(
+                        (
+                            summary_value,
+                            trace_value,
+                            artifacts_value,
+                            item.get("status_text") if show_status else "",
+                            error_value,
+                            item.get("phase"),
+                        )
+                    )
+
+                status_text = ""
+                if isinstance(item, dict) and show_status and is_agent_item and not has_text_output:
+                    status_text = _coerce_chat_text(
+                        item.get("status_text")
+                        or (thinking_label if phase in {"thinking", "running"} else "")
+                    )
+
+                thinking = show_status and is_agent_item and not has_text_output and (
+                    phase in {"thinking", "running"} or status in {"thinking", "streaming"}
+                )
+                has_visible_agent_meta = any(
+                    (
+                        _coerce_chat_text(status_text).strip(),
+                        summary_value,
+                        trace_value,
+                        artifacts_value,
+                        error_value,
+                    )
+                )
+
+                if not has_text_output and not has_visible_agent_meta and role == "assistant":
+                    continue
+
+                with self.chat_message(
+                    role,
+                    avatar=item.get("avatar") if isinstance(item, dict) else None,
+                    thinking=thinking,
+                    thinking_label=thinking_label,
+                    phase=phase,
+                    status_text=status_text,
+                    summary=summary_value,
+                    trace=trace_value,
+                    artifacts=artifacts_value,
+                    error_text=error_value,
+                    key=item.get("key") if isinstance(item, dict) else None,
+                ):
                     if chunks:
                         if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
                             streamed_text = "".join(chunks)
@@ -420,8 +924,40 @@ class ChatWidgetsMixin:
                             self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
                     elif content:
                         self.markdown(content)
+                    elif isinstance(item, dict) and error_value:
+                        pass
+                    elif isinstance(item, dict) and has_visible_agent_meta:
+                        pass
                     else:
-                        self.caption(item.get("thinking_label", "Thinking...") if isinstance(item, dict) else "Thinking...")
+                        self.caption(thinking_label)
+
+    def agent_messages(
+        self,
+        messages,
+        *,
+        height: Union[int, str] = "58vh",
+        cursor: Optional[str] = "|",
+        show_status: bool = True,
+        show_summary: bool = True,
+        show_trace: bool = True,
+        show_artifacts: bool = True,
+        cls: str = "",
+        style: str = "",
+        border: bool = False,
+    ):
+        """Alias for chat_messages for discoverability in agent-focused apps."""
+        return self.chat_messages(
+            messages,
+            height=height,
+            cursor=cursor,
+            show_status=show_status,
+            show_summary=show_summary,
+            show_trace=show_trace,
+            show_artifacts=show_artifacts,
+            cls=cls,
+            style=style,
+            border=border,
+        )
 
     def chat_input(
         self,
@@ -524,13 +1060,36 @@ class ChatWidgetsMixin:
                     return reply
 
                 chunks = []
+                agent_stream_seen = False
                 last_emit_at = time.perf_counter()
                 pending_emit_chars = 0
                 for raw_chunk in candidate:
+                    if _is_agent_event(raw_chunk):
+                        agent_stream_seen = True
+                        _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
+                        _push_stream_frame(self)
+                        last_emit_at = time.perf_counter()
+                        pending_emit_chars = 0
+                        continue
+
                     chunk = self._extract_stream_chunk(raw_chunk)
                     text = chunk if isinstance(chunk, str) else str(chunk)
                     if not text:
                         continue
+
+                    if agent_stream_seen:
+                        chunks.append(text)
+                        _patch_last_chat_item(
+                            messages,
+                            chunks=list(chunks),
+                            content="".join(chunks),
+                            status="streaming",
+                            phase="running",
+                            cursor=stream_cursor,
+                        )
+                        _push_stream_frame(self)
+                        continue
+
                     fragments = list(
                         _iter_stream_text_fragments(
                             text,
@@ -559,6 +1118,24 @@ class ChatWidgetsMixin:
                     _push_stream_frame(self)
 
                 reply = "".join(chunks).strip()
+                if agent_stream_seen:
+                    last_item = (_clone_chat_items(messages)[-1] if getattr(messages, "value", None) else None)
+                    final_updates: dict[str, Any] = {
+                        "cursor": None,
+                    }
+                    if last_item and _normalize_chat_phase(last_item) != "error":
+                        final_updates["phase"] = "done"
+                        final_updates["status"] = "done"
+                        final_updates["status_text"] = ""
+                    if reply:
+                        final_updates["content"] = reply
+                        final_updates["chunks"] = list(chunks)
+                    _patch_last_chat_item(messages, **final_updates)
+                    final_item = _clone_chat_items(messages)[-1]
+                    if not _chat_item_has_visible_content(final_item):
+                        raise RuntimeError("Chat reply was empty.")
+                    return reply or _coerce_chat_text(final_item.get("summary")).strip() or "done"
+
                 if not reply:
                     raise RuntimeError("Chat reply was empty.")
                 _patch_last_chat_item(messages, content=reply, chunks=list(chunks), status="done", cursor=None)
