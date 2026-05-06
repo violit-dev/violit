@@ -1066,6 +1066,38 @@ class ChatWidgetsMixin:
                 for raw_chunk in candidate:
                     if _is_agent_event(raw_chunk):
                         agent_stream_seen = True
+                        event_type = _coerce_chat_text(raw_chunk.get("type") or raw_chunk.get("event")).strip().lower() if isinstance(raw_chunk, dict) else ""
+                        event_text = _coerce_chat_text(
+                            raw_chunk.get("text") or raw_chunk.get("content") or raw_chunk.get("message")
+                        ) if isinstance(raw_chunk, dict) else ""
+
+                        if event_type == "text" and event_text:
+                            fragments = list(
+                                _iter_stream_text_fragments(
+                                    event_text,
+                                    preferred_size=stream_profile["fragment_size"],
+                                    mode=stream_profile["fragment_mode"],
+                                )
+                            )
+                            for fragment in fragments:
+                                fragment_event = dict(raw_chunk)
+                                fragment_event["text"] = fragment
+                                _patch_last_chat_item_with_event(messages, fragment_event, cursor=stream_cursor)
+                                pending_emit_chars += len(fragment)
+                                if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
+                                    _push_stream_frame(self)
+                                    last_emit_at = time.perf_counter()
+                                    pending_emit_chars = 0
+                                pause = _stream_fragment_pause(
+                                    fragment,
+                                    stream_profile["delay"],
+                                    stream_profile["punctuation_pause"],
+                                    stream_profile["space_pause"],
+                                )
+                                if pause > 0:
+                                    time.sleep(pause)
+                            continue
+
                         _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
                         _push_stream_frame(self)
                         last_emit_at = time.perf_counter()
