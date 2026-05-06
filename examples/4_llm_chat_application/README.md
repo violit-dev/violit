@@ -1,9 +1,10 @@
 # 4. Very Simple LLM Chat Application
 
-This folder has two small chat examples:
+This folder has three small chat examples:
 
 - `demo_app_gemini.py`
 - `demo_app_openai.py`
+- `demo_app_gemini_agent.py`
 
 They have the same structure on purpose.
 
@@ -13,6 +14,7 @@ If you understand one file, the other file should feel familiar.
 
 - `demo_app_gemini.py`: Gemini chat example
 - `demo_app_openai.py`: OpenAI chat example
+- `demo_app_gemini_agent.py`: Gemini-powered agent example with visible trace and local tools
 
 ## Run
 
@@ -30,6 +32,13 @@ cd examples/4_llm_chat_application
 python demo_app_openai.py
 ```
 
+### Gemini Agent
+
+```bash
+cd examples/4_llm_chat_application
+python demo_app_gemini_agent.py
+```
+
 ## Configure
 
 There is no `.env` file in these examples.
@@ -37,6 +46,7 @@ There is no `.env` file in these examples.
 Open the app and paste your API key into the password input.
 
 - `demo_app_gemini.py` asks for `GEMINI_API_KEY`
+- `demo_app_gemini_agent.py` asks for `GEMINI_API_KEY`
 - `demo_app_openai.py` asks for `OPENAI_API_KEY`
 
 Each app also has a simple `Mode` selectbox:
@@ -48,7 +58,7 @@ That lets you compare the two response styles in the same UI.
 
 ## What The App Shows
 
-Both examples follow the same pattern:
+All three examples follow the same pattern:
 
 - create `app`, `messages`, `api_key`, and `mode`
 - show a password input for the API key
@@ -121,6 +131,7 @@ The main difference is only the request and response format:
 
 - Gemini uses the Gemini API structure
 - OpenAI uses the OpenAI API structure
+- Gemini Agent uses Gemini both as planner and final answerer, then maps the run into `status`, `step`, `summary`, `text`, `artifact`, and `done` events
 
 ## The Smallest Mental Model
 

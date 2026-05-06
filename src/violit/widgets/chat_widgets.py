@@ -1418,7 +1418,7 @@ class ChatWidgetsMixin:
                             return;
                         }}
                         window.lastActiveChatInput = 'input_{cid}';
-                        {f"window.sendAction('{cid}', trimmed);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: trimmed, _csrf_token: window._csrf_token || ''}}, swap: 'none'}});"}
+                        {f"window.sendAction('{cid}', trimmed);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: trimmed, _csrf_token: window._csrf_token || '', _vl_lite_stream_dirty: 'true'}}, swap: 'none'}});"}
                         el.value = '';
                         autoResize();
                         syncSendButtonState();
