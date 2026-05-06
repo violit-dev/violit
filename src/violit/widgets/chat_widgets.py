@@ -1070,8 +1070,11 @@ class ChatWidgetsMixin:
                         event_text = _coerce_chat_text(
                             raw_chunk.get("text") or raw_chunk.get("content") or raw_chunk.get("message")
                         ) if isinstance(raw_chunk, dict) else ""
+                        event_should_stream = True
+                        if isinstance(raw_chunk, dict) and raw_chunk.get("stream") is not None:
+                            event_should_stream = bool(raw_chunk.get("stream"))
 
-                        if event_type == "text" and event_text:
+                        if event_type == "text" and event_text and event_should_stream:
                             fragments = list(
                                 _iter_stream_text_fragments(
                                     event_text,
