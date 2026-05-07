@@ -190,6 +190,41 @@ def _coerce_chat_text(value: Any) -> str:
     return str(value)
 
 
+def _html_attr(name: str, value: Any) -> str:
+    text = _coerce_chat_text(value).strip()
+    if not text:
+        return ""
+    return f' {name}="{html_lib.escape(text, quote=True)}"'
+
+
+def _theme_tone(accent: str, *, bg_weight: int = 14, border_weight: int = 22) -> tuple[str, str]:
+    safe_bg_weight = max(0, min(100, int(bg_weight)))
+    safe_border_weight = max(0, min(100, int(border_weight)))
+    bg = f"color-mix(in srgb, {accent} {safe_bg_weight}%, var(--vl-bg-card) {100 - safe_bg_weight}%)"
+    border = f"color-mix(in srgb, {accent} {safe_border_weight}%, var(--vl-border) {100 - safe_border_weight}%)"
+    return bg, border
+
+
+def _phase_accent_color(phase: str) -> str:
+    normalized_phase = (phase or "").strip().lower()
+    return {
+        "thinking": "var(--vl-primary)",
+        "running": "color-mix(in srgb, var(--vl-primary) 38%, var(--vl-text) 62%)",
+        "done": "var(--vl-success)",
+        "error": "var(--vl-danger)",
+    }.get(normalized_phase, "var(--vl-text-muted)")
+
+
+def _trace_kind_accent_color(kind: str) -> str:
+    normalized_kind = (kind or "").strip().lower()
+    return {
+        "status": "var(--vl-primary)",
+        "tool_call": "var(--vl-success)",
+        "observation": "var(--vl-warning)",
+        "step": "color-mix(in srgb, var(--vl-primary) 18%, var(--vl-text) 82%)",
+    }.get(normalized_kind, "var(--vl-text-muted)")
+
+
 def _normalize_chat_phase(item: Any) -> str:
     if not isinstance(item, dict):
         return ""
@@ -253,28 +288,18 @@ def _render_agent_status_html(status_text: str, phase: str) -> str:
         "done": "Done",
         "error": "Error",
     }.get(normalized_phase, normalized_phase.title() or "Status")
-    badge_bg = {
-        "thinking": "rgba(59, 130, 246, 0.10)",
-        "running": "rgba(15, 23, 42, 0.08)",
-        "done": "rgba(34, 197, 94, 0.12)",
-        "error": "rgba(239, 68, 68, 0.12)",
-    }.get(normalized_phase, "rgba(148, 163, 184, 0.16)")
-    badge_color = {
-        "thinking": "#1d4ed8",
-        "running": "#334155",
-        "done": "#166534",
-        "error": "#b91c1c",
-    }.get(normalized_phase, "#334155")
+    badge_color = _phase_accent_color(normalized_phase)
+    badge_bg, card_border = _theme_tone(badge_color, bg_weight=14, border_weight=22)
     spinner_html = ""
     if normalized_phase in {"thinking", "running"}:
         spinner_html = '<wa-spinner style="font-size:0.78rem; --indicator-color: currentColor;"></wa-spinner>'
 
     return f'''
-    <div class="vl-agent-status" style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.8rem;padding:0.75rem 0.85rem;border-radius:14px;background:rgba(248, 250, 252, 0.82);border:1px solid rgba(148, 163, 184, 0.18);">
-        <div style="flex-shrink:0;display:flex;align-items:center;justify-content:center;color:{badge_color};min-height:1.1rem;">{spinner_html}</div>
-        <div style="min-width:0;flex:1;">
-            <div style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.48rem;border-radius:999px;background:{badge_bg};color:{badge_color};font-size:0.72rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;">{html_lib.escape(badge_label)}</div>
-            <div style="margin-top:0.42rem;color:var(--vl-text);font-size:0.94rem;line-height:1.5;">{safe_text}</div>
+    <div class="vl-agent-status vl-chat-meta-card vl-chat-meta-card--status vl-chat-meta-card--{normalized_phase}" data-chat-part="agent-status" data-agent-phase="{html_lib.escape(normalized_phase, quote=True)}" style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.8rem;padding:0.75rem 0.85rem;border-radius:14px;background:color-mix(in srgb, var(--vl-bg-card) 88%, var(--vl-bg) 12%);border:1px solid {card_border};box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 12%, transparent);">
+        <div class="vl-agent-status__icon" data-chat-part="agent-status-icon" style="flex-shrink:0;display:flex;align-items:center;justify-content:center;color:{badge_color};min-height:1.1rem;">{spinner_html}</div>
+        <div class="vl-agent-status__body" data-chat-part="agent-status-body" style="min-width:0;flex:1;">
+            <div class="vl-agent-status__badge" data-chat-part="agent-status-badge" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.48rem;border-radius:999px;background:{badge_bg};color:{badge_color};font-size:0.72rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;">{html_lib.escape(badge_label)}</div>
+            <div class="vl-agent-status__text" data-chat-part="agent-status-text" style="margin-top:0.42rem;color:var(--vl-text);font-size:0.94rem;line-height:1.5;">{safe_text}</div>
         </div>
     </div>
     '''
@@ -287,9 +312,9 @@ def _render_agent_summary_html(summary: str) -> str:
 
     safe_text = html_lib.escape(text).replace("\n", "<br>")
     return f'''
-    <div class="vl-agent-summary" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.92));border:1px solid rgba(148, 163, 184, 0.18);">
-        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--vl-text-muted, #64748b);margin-bottom:0.35rem;">Summary</div>
-        <div style="color:var(--vl-text);font-size:0.95rem;line-height:1.55;">{safe_text}</div>
+    <div class="vl-agent-summary vl-chat-meta-card vl-chat-meta-card--summary" data-chat-part="agent-summary" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:linear-gradient(180deg, color-mix(in srgb, var(--vl-bg-card) 94%, white 6%), color-mix(in srgb, var(--vl-bg-card) 86%, var(--vl-bg) 14%));border:1px solid color-mix(in srgb, var(--vl-border) 88%, var(--vl-primary) 12%);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent);">
+        <div class="vl-agent-summary__label" data-chat-part="agent-summary-label" style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--vl-text-muted, #64748b);margin-bottom:0.35rem;">Summary</div>
+        <div class="vl-agent-summary__text" data-chat-part="agent-summary-text" style="color:var(--vl-text);font-size:0.95rem;line-height:1.55;">{safe_text}</div>
     </div>
     '''
 
@@ -300,10 +325,11 @@ def _render_agent_error_html(error_text: str) -> str:
         return ""
 
     safe_text = html_lib.escape(text).replace("\n", "<br>")
+    error_bg, error_border = _theme_tone("var(--vl-danger)", bg_weight=14, border_weight=28)
     return f'''
-    <div class="vl-agent-error" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:rgba(254, 242, 242, 0.9);border:1px solid rgba(248, 113, 113, 0.28);color:#991b1b;">
-        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:0.35rem;">Error</div>
-        <div style="font-size:0.94rem;line-height:1.55;">{safe_text}</div>
+    <div class="vl-agent-error vl-chat-meta-card vl-chat-meta-card--error" data-chat-part="agent-error" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:{error_bg};border:1px solid {error_border};color:color-mix(in srgb, var(--vl-danger) 82%, var(--vl-text) 18%);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-danger) 10%, transparent);">
+        <div class="vl-agent-error__label" data-chat-part="agent-error-label" style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:0.35rem;">Error</div>
+        <div class="vl-agent-error__text" data-chat-part="agent-error-text" style="font-size:0.94rem;line-height:1.55;">{safe_text}</div>
     </div>
     '''
 
@@ -323,37 +349,27 @@ def _render_agent_trace_html(trace: Any, collapsed: bool = True) -> str:
         title = _coerce_chat_text(step.get("title")).strip()
         text = _coerce_chat_text(step.get("text") or step.get("content") or step.get("message")).strip()
         status = _coerce_chat_text(step.get("status")).strip()
-        badge_bg = {
-            "status": "rgba(59, 130, 246, 0.10)",
-            "tool_call": "rgba(16, 185, 129, 0.12)",
-            "observation": "rgba(245, 158, 11, 0.14)",
-            "step": "rgba(15, 23, 42, 0.08)",
-        }.get(kind, "rgba(148, 163, 184, 0.16)")
-        badge_color = {
-            "status": "#1d4ed8",
-            "tool_call": "#047857",
-            "observation": "#b45309",
-            "step": "#334155",
-        }.get(kind, "#334155")
+        badge_color = _trace_kind_accent_color(kind)
+        badge_bg, row_border = _theme_tone(badge_color, bg_weight=14, border_weight=20)
         safe_title = html_lib.escape(title)
         safe_text = html_lib.escape(text).replace("\n", "<br>")
         safe_status = html_lib.escape(status)
         body_html = ""
         if safe_title or safe_text:
-            body_html = f'<div style="margin-top:0.34rem;color:var(--vl-text);font-size:0.93rem;line-height:1.5;">'
+            body_html = f'<div class="vl-agent-trace__body" data-chat-part="agent-trace-body" style="margin-top:0.34rem;color:var(--vl-text);font-size:0.93rem;line-height:1.5;">'
             if safe_title:
-                body_html += f'<strong style="font-weight:650;">{safe_title}</strong>'
+                body_html += f'<strong class="vl-agent-trace__title" data-chat-part="agent-trace-title" style="font-weight:650;">{safe_title}</strong>'
                 if safe_text:
                     body_html += '<span style="opacity:0.66;">: </span>'
             if safe_text:
                 body_html += safe_text
             body_html += '</div>'
-        status_html = f'<div style="margin-top:0.28rem;font-size:0.8rem;color:var(--vl-text-muted, #64748b);">{safe_status}</div>' if safe_status else ''
+        status_html = f'<div class="vl-agent-trace__status" data-chat-part="agent-trace-status" style="margin-top:0.28rem;font-size:0.8rem;color:var(--vl-text-muted, #64748b);">{safe_status}</div>' if safe_status else ''
         rows.append(
             f'''
-            <div style="padding:0.72rem 0.15rem;{'' if not rows else 'border-top:1px solid rgba(148, 163, 184, 0.16);'}">
-                <div style="display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">
-                    <span style="display:inline-flex;align-items:center;padding:0.18rem 0.48rem;border-radius:999px;background:{badge_bg};color:{badge_color};font-size:0.72rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;">{html_lib.escape(kind.replace('_', ' '))}</span>
+            <div class="vl-agent-trace__row vl-agent-trace__row--{html_lib.escape(kind, quote=True)}" data-chat-part="agent-trace-row" data-trace-kind="{html_lib.escape(kind, quote=True)}" style="padding:0.72rem 0.15rem;{'' if not rows else f'border-top:1px solid {row_border};'}">
+                <div class="vl-agent-trace__header" data-chat-part="agent-trace-header" style="display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">
+                    <span class="vl-agent-trace__badge" data-chat-part="agent-trace-badge" style="display:inline-flex;align-items:center;padding:0.18rem 0.48rem;border-radius:999px;background:{badge_bg};color:{badge_color};font-size:0.72rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;">{html_lib.escape(kind.replace('_', ' '))}</span>
                 </div>
                 {body_html}
                 {status_html}
@@ -366,9 +382,9 @@ def _render_agent_trace_html(trace: Any, collapsed: bool = True) -> str:
 
     open_attr = "" if collapsed else "open"
     return f'''
-    <wa-details {open_attr} style="margin-bottom:0.85rem;border-radius:14px;">
-        <span slot="summary" style="font-weight:650;">Trace <span style="margin-left:0.35rem;color:var(--vl-text-muted, #64748b);font-size:0.84rem;">{len(rows)} steps</span></span>
-        <div style="padding:0.2rem 0.1rem 0.1rem;">
+    <wa-details class="vl-agent-trace" data-chat-part="agent-trace" {open_attr} style="margin-bottom:0.85rem;border-radius:14px;--summary-icon-color: var(--vl-text-muted);">
+        <span slot="summary" class="vl-agent-trace__summary" data-chat-part="agent-trace-summary" style="font-weight:650;color:var(--vl-text);">Trace <span class="vl-agent-trace__count" data-chat-part="agent-trace-count" style="margin-left:0.35rem;color:var(--vl-text-muted, #64748b);font-size:0.84rem;">{len(rows)} steps</span></span>
+        <div class="vl-agent-trace__content" data-chat-part="agent-trace-content" style="padding:0.2rem 0.1rem 0.1rem;">
             {''.join(rows)}
         </div>
     </wa-details>
@@ -392,13 +408,13 @@ def _render_agent_artifacts_html(artifacts: Any, collapsed: bool = True) -> str:
             link_html = ""
             if url:
                 safe_url = html_lib.escape(url, quote=True)
-                link_html = f'<div style="margin-top:0.45rem;"><a href="{safe_url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none;font-weight:600;">Open artifact</a></div>'
+                link_html = f'<div class="vl-agent-artifact__link-wrap" data-chat-part="agent-artifact-link-wrap" style="margin-top:0.45rem;"><a class="vl-agent-artifact__link" data-chat-part="agent-artifact-link" href="{safe_url}" target="_blank" rel="noopener noreferrer" style="color:var(--vl-primary);text-decoration:none;font-weight:600;">Open artifact</a></div>'
             cards.append(
                 f'''
-                <div style="padding:0.72rem 0.82rem;border-radius:12px;background:rgba(248, 250, 252, 0.9);border:1px solid rgba(148, 163, 184, 0.16);">
-                    <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--vl-text-muted, #64748b);margin-bottom:0.28rem;">{html_lib.escape(kind)}</div>
-                    <div style="font-weight:650;color:var(--vl-text);">{safe_title}</div>
-                    {f'<div style="margin-top:0.35rem;color:var(--vl-text);font-size:0.92rem;line-height:1.5;">{safe_text}</div>' if safe_text else ''}
+                <div class="vl-agent-artifact vl-agent-artifact--card" data-chat-part="agent-artifact" style="padding:0.72rem 0.82rem;border-radius:12px;background:color-mix(in srgb, var(--vl-bg-card) 90%, var(--vl-bg) 10%);border:1px solid color-mix(in srgb, var(--vl-border) 88%, var(--vl-primary) 12%);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent);">
+                    <div class="vl-agent-artifact__kind" data-chat-part="agent-artifact-kind" style="font-size:0.78rem;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:var(--vl-text-muted, #64748b);margin-bottom:0.28rem;">{html_lib.escape(kind)}</div>
+                    <div class="vl-agent-artifact__title" data-chat-part="agent-artifact-title" style="font-weight:650;color:var(--vl-text);">{safe_title}</div>
+                    {f'<div class="vl-agent-artifact__text" data-chat-part="agent-artifact-text" style="margin-top:0.35rem;color:var(--vl-text);font-size:0.92rem;line-height:1.5;">{safe_text}</div>' if safe_text else ''}
                     {link_html}
                 </div>
                 '''
@@ -409,7 +425,7 @@ def _render_agent_artifacts_html(artifacts: Any, collapsed: bool = True) -> str:
         if text:
             safe_plain_text = html_lib.escape(text).replace("\n", "<br>")
             cards.append(
-                f'<div style="padding:0.72rem 0.82rem;border-radius:12px;background:rgba(248, 250, 252, 0.9);border:1px solid rgba(148, 163, 184, 0.16);color:var(--vl-text);font-size:0.92rem;line-height:1.5;">{safe_plain_text}</div>'
+                f'<div class="vl-agent-artifact vl-agent-artifact--plain" data-chat-part="agent-artifact" style="padding:0.72rem 0.82rem;border-radius:12px;background:color-mix(in srgb, var(--vl-bg-card) 90%, var(--vl-bg) 10%);border:1px solid color-mix(in srgb, var(--vl-border) 88%, var(--vl-primary) 12%);color:var(--vl-text);font-size:0.92rem;line-height:1.5;">{safe_plain_text}</div>'
             )
 
     if not cards:
@@ -417,9 +433,9 @@ def _render_agent_artifacts_html(artifacts: Any, collapsed: bool = True) -> str:
 
     open_attr = "" if collapsed else "open"
     return f'''
-    <wa-details {open_attr} style="margin-top:0.9rem;border-radius:14px;">
-        <span slot="summary" style="font-weight:650;">Artifacts <span style="margin-left:0.35rem;color:var(--vl-text-muted, #64748b);font-size:0.84rem;">{len(cards)}</span></span>
-        <div style="display:grid;gap:0.65rem;padding:0.2rem 0.1rem 0.1rem;">
+    <wa-details class="vl-agent-artifacts" data-chat-part="agent-artifacts" {open_attr} style="margin-top:0.9rem;border-radius:14px;--summary-icon-color: var(--vl-text-muted);">
+        <span slot="summary" class="vl-agent-artifacts__summary" data-chat-part="agent-artifacts-summary" style="font-weight:650;color:var(--vl-text);">Artifacts <span class="vl-agent-artifacts__count" data-chat-part="agent-artifacts-count" style="margin-left:0.35rem;color:var(--vl-text-muted, #64748b);font-size:0.84rem;">{len(cards)}</span></span>
+        <div class="vl-agent-artifacts__content" data-chat-part="agent-artifacts-content" style="display:grid;gap:0.65rem;padding:0.2rem 0.1rem 0.1rem;">
             {''.join(cards)}
         </div>
     </wa-details>
@@ -686,37 +702,38 @@ class ChatWidgetsMixin:
                     name_color = "var(--vl-text-muted, #64748b)"
                     avatar_content = ""
                     normalized_phase = _coerce_chat_text(self.phase).strip().lower()
+                    user_class_attr = _html_attr("class", merge_cls("vl-chat-message-root", self.user_cls))
                     
                     # Icons handling
                     if self.avatar:
                         if self.avatar.startswith("http") or self.avatar.startswith("data:"):
                             safe_avatar = html_lib.escape(self.avatar, quote=True)
-                            avatar_content = f'<img src="{safe_avatar}" style="width:42px;height:42px;border-radius:999px;object-fit:cover;border:1px solid rgba(148, 163, 184, 0.25);">'
+                            avatar_content = f'<img class="vl-chat-avatar-inner vl-chat-avatar-inner--image" data-chat-part="avatar-inner" src="{safe_avatar}" style="width:var(--vl-chat-avatar-size, 42px);height:var(--vl-chat-avatar-size, 42px);border-radius:999px;object-fit:cover;border:1px solid color-mix(in srgb, var(--vl-border) 78%, transparent);box-shadow:var(--vl-chat-avatar-shadow, 0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent));">'
                         else:
                             safe_avatar = html_lib.escape(self.avatar)
-                            avatar_content = f'<div style="width:42px;height:42px;border-radius:999px;background:linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);border:1px solid rgba(148, 163, 184, 0.25);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#334155;">{safe_avatar}</div>'
+                            avatar_content = f'<div class="vl-chat-avatar-inner vl-chat-avatar-inner--label" data-chat-part="avatar-inner" style="width:var(--vl-chat-avatar-size, 42px);height:var(--vl-chat-avatar-size, 42px);border-radius:999px;background:linear-gradient(135deg, color-mix(in srgb, var(--vl-bg-card) 76%, var(--vl-bg) 24%) 0%, color-mix(in srgb, var(--vl-border) 76%, var(--vl-bg-card) 24%) 100%);border:1px solid color-mix(in srgb, var(--vl-border) 78%, transparent);display:flex;align-items:center;justify-content:center;font-size:var(--vl-chat-avatar-font-size, 18px);font-weight:700;color:color-mix(in srgb, var(--vl-text) 78%, var(--vl-primary) 22%);box-shadow:var(--vl-chat-avatar-shadow, 0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent));">{safe_avatar}</div>'
                     else:
                         if role == "user":
-                            avatar_content = '<div style="width:42px;height:42px;border-radius:999px;background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);color:white;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(37, 99, 235, 0.18);"><wa-icon name="user"></wa-icon></div>'
+                            avatar_content = '<div class="vl-chat-avatar-inner vl-chat-avatar-inner--user" data-chat-part="avatar-inner" style="width:var(--vl-chat-avatar-size, 42px);height:var(--vl-chat-avatar-size, 42px);border-radius:999px;background:linear-gradient(135deg, var(--vl-primary) 0%, var(--vl-secondary) 100%);color:color-mix(in srgb, white 88%, var(--vl-bg) 12%);display:flex;align-items:center;justify-content:center;box-shadow:var(--vl-chat-avatar-shadow, 0 10px 24px color-mix(in srgb, var(--vl-primary) 18%, transparent));"><wa-icon name="user"></wa-icon></div>'
                         elif role == "assistant":
-                            avatar_content = '<div style="width:42px;height:42px;border-radius:999px;background:linear-gradient(135deg, #0f172a 0%, #334155 100%);color:white;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(15, 23, 42, 0.2);"><wa-icon name="sparkles"></wa-icon></div>'
+                            avatar_content = '<div class="vl-chat-avatar-inner vl-chat-avatar-inner--assistant" data-chat-part="avatar-inner" style="width:var(--vl-chat-avatar-size, 42px);height:var(--vl-chat-avatar-size, 42px);border-radius:999px;background:linear-gradient(135deg, color-mix(in srgb, var(--vl-secondary) 72%, var(--vl-primary) 28%) 0%, color-mix(in srgb, var(--vl-text) 24%, var(--vl-secondary) 76%) 100%);color:color-mix(in srgb, white 88%, var(--vl-bg) 12%);display:flex;align-items:center;justify-content:center;box-shadow:var(--vl-chat-avatar-shadow, 0 10px 24px color-mix(in srgb, var(--vl-secondary) 18%, transparent));"><wa-icon name="sparkles"></wa-icon></div>'
                         else:
                             initial = self.name[0].upper() if self.name else "?"
-                            avatar_content = f'<div style="width:42px;height:42px;border-radius:999px;background:linear-gradient(135deg, #64748b 0%, #475569 100%);color:white;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 10px 24px rgba(71, 85, 105, 0.2);">{html_lib.escape(initial)}</div>'
+                            avatar_content = f'<div class="vl-chat-avatar-inner vl-chat-avatar-inner--generic" data-chat-part="avatar-inner" style="width:var(--vl-chat-avatar-size, 42px);height:var(--vl-chat-avatar-size, 42px);border-radius:999px;background:linear-gradient(135deg, var(--vl-text-muted) 0%, color-mix(in srgb, var(--vl-text-muted) 62%, var(--vl-secondary) 38%) 100%);color:color-mix(in srgb, white 90%, var(--vl-bg) 10%);display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:var(--vl-chat-avatar-shadow, 0 10px 24px color-mix(in srgb, var(--vl-text-muted) 16%, transparent));">{html_lib.escape(initial)}</div>'
 
                     if role == "user":
-                        bubble_bg = "linear-gradient(180deg, rgba(37, 99, 235, 0.12) 0%, rgba(37, 99, 235, 0.07) 100%)"
-                        bubble_border = "1px solid rgba(37, 99, 235, 0.18)"
-                        bubble_shadow = "0 12px 28px rgba(37, 99, 235, 0.12)"
-                        name_color = "#1d4ed8"
+                        bubble_bg = "linear-gradient(180deg, color-mix(in srgb, var(--vl-primary) 18%, var(--vl-bg-card) 82%) 0%, color-mix(in srgb, var(--vl-primary) 10%, var(--vl-bg-card) 90%) 100%)"
+                        bubble_border = "1px solid color-mix(in srgb, var(--vl-primary) 28%, var(--vl-border) 72%)"
+                        bubble_shadow = "0 12px 28px color-mix(in srgb, var(--vl-primary) 16%, transparent)"
+                        name_color = "var(--vl-primary)"
                     elif normalized_phase == "error":
-                        bubble_bg = "linear-gradient(180deg, rgba(254, 242, 242, 0.96) 0%, rgba(254, 226, 226, 0.9) 100%)"
-                        bubble_border = "1px solid rgba(248, 113, 113, 0.22)"
-                        bubble_shadow = "0 14px 30px rgba(239, 68, 68, 0.08)"
+                        bubble_bg = "linear-gradient(180deg, color-mix(in srgb, var(--vl-danger) 16%, var(--vl-bg-card) 84%) 0%, color-mix(in srgb, var(--vl-danger) 10%, var(--vl-bg-card) 90%) 100%)"
+                        bubble_border = "1px solid color-mix(in srgb, var(--vl-danger) 28%, var(--vl-border) 72%)"
+                        bubble_shadow = "0 14px 30px color-mix(in srgb, var(--vl-danger) 12%, transparent)"
                     elif self.thinking:
-                        bubble_bg = "linear-gradient(180deg, rgba(15, 23, 42, 0.06) 0%, rgba(148, 163, 184, 0.10) 100%)"
-                        bubble_border = "1px solid rgba(148, 163, 184, 0.30)"
-                        bubble_shadow = "0 14px 30px rgba(15, 23, 42, 0.08)"
+                        bubble_bg = "linear-gradient(180deg, color-mix(in srgb, var(--vl-text-muted) 10%, var(--vl-bg-card) 90%) 0%, color-mix(in srgb, var(--vl-primary) 8%, var(--vl-bg-card) 92%) 100%)"
+                        bubble_border = "1px solid color-mix(in srgb, var(--vl-primary) 18%, var(--vl-border) 82%)"
+                        bubble_shadow = "0 14px 30px color-mix(in srgb, var(--vl-primary) 10%, transparent)"
 
                     before_content_html = "".join(
                         part
@@ -733,11 +750,11 @@ class ChatWidgetsMixin:
                     if self.thinking and not inner_html and not before_content_html and not after_content_html:
                         label = html_lib.escape(self.thinking_label)
                         inner_html = f'''
-                        <div class="vl-chat-thinking" style="display:flex;align-items:center;gap:0.8rem;min-height:1.4rem;">
+                        <div class="vl-chat-thinking" data-chat-part="thinking" style="display:flex;align-items:center;gap:0.8rem;min-height:1.4rem;">
                             <wa-spinner style="font-size:1rem;--indicator-color: var(--vl-accent, #2563eb);"></wa-spinner>
-                            <div>
-                                <div style="font-weight:600;color:var(--vl-text);">{label}</div>
-                                <div style="font-size:0.88rem;color:var(--vl-text-muted, #64748b);margin-top:0.15rem;">The response is being prepared in the background.</div>
+                            <div class="vl-chat-thinking__body" data-chat-part="thinking-body">
+                                <div class="vl-chat-thinking__label" data-chat-part="thinking-label" style="font-weight:600;color:var(--vl-text);">{label}</div>
+                                <div class="vl-chat-thinking__caption" data-chat-part="thinking-caption" style="font-size:0.88rem;color:var(--vl-text-muted, #64748b);margin-top:0.15rem;">The response is being prepared in the background.</div>
                             </div>
                         </div>
                         '''
@@ -761,13 +778,13 @@ class ChatWidgetsMixin:
                         safe_key_attr = f' data-chat-key="{html_lib.escape(str(self.key), quote=True)}"'
 
                     html = f'''
-                    <div class="chat-message chat-message--{role}" data-chat-message="true" data-chat-role="{role}" data-chat-thinking="{'true' if self.thinking else 'false'}"{safe_key_attr} style="display:flex; gap:14px; align-items:flex-start; justify-content:{row_justify}; margin-bottom:18px;">
-                        <div class="chat-avatar" style="flex-shrink:0; padding-top:2px;">
+                    <div class="chat-message vl-chat-message chat-message--{role} vl-chat-message--{role}{' vl-chat-message--thinking' if self.thinking else ''}{' vl-chat-message--error' if normalized_phase == 'error' else ''}" data-chat-message="true" data-chat-role="{role}" data-chat-phase="{html_lib.escape(normalized_phase or ('thinking' if self.thinking else 'done'), quote=True)}" data-chat-thinking="{'true' if self.thinking else 'false'}" data-chat-part="message"{safe_key_attr}{user_class_attr} style="--vl-chat-author-color-base:{name_color};--vl-chat-bubble-bg-base:{bubble_bg};--vl-chat-bubble-border-base:{bubble_border};--vl-chat-bubble-shadow-base:{bubble_shadow};display:flex; gap:var(--vl-chat-row-gap, 14px); align-items:flex-start; justify-content:{row_justify}; margin-bottom:var(--vl-chat-message-spacing, 18px);">
+                        <div class="chat-avatar vl-chat-avatar" data-chat-part="avatar" style="flex-shrink:0; padding-top:2px;">
                            {avatar_content}
                         </div>
-                        <div class="chat-content" style="flex:1; min-width:0; overflow-wrap:break-word; display:flex; flex-direction:column; gap:0.5rem; {width_style}">
-                            <div class="chat-author" style="font-size:0.8rem; letter-spacing:0.03em; text-transform:uppercase; font-weight:700; color:{name_color}; padding:0 0.2rem;">{safe_name}</div>
-                            <div class="chat-bubble" style="background:{bubble_bg}; border:{bubble_border}; box-shadow:{bubble_shadow}; border-radius:20px; padding:16px 18px; color:var(--vl-text); line-height:1.6;">
+                        <div class="chat-content vl-chat-content" data-chat-part="content" style="flex:1; min-width:0; overflow-wrap:break-word; display:flex; flex-direction:column; gap:0.5rem; {width_style}">
+                            <div class="chat-author vl-chat-author" data-chat-part="author" style="font-size:var(--vl-chat-author-size, 0.8rem); letter-spacing:var(--vl-chat-author-tracking, 0.03em); text-transform:uppercase; font-weight:700; color:var(--vl-chat-author-color, var(--vl-chat-author-color-base)); padding:0 0.2rem;">{safe_name}</div>
+                            <div class="chat-bubble vl-chat-bubble" data-chat-part="bubble" style="background:var(--vl-chat-bubble-bg, var(--vl-chat-bubble-bg-base)); border:var(--vl-chat-bubble-border, var(--vl-chat-bubble-border-base)); box-shadow:var(--vl-chat-bubble-shadow, var(--vl-chat-bubble-shadow-base)); border-radius:var(--vl-chat-bubble-radius, 20px); padding:var(--vl-chat-bubble-py, 16px) var(--vl-chat-bubble-px, 18px); color:var(--vl-text); line-height:1.6; backdrop-filter:saturate(140%) blur(3px);">
                                 {inner_html}
                             </div>
                         </div>
@@ -809,11 +826,11 @@ class ChatWidgetsMixin:
         """
         surface_style = merge_style(
             """
-            border-radius: 24px;
-            padding: 0.25rem 0.35rem 0.5rem;
-            background: linear-gradient(180deg, rgba(248, 250, 252, 0.82), rgba(255, 255, 255, 0.94));
-            border: 1px solid rgba(148, 163, 184, 0.16);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+            border-radius: var(--vl-chat-thread-radius, 24px) !important;
+            padding: var(--vl-chat-thread-padding, 0.25rem 0.35rem 0.5rem);
+            background: linear-gradient(180deg, color-mix(in srgb, var(--vl-bg-card) 90%, var(--vl-bg) 10%), color-mix(in srgb, var(--vl-bg-card) 82%, var(--vl-bg) 18%)) !important;
+            border: 1px solid color-mix(in srgb, var(--vl-border) 88%, var(--vl-primary) 12%) !important;
+            box-shadow: var(--vl-chat-thread-shadow, inset 0 1px 0 color-mix(in srgb, white 24%, transparent), 0 18px 40px color-mix(in srgb, var(--vl-border) 10%, transparent)) !important;
             """,
             style,
         )
@@ -1286,10 +1303,10 @@ class ChatWidgetsMixin:
                 spacer_html = ""
             
             html = f'''
-            <div class="chat-input-container" data-chat-pinned="{'true' if effective_pinned else 'false'}" style="
+            <div class="chat-input-container vl-chat-input-container{(' ' + html_lib.escape(cls, quote=True)) if cls else ''}" data-chat-pinned="{'true' if effective_pinned else 'false'}" data-chat-part="input-container" style="
                 {container_style}
             ">
-                <div data-chat-input-root="{cid}" style="
+                <div class="vl-chat-input-root" data-chat-input-root="{cid}" data-chat-part="input-root" style="
                     {width_style}
                     max-width: 860px;
                     display: flex;
@@ -1297,16 +1314,16 @@ class ChatWidgetsMixin:
                     gap: 10px;
                     pointer-events: auto;
                 ">
-                    <div style="
+                    <div class="vl-chat-input-surface" data-chat-part="input-surface" style="
                         flex: 1;
                         min-width: 0;
-                        background: color-mix(in srgb, var(--vl-bg-card) 92%, white 8%);
+                        background: color-mix(in srgb, var(--vl-bg-card) 92%, var(--vl-bg) 8%);
                         border: 1px solid color-mix(in srgb, var(--vl-border) 80%, transparent);
-                        border-radius: 24px;
-                        padding: 10px;
-                        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.10);
+                        border-radius: var(--vl-chat-input-surface-radius, 24px);
+                        padding: var(--vl-chat-input-surface-padding, 10px);
+                        box-shadow: 0 20px 40px color-mix(in srgb, var(--vl-border) 10%, transparent);
                     ">
-                        <textarea id="input_{cid}" class="chat-input-box" placeholder={placeholder_js}
+                        <textarea id="input_{cid}" class="chat-input-box vl-chat-input-box" data-chat-part="input-textarea" placeholder={placeholder_js}
                             rows="1"
                             {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
                             {"disabled" if disabled else ""}
@@ -1315,7 +1332,7 @@ class ChatWidgetsMixin:
                                 border: none;
                                 background: transparent;
                                 padding: 10px 12px;
-                                font-size: 1rem;
+                                font-size: var(--vl-chat-input-font-size, 1rem);
                                 color: var(--vl-text);
                                 outline: none;
                                 resize: none;
@@ -1327,7 +1344,7 @@ class ChatWidgetsMixin:
                             "
                         ></textarea>
                     </div>
-                    <wa-button id="send_{cid}" type="button" size="small" variant="brand" appearance="accent" {"disabled" if disabled else ""} style="flex: 0 0 48px; min-width: 48px; width: 48px; height: 48px; margin-bottom: 2px; --wa-button-padding-inline: 0;" onclick="
+                    <wa-button id="send_{cid}" type="button" size="small" variant="brand" appearance="accent" {"disabled" if disabled else ""} style="flex: 0 0 var(--vl-chat-input-button-size, 48px); min-width: var(--vl-chat-input-button-size, 48px); width: var(--vl-chat-input-button-size, 48px); height: var(--vl-chat-input-button-size, 48px); margin-bottom: 2px; --wa-button-padding-inline: 0;" onclick="
                         window.submitChatInput_{cid}();
                     ">
                         <span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0;">
