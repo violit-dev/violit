@@ -5,90 +5,285 @@ import re
 import time
 from typing import Union, Callable, Optional, Any
 from urllib.parse import urlparse
+
+try:
+    import markdown as markdown_lib
+except ImportError:  # pragma: no cover - dependency should be installed with violit
+    markdown_lib = None
+
 from ..component import Component
 from ..context import rendering_ctx
 from ..style_utils import merge_cls, merge_style
 
 
+def _sanitize_markdown_url(raw_url: str, *, allowed_schemes: set[str], allow_relative: bool = False) -> str | None:
+    url = html_lib.unescape(raw_url).strip()
+    if not url or url.startswith("//"):
+        return None
+
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    if scheme:
+        if scheme not in allowed_schemes:
+            return None
+    elif not allow_relative:
+        return None
+
+    return html_lib.escape(url, quote=True)
+
+
 def _sanitize_markdown_href(raw_href: str) -> str | None:
-    href = html_lib.unescape(raw_href).strip()
-    if not href or href.startswith("//"):
-        return None
+    return _sanitize_markdown_url(
+        raw_href,
+        allowed_schemes={"http", "https", "mailto", "tel"},
+        allow_relative=False,
+    )
 
-    scheme = urlparse(href).scheme.lower()
-    if scheme and scheme not in {"http", "https", "mailto", "tel"}:
-        return None
 
-    return html_lib.escape(href, quote=True)
+def _sanitize_markdown_src(raw_src: str) -> str | None:
+    return _sanitize_markdown_url(
+        raw_src,
+        allowed_schemes={"http", "https"},
+        allow_relative=False,
+    )
+
+
+def _inject_style_attr(opening_tag: str, style: str, *, extra_attrs: list[str] | None = None) -> str:
+    updated_tag = opening_tag
+
+    style_match = re.search(r'style=("|\')(.*?)(\1)', updated_tag, flags=re.IGNORECASE | re.DOTALL)
+    if style_match:
+        existing_style = style_match.group(2).strip()
+        merged_style = f"{existing_style.rstrip(';')} ; {style}" if existing_style else style
+        updated_tag = (
+            updated_tag[:style_match.start()]
+            + f'style={style_match.group(1)}{merged_style}{style_match.group(1)}'
+            + updated_tag[style_match.end():]
+        )
+    else:
+        updated_tag = updated_tag[:-1] + f' style="{style}">'
+
+    if extra_attrs:
+        for attr in extra_attrs:
+            attr_name = attr.split("=", 1)[0].strip().lower()
+            if re.search(rf'\b{re.escape(attr_name)}\b', updated_tag, flags=re.IGNORECASE):
+                continue
+            updated_tag = updated_tag[:-1] + f' {attr}>'
+
+    return updated_tag
+
+
+def _style_rendered_markdown_html(rendered_html: str) -> str:
+    styles = {
+        "p": "margin:0 0 0.85rem 0; line-height:1.7;",
+        "ul": "margin:0.75rem 0; padding-left:1.5rem; list-style:disc; list-style-position:outside;",
+        "ol": "margin:0.75rem 0; padding-left:1.5rem; list-style:decimal; list-style-position:outside;",
+        "li": "margin:0.2rem 0; display:list-item;",
+        "blockquote": "margin:1rem 0; padding:0.15rem 0 0.15rem 1rem; border-left:4px solid var(--vl-primary); color:var(--vl-text-muted);",
+        "pre": "margin:1rem 0; padding:0.9rem 1rem; overflow-x:auto; border-radius:0.75rem; background:var(--vl-bg-card); border:1px solid var(--vl-border);",
+        "table": "width:100%; margin:1rem 0; border-collapse:collapse; display:table;",
+        "thead": "background:var(--vl-bg-card);",
+        "th": "padding:0.65rem 0.75rem; border:1px solid var(--vl-border); text-align:left; font-weight:600;",
+        "td": "padding:0.65rem 0.75rem; border:1px solid var(--vl-border); vertical-align:top;",
+        "hr": "border:none; border-top:1px solid var(--vl-border); margin:1.25rem 0;",
+        "img": "max-width:100%; height:auto; margin:0.9rem 0; border-radius:0.5rem;",
+    }
+
+    rendered_html = re.sub(
+        r'<div\b([^>]*?)class=("|\")(.*?\bcodehilite\b.*?)(\2)([^>]*)>',
+        lambda match: _inject_style_attr(
+            match.group(0),
+            "margin:1rem 0; border-radius:0.75rem; overflow:hidden; border:1px solid var(--vl-border); background:var(--vl-bg-card);",
+        ),
+        rendered_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    for tag_name, style in styles.items():
+        rendered_html = re.sub(
+            rf'<{tag_name}\b[^>]*>',
+            lambda match, style=style: _inject_style_attr(match.group(0), style),
+            rendered_html,
+            flags=re.IGNORECASE,
+        )
+
+    rendered_html = re.sub(
+        r'<code\b(?![^>]*(data-vl-code-block|class=|style=))[^>]*>',
+        lambda match: _inject_style_attr(
+            match.group(0),
+            "background:var(--vl-bg-card); padding:0.2em 0.4em; border-radius:0.35rem; font-family:'SF Mono','Fira Code','Consolas',monospace; font-size:0.92em;",
+        ),
+        rendered_html,
+        flags=re.IGNORECASE,
+    )
+
+    rendered_html = re.sub(
+        r'<pre\b[^>]*>\s*<code\b([^>]*)>',
+        lambda match: (
+            match.group(0).replace(
+                "<code",
+                '<code data-vl-code-block="true" style="background:transparent; padding:0; border-radius:0; font-family:\'SF Mono\',\'Fira Code\',\'Consolas\',monospace; font-size:0.92rem;"',
+                1,
+            )
+        ),
+        rendered_html,
+        flags=re.IGNORECASE,
+    )
+
+    return rendered_html
+
+
+def _sanitize_rendered_markdown_html(rendered_html: str) -> str:
+    def replace_anchor(match: re.Match[str]) -> str:
+        attrs_before = match.group(1) or ""
+        raw_href = match.group(3)
+        attrs_after = match.group(4) or ""
+        label = match.group(5)
+        safe_href = _sanitize_markdown_href(raw_href)
+        if safe_href is None:
+            return f'{label} ({html_lib.escape(html_lib.unescape(raw_href))})'
+        anchor_tag = f'<a{attrs_before} href="{safe_href}"{attrs_after}>'
+        return _inject_style_attr(
+            anchor_tag,
+            "color:var(--vl-primary); text-decoration:underline;",
+            extra_attrs=['rel="noopener noreferrer"'],
+        ) + label + '</a>'
+
+    rendered_html = re.sub(
+        r'<a\b([^>]*?)href=("|\')(.*?)(\2)([^>]*)>(.*?)</a>',
+        replace_anchor,
+        rendered_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    def replace_image(match: re.Match[str]) -> str:
+        opening_tag = match.group(0)
+        src_match = re.search(r'src=("|\')(.*?)(\1)', opening_tag, flags=re.IGNORECASE | re.DOTALL)
+        if src_match is None:
+            return opening_tag
+        safe_src = _sanitize_markdown_src(src_match.group(2))
+        alt_match = re.search(r'alt=("|\')(.*?)(\1)', opening_tag, flags=re.IGNORECASE | re.DOTALL)
+        alt_text = html_lib.escape(html_lib.unescape(alt_match.group(2))) if alt_match else "image"
+        if safe_src is None:
+            return f'<span style="color:var(--vl-text-muted);">[image: {alt_text}]</span>'
+        sanitized_tag = (
+            opening_tag[:src_match.start()]
+            + f'src="{safe_src}"'
+            + opening_tag[src_match.end():]
+        )
+        return _inject_style_attr(sanitized_tag, "max-width:100%; height:auto; margin:0.9rem 0; border-radius:0.5rem;", extra_attrs=['loading="lazy"'])
+
+    rendered_html = re.sub(r'<img\b[^>]*?>', replace_image, rendered_html, flags=re.IGNORECASE | re.DOTALL)
+
+    def replace_task_list(match: re.Match[str]) -> str:
+        checked = match.group(1).lower() == "x"
+        label = match.group(2)
+        checkbox_style = (
+            "display:inline-flex; align-items:center; justify-content:center; "
+            "width:1rem; height:1rem; margin-right:0.55rem; border-radius:0.25rem; "
+            f"border:1.5px solid {'var(--vl-primary)' if checked else 'var(--vl-border)'}; "
+            f"background:{'var(--vl-primary)' if checked else 'transparent'}; "
+            f"color:{'white' if checked else 'transparent'}; font-size:0.75rem; font-weight:700; flex:0 0 auto;"
+        )
+        checkbox = f'<span aria-hidden="true" style="{checkbox_style}">{"✓" if checked else ""}</span>'
+        return (
+            '<li style="margin:0.2rem 0; display:flex; align-items:flex-start; list-style:none;">'
+            f'{checkbox}<span style="display:inline-block; line-height:1.6;">{label}</span>'
+            '</li>'
+        )
+
+    rendered_html = re.sub(
+        r'<li\b[^>]*>\s*\[([ xX])\]\s*(.*?)</li>',
+        replace_task_list,
+        rendered_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    return _style_rendered_markdown_html(rendered_html)
+
+
+def _escape_raw_html_fragments(text: str) -> str:
+    return re.sub(r'<[^>\n]+>', lambda match: html_lib.escape(match.group(0)), text)
+
+
+def _normalize_markdown_indentation(text: str) -> str:
+    normalized_lines = []
+    in_fence = False
+
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            normalized_lines.append(line)
+            continue
+
+        if in_fence:
+            normalized_lines.append(line)
+            continue
+
+        match = re.match(r'^( +)([-*+]\s+|\d+\.\s+)(.*)$', line)
+        if match is None:
+            normalized_lines.append(line)
+            continue
+
+        indent_len = len(match.group(1))
+        if indent_len == 0:
+            normalized_lines.append(line)
+            continue
+
+        normalized_indent_len = max(4, ((indent_len + 3) // 4) * 4)
+        normalized_lines.append(
+            f'{" " * normalized_indent_len}{match.group(2)}{match.group(3)}'
+        )
+
+    return "\n".join(normalized_lines)
+
+
+def _markdown_extensions() -> list[str]:
+    return ["fenced_code", "tables", "sane_lists", "nl2br", "codehilite"]
+
+
+def _markdown_extension_configs() -> dict[str, dict[str, object]]:
+    return {
+        "codehilite": {
+            "guess_lang": False,
+            "noclasses": True,
+            "css_class": "codehilite",
+        }
+    }
 
 
 def _render_safe_markdown_html(text: str) -> str:
-    escaped_text = html_lib.escape(text)
-    lines = escaped_text.split('\n')
-    result = []
-    i = 0
+    if markdown_lib is None:
+        safe_text = html_lib.escape(text).replace('\n', '<br>')
+        return safe_text
 
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
+    rendered_html = markdown_lib.markdown(
+        _escape_raw_html_fragments(_normalize_markdown_indentation(text)),
+        extensions=_markdown_extensions(),
+        extension_configs=_markdown_extension_configs(),
+        output_format="html",
+    )
+    return _sanitize_rendered_markdown_html(rendered_html)
 
-        if stripped.startswith('### '):
-            result.append(f'<h3>{stripped[4:]}</h3>')
-            i += 1
-        elif stripped.startswith('## '):
-            result.append(f'<h2>{stripped[3:]}</h2>')
-            i += 1
-        elif stripped.startswith('# '):
-            result.append(f'<h1>{stripped[2:]}</h1>')
-            i += 1
-        elif stripped.startswith(('- ', '* ')):
-            list_items = []
-            while i < len(lines):
-                current_line = lines[i].strip()
-                if current_line.startswith(('- ', '* ')):
-                    list_items.append(f'<li>{current_line[2:]}</li>')
-                    i += 1
-                elif not current_line:
-                    i += 1
-                    break
-                else:
-                    break
-            result.append('<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ul>')
-        elif re.match(r'^\d+\.\s', stripped):
-            list_items = []
-            while i < len(lines):
-                current_line = lines[i].strip()
-                if re.match(r'^\d+\.\s', current_line):
-                    clean_item = re.sub(r'^\d+\.\s', '', current_line)
-                    list_items.append(f'<li>{clean_item}</li>')
-                    i += 1
-                elif not current_line:
-                    i += 1
-                    break
-                else:
-                    break
-            result.append('<ol style="margin: 0.5rem 0; padding-left: 1.5rem;">' + ''.join(list_items) + '</ol>')
-        elif not stripped:
-            result.append('<br>')
-            i += 1
-        else:
-            result.append(f'{line}<br>')
-            i += 1
 
-    html = '\n'.join(result)
-    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-    html = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', r'<em>\1</em>', html)
-    html = re.sub(r'`(.+?)`', r'<code style="background:var(--vl-bg-card);padding:0.2em 0.4em;border-radius:3px;">\1</code>', html)
+def _render_markdown_html(text: str, *, allow_html: bool) -> str:
+    if markdown_lib is None:
+        if allow_html:
+            return text
+        return _render_safe_markdown_html(text)
 
-    def replace_link(match: re.Match[str]) -> str:
-        label = match.group(1)
-        raw_href = match.group(2)
-        safe_href = _sanitize_markdown_href(raw_href)
-        if safe_href is None:
-            return f'{label} ({raw_href})'
-        return f'<a href="{safe_href}" rel="noopener noreferrer" style="color:var(--vl-primary);">{label}</a>'
+    source_text = _normalize_markdown_indentation(text)
+    if not allow_html:
+        source_text = _escape_raw_html_fragments(source_text)
 
-    return re.sub(r'\[(.+?)\]\((.+?)\)', replace_link, html)
+    rendered_html = markdown_lib.markdown(
+        source_text,
+        extensions=_markdown_extensions(),
+        extension_configs=_markdown_extension_configs(),
+        output_format="html",
+    )
+    return _sanitize_rendered_markdown_html(rendered_html)
 
 
 class TextWidgetsMixin:
@@ -266,7 +461,7 @@ class TextWidgetsMixin:
     
     def _render_markdown(self, text: str) -> str:
         """Render markdown to HTML (internal helper)"""
-        return _render_safe_markdown_html(text)
+        return _render_markdown_html(text, allow_html=False)
     
     def _render_dataframe_html(self, df) -> str:
         """Render pandas DataFrame as HTML table (internal helper)"""
@@ -408,7 +603,7 @@ class TextWidgetsMixin:
         """Display markdown-formatted text
 
         Args:
-            unsafe_allow_html: If True, allow raw HTML tags to pass through (not escaped)
+            unsafe_allow_html: If True, allow raw HTML tags to participate in markdown rendering
             help: Tooltip text
         """
         cid = self._get_next_cid("markdown")
@@ -427,7 +622,7 @@ class TextWidgetsMixin:
             
             content = " ".join(parts)
 
-            html = content if unsafe_allow_html else _render_safe_markdown_html(content)
+            html = _render_markdown_html(content, allow_html=unsafe_allow_html)
             
             rendering_ctx.reset(token)
             _wd = self._get_widget_defaults("markdown")
