@@ -33,6 +33,7 @@ chat_history = app.state(
 )
 chat_mode = app.state("streaming", key="showcase_chat_mode")
 chat_style = app.state("Builder", key="showcase_chat_style")
+chat_busy = app.state(False, key="showcase_chat_busy")
 dashboard_seed = app.state(0, key="showcase_dashboard_seed")
 
 
@@ -132,6 +133,7 @@ def _iter_markdown_chunks(text: str):
 
 
 def _pseudo_chat_reply(prompt: str):
+    chat_busy.set(True)
     cleaned = prompt.strip()
     lower = cleaned.lower()
     rng = random.Random(sum(ord(ch) for ch in lower) + len(chat_style.value))
@@ -168,7 +170,16 @@ def _pseudo_chat_reply(prompt: str):
     )
 
     if chat_mode.value == "streaming":
-        return _iter_markdown_chunks(reply)
+        def busy_stream():
+            try:
+                for chunk in _iter_markdown_chunks(reply):
+                    yield chunk
+            finally:
+                chat_busy.set(False)
+
+        return busy_stream()
+
+    chat_busy.set(False)
     return reply
 
 
@@ -549,9 +560,11 @@ def chat_page():
         "Ask about themes, auth, ORM, Lite mode, or styling...",
         messages=chat_history,
         on_submit=_pseudo_chat_reply,
+        disabled=bool(chat_busy.value),
         pinned=False,
         auto_scroll="bottom",
         stream_speed="smooth",
+        submit_policy="drop",
     )
 
 

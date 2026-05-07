@@ -4,6 +4,7 @@ import json
 import re
 import time
 from typing import Optional, Union, Callable, Any, Sequence
+from ..background import CancelledError
 from ..component import Component
 from ..context import fragment_ctx, session_ctx, view_ctx, layout_ctx
 from ..state import get_session_store
@@ -44,6 +45,63 @@ def _patch_last_chat_item(messages_state, **updates):
         return
     items[-1] = {**items[-1], **updates}
     messages_state.set(items)
+
+
+def _chat_submit_inflight_key(cid: str) -> str:
+    return f"_violit_chat_submit_inflight:{cid}"
+
+
+def _chat_submit_queue_key(cid: str) -> str:
+    return f"_violit_chat_submit_queue:{cid}"
+
+
+def _chat_submit_task_key(cid: str) -> str:
+    return f"_violit_chat_submit_task:{cid}"
+
+
+def _is_chat_submit_inflight(store, cid: str) -> bool:
+    return bool(store.get(_chat_submit_inflight_key(cid)))
+
+
+def _set_chat_submit_inflight(store, cid: str, active: bool):
+    key = _chat_submit_inflight_key(cid)
+    if active:
+        store[key] = True
+        return
+    store.pop(key, None)
+
+
+def _enqueue_chat_submit(store, cid: str, value: Any):
+    key = _chat_submit_queue_key(cid)
+    queued = list(store.get(key) or [])
+    queued.append(value)
+    store[key] = queued
+
+
+def _dequeue_chat_submit(store, cid: str):
+    key = _chat_submit_queue_key(cid)
+    queued = list(store.get(key) or [])
+    if not queued:
+        store.pop(key, None)
+        return None
+    next_value = queued.pop(0)
+    if queued:
+        store[key] = queued
+    else:
+        store.pop(key, None)
+    return next_value
+
+
+def _get_chat_submit_task(store, cid: str):
+    return store.get(_chat_submit_task_key(cid))
+
+
+def _set_chat_submit_task(store, cid: str, task):
+    key = _chat_submit_task_key(cid)
+    if task is None:
+        store.pop(key, None)
+        return
+    store[key] = task
 
 
 def _push_stream_frame(app):
@@ -1003,6 +1061,9 @@ class ChatWidgetsMixin:
         style: str = "",
         multiline: bool = True,
         submit_on_enter: bool = True,
+        submit_policy: str = "drop",
+        auto_disable_while_pending: bool = True,
+        show_stop_button: bool = False,
         pinned: Optional[bool] = None,
         scroll_behavior: str = "smooth",
     ):
@@ -1017,6 +1078,22 @@ class ChatWidgetsMixin:
         "cinematic" or a smoothness score from 1 to 10, where 10 is the
         smoothest. It can also be provided as a State-like object or callable
         so the active preset is resolved when the user submits a message.
+
+        `submit_policy` controls what happens when the same chat input is
+        submitted again while a previous reply is still running. Supported
+        values are "drop" (default) and "queue".
+
+        If `auto_disable_while_pending` is True, pending Enter submits are
+        blocked while a reply is in flight, but the textarea stays editable so
+        draft text is preserved until the run finishes. If it is False,
+        pending Enter submits follow `submit_policy`: `queue` submits the
+        draft for the next turn and `drop` clears the current draft without
+        sending it.
+
+        If `show_stop_button` is True, the send button becomes a stop button
+        while a reply is in flight. Clicking stop temporarily locks the input
+        until cancellation finishes, then the send button returns so the user
+        can continue the conversation. Pressing Enter never acts as stop.
         """
         if accept_file:
             raise NotImplementedError("accept_file is not supported yet by violit.chat_input.")
@@ -1025,7 +1102,11 @@ class ChatWidgetsMixin:
         del file_type, audio_sample_rate
 
         cid = f"chat_input_{_sanitize_chat_key(key)}" if key is not None else self._get_next_cid("chat_input")
+        stop_cid = f"{cid}__stop"
         store = get_session_store()
+        normalized_submit_policy = str(submit_policy).strip().lower() or "drop"
+        if normalized_submit_policy not in {"drop", "queue"}:
+            raise ValueError("submit_policy must be either 'drop' or 'queue'.")
         callback_args = tuple(args or ())
         callback_kwargs = dict(kwargs or {})
         if pinned is None:
@@ -1044,224 +1125,304 @@ class ChatWidgetsMixin:
             if not val:
                 return
 
-            if messages is None:
-                on_submit(*callback_args, val, **callback_kwargs)
+            if _is_chat_submit_inflight(store, cid):
+                if normalized_submit_policy == "queue":
+                    _enqueue_chat_submit(store, cid, val)
                 return
 
-            messages.set(_clone_chat_items(messages) + [
-                {"role": user_name, "content": val, "status": "done"},
-                {
-                    "role": assistant_name,
-                    "content": "",
-                    "chunks": [],
-                    "status": "thinking",
-                    "phase": "thinking",
-                    "thinking_label": "Thinking...",
-                    "cursor": None,
-                },
-            ])
+            def clear_submit_lock():
+                _set_chat_submit_inflight(store, cid, False)
+                _set_chat_submit_task(store, cid, None)
 
-            stream_profile = _resolve_stream_profile(
-                _resolve_stream_speed_value(stream_speed),
-                flush_interval,
-            )
+            def clear_submit_lock_and_continue():
+                clear_submit_lock()
+                next_value = _dequeue_chat_submit(store, cid)
+                if next_value is not None:
+                    handler(next_value)
 
-            def run_reply():
-                result = on_submit(*callback_args, val, **callback_kwargs)
+            if messages is None:
+                _set_chat_submit_inflight(store, cid, True)
+                try:
+                    on_submit(*callback_args, val, **callback_kwargs)
+                finally:
+                    clear_submit_lock_and_continue()
+                return
 
-                if isinstance(result, str):
-                    reply = result.strip()
-                    if not reply:
-                        raise RuntimeError("Chat reply was empty.")
-                    _patch_last_chat_item(
-                        messages,
-                        content=reply,
-                        chunks=[],
-                        status="done",
-                        phase="done",
-                        status_text="",
-                        cursor=None,
-                    )
-                    return reply
+            _set_chat_submit_inflight(store, cid, True)
 
-                candidate = result() if callable(result) and not hasattr(result, "__iter__") else result
-                if not hasattr(candidate, "__iter__"):
-                    reply = str(result).strip()
-                    if not reply:
-                        raise RuntimeError("Chat reply was empty.")
-                    _patch_last_chat_item(
-                        messages,
-                        content=reply,
-                        chunks=[],
-                        status="done",
-                        phase="done",
-                        status_text="",
-                        cursor=None,
-                    )
-                    return reply
+            try:
+                messages.set(_clone_chat_items(messages) + [
+                    {"role": user_name, "content": val, "status": "done"},
+                    {
+                        "role": assistant_name,
+                        "content": "",
+                        "chunks": [],
+                        "status": "thinking",
+                        "phase": "thinking",
+                        "thinking_label": "Thinking...",
+                        "cursor": None,
+                    },
+                ])
 
-                chunks = []
-                agent_stream_seen = False
-                last_emit_at = time.perf_counter()
-                pending_emit_chars = 0
-                for raw_chunk in candidate:
-                    if _is_agent_event(raw_chunk):
-                        agent_stream_seen = True
-                        event_type = _coerce_chat_text(raw_chunk.get("type") or raw_chunk.get("event")).strip().lower() if isinstance(raw_chunk, dict) else ""
-                        event_text = _coerce_chat_text(
-                            raw_chunk.get("text") or raw_chunk.get("content") or raw_chunk.get("message")
-                        ) if isinstance(raw_chunk, dict) else ""
-                        event_should_stream = True
-                        if isinstance(raw_chunk, dict) and raw_chunk.get("stream") is not None:
-                            event_should_stream = bool(raw_chunk.get("stream"))
+                stream_profile = _resolve_stream_profile(
+                    _resolve_stream_speed_value(stream_speed),
+                    flush_interval,
+                )
 
-                        if event_type == "text" and event_text and event_should_stream:
-                            fragments = list(
-                                _iter_stream_text_fragments(
-                                    event_text,
-                                    preferred_size=stream_profile["fragment_size"],
-                                    mode=stream_profile["fragment_mode"],
-                                )
-                            )
-                            for fragment in fragments:
-                                fragment_event = dict(raw_chunk)
-                                fragment_event["text"] = fragment
-                                _patch_last_chat_item_with_event(messages, fragment_event, cursor=stream_cursor)
-                                pending_emit_chars += len(fragment)
-                                if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
-                                    _push_stream_frame(self)
-                                    last_emit_at = time.perf_counter()
-                                    pending_emit_chars = 0
-                                pause = _stream_fragment_pause(
-                                    fragment,
-                                    stream_profile["delay"],
-                                    stream_profile["punctuation_pause"],
-                                    stream_profile["space_pause"],
-                                )
-                                if pause > 0:
-                                    time.sleep(pause)
-                            continue
+                def run_reply():
+                    task = _get_chat_submit_task(store, cid)
 
-                        _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
-                        _push_stream_frame(self)
-                        last_emit_at = time.perf_counter()
-                        pending_emit_chars = 0
-                        continue
+                    def check_cancelled():
+                        if task is not None:
+                            task.check_cancelled()
 
-                    chunk = self._extract_stream_chunk(raw_chunk)
-                    text = chunk if isinstance(chunk, str) else str(chunk)
-                    if not text:
-                        continue
+                    result = on_submit(*callback_args, val, **callback_kwargs)
+                    check_cancelled()
 
-                    if agent_stream_seen:
-                        chunks.append(text)
+                    if isinstance(result, str):
+                        reply = result.strip()
+                        if not reply:
+                            raise RuntimeError("Chat reply was empty.")
                         _patch_last_chat_item(
                             messages,
-                            chunks=list(chunks),
-                            content="".join(chunks),
-                            status="streaming",
-                            phase="running",
+                            content=reply,
+                            chunks=[],
+                            status="done",
+                            phase="done",
                             status_text="",
-                            cursor=stream_cursor,
+                            cursor=None,
                         )
-                        _push_stream_frame(self)
-                        continue
+                        return reply
 
-                    fragments = list(
-                        _iter_stream_text_fragments(
-                            text,
-                            preferred_size=stream_profile["fragment_size"],
-                            mode=stream_profile["fragment_mode"],
-                        )
-                    )
-                    for fragment in fragments:
-                        chunks.append(fragment)
-                        pending_emit_chars += len(fragment)
+                    candidate = result() if callable(result) and not hasattr(result, "__iter__") else result
+                    if not hasattr(candidate, "__iter__"):
+                        reply = str(result).strip()
+                        if not reply:
+                            raise RuntimeError("Chat reply was empty.")
                         _patch_last_chat_item(
                             messages,
-                            chunks=list(chunks),
-                            status="streaming",
-                            phase="running",
+                            content=reply,
+                            chunks=[],
+                            status="done",
+                            phase="done",
                             status_text="",
-                            cursor=stream_cursor,
+                            cursor=None,
                         )
-                        if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
+                        return reply
+
+                    chunks = []
+                    agent_stream_seen = False
+                    last_emit_at = time.perf_counter()
+                    pending_emit_chars = 0
+                    for raw_chunk in candidate:
+                        check_cancelled()
+                        if _is_agent_event(raw_chunk):
+                            agent_stream_seen = True
+                            event_type = _coerce_chat_text(raw_chunk.get("type") or raw_chunk.get("event")).strip().lower() if isinstance(raw_chunk, dict) else ""
+                            event_text = _coerce_chat_text(
+                                raw_chunk.get("text") or raw_chunk.get("content") or raw_chunk.get("message")
+                            ) if isinstance(raw_chunk, dict) else ""
+                            event_should_stream = True
+                            if isinstance(raw_chunk, dict) and raw_chunk.get("stream") is not None:
+                                event_should_stream = bool(raw_chunk.get("stream"))
+
+                            if event_type == "text" and event_text and event_should_stream:
+                                fragments = list(
+                                    _iter_stream_text_fragments(
+                                        event_text,
+                                        preferred_size=stream_profile["fragment_size"],
+                                        mode=stream_profile["fragment_mode"],
+                                    )
+                                )
+                                for fragment in fragments:
+                                    check_cancelled()
+                                    fragment_event = dict(raw_chunk)
+                                    fragment_event["text"] = fragment
+                                    _patch_last_chat_item_with_event(messages, fragment_event, cursor=stream_cursor)
+                                    pending_emit_chars += len(fragment)
+                                    if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
+                                        _push_stream_frame(self)
+                                        last_emit_at = time.perf_counter()
+                                        pending_emit_chars = 0
+                                    pause = _stream_fragment_pause(
+                                        fragment,
+                                        stream_profile["delay"],
+                                        stream_profile["punctuation_pause"],
+                                        stream_profile["space_pause"],
+                                    )
+                                    if pause > 0:
+                                        time.sleep(pause)
+                                continue
+
+                            _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
                             _push_stream_frame(self)
                             last_emit_at = time.perf_counter()
                             pending_emit_chars = 0
-                        pause = _stream_fragment_pause(
-                            fragment,
-                            stream_profile["delay"],
-                            stream_profile["punctuation_pause"],
-                            stream_profile["space_pause"],
+                            continue
+
+                        chunk = self._extract_stream_chunk(raw_chunk)
+                        text = chunk if isinstance(chunk, str) else str(chunk)
+                        if not text:
+                            continue
+
+                        if agent_stream_seen:
+                            chunks.append(text)
+                            _patch_last_chat_item(
+                                messages,
+                                chunks=list(chunks),
+                                content="".join(chunks),
+                                status="streaming",
+                                phase="running",
+                                status_text="",
+                                cursor=stream_cursor,
+                            )
+                            _push_stream_frame(self)
+                            continue
+
+                        fragments = list(
+                            _iter_stream_text_fragments(
+                                text,
+                                preferred_size=stream_profile["fragment_size"],
+                                mode=stream_profile["fragment_mode"],
+                            )
                         )
-                        if pause > 0:
-                            time.sleep(pause)
+                        for fragment in fragments:
+                            check_cancelled()
+                            chunks.append(fragment)
+                            pending_emit_chars += len(fragment)
+                            _patch_last_chat_item(
+                                messages,
+                                chunks=list(chunks),
+                                status="streaming",
+                                phase="running",
+                                status_text="",
+                                cursor=stream_cursor,
+                            )
+                            if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
+                                _push_stream_frame(self)
+                                last_emit_at = time.perf_counter()
+                                pending_emit_chars = 0
+                            pause = _stream_fragment_pause(
+                                fragment,
+                                stream_profile["delay"],
+                                stream_profile["punctuation_pause"],
+                                stream_profile["space_pause"],
+                            )
+                            if pause > 0:
+                                time.sleep(pause)
 
-                if chunks and pending_emit_chars > 0:
-                    _push_stream_frame(self)
+                    if chunks and pending_emit_chars > 0:
+                        _push_stream_frame(self)
 
-                reply = "".join(chunks).strip()
-                if agent_stream_seen:
-                    last_item = (_clone_chat_items(messages)[-1] if getattr(messages, "value", None) else None)
-                    final_updates: dict[str, Any] = {
-                        "cursor": None,
-                    }
-                    if last_item and _normalize_chat_phase(last_item) != "error":
-                        final_updates["phase"] = "done"
-                        final_updates["status"] = "done"
-                        final_updates["status_text"] = ""
-                    if reply:
-                        final_updates["content"] = reply
-                        final_updates["chunks"] = list(chunks)
-                    _patch_last_chat_item(messages, **final_updates)
-                    final_item = _clone_chat_items(messages)[-1]
-                    if not _chat_item_has_visible_content(final_item):
+                    reply = "".join(chunks).strip()
+                    if agent_stream_seen:
+                        last_item = (_clone_chat_items(messages)[-1] if getattr(messages, "value", None) else None)
+                        final_updates: dict[str, Any] = {
+                            "cursor": None,
+                        }
+                        if last_item and _normalize_chat_phase(last_item) != "error":
+                            final_updates["phase"] = "done"
+                            final_updates["status"] = "done"
+                            final_updates["status_text"] = ""
+                        if reply:
+                            final_updates["content"] = reply
+                            final_updates["chunks"] = list(chunks)
+                        _patch_last_chat_item(messages, **final_updates)
+                        final_item = _clone_chat_items(messages)[-1]
+                        if not _chat_item_has_visible_content(final_item):
+                            raise RuntimeError("Chat reply was empty.")
+                        return reply or _coerce_chat_text(final_item.get("summary")).strip() or "done"
+
+                    if not reply:
                         raise RuntimeError("Chat reply was empty.")
-                    return reply or _coerce_chat_text(final_item.get("summary")).strip() or "done"
+                    _patch_last_chat_item(
+                        messages,
+                        content=reply,
+                        chunks=list(chunks),
+                        status="done",
+                        phase="done",
+                        status_text="",
+                        cursor=None,
+                    )
+                    return reply
 
-                if not reply:
-                    raise RuntimeError("Chat reply was empty.")
-                _patch_last_chat_item(
-                    messages,
-                    content=reply,
-                    chunks=list(chunks),
-                    status="done",
-                    phase="done",
-                    status_text="",
-                    cursor=None,
+                def cancel_reply():
+                    last_item = (_clone_chat_items(messages)[-1] if getattr(messages, "value", None) else None)
+                    stop_notice = "대화가 중단되었습니다."
+                    last_content = ""
+                    last_chunks: list[str] = []
+                    if isinstance(last_item, dict):
+                        last_content = _coerce_chat_text(last_item.get("content"))
+                        raw_chunks = last_item.get("chunks")
+                        if isinstance(raw_chunks, list):
+                            last_chunks = [_coerce_chat_text(chunk) for chunk in raw_chunks]
+                    base_content = last_content.rstrip()
+                    if not base_content and last_chunks:
+                        base_content = "".join(last_chunks).rstrip()
+                    final_updates: dict[str, Any] = {
+                        "content": f"{base_content}\n\n{stop_notice}" if base_content else stop_notice,
+                        "chunks": [],
+                        "cursor": None,
+                        "status": "done",
+                        "phase": "done",
+                        "status_text": "",
+                    }
+                    _patch_last_chat_item(messages, **final_updates)
+                    clear_submit_lock_and_continue()
+
+                def fail_reply(exc):
+                    _patch_last_chat_item(
+                        messages,
+                        content=f"Error:\n\n```text\n{exc}\n```",
+                        chunks=[],
+                        status="error",
+                        phase="error",
+                        status_text="",
+                        cursor=None,
+                    )
+
+                def fail_reply_and_unlock(exc):
+                    try:
+                        fail_reply(exc)
+                    finally:
+                        clear_submit_lock_and_continue()
+
+                task = self.background(
+                    run_reply,
+                    on_complete=clear_submit_lock_and_continue,
+                    on_cancel=cancel_reply,
+                    on_error=fail_reply_and_unlock,
+                    flush_interval=stream_profile["flush_interval"],
                 )
-                return reply
+                _set_chat_submit_task(store, cid, task)
+                task.start()
+            except Exception:
+                clear_submit_lock_and_continue()
+                raise
 
-            def fail_reply(exc):
-                _patch_last_chat_item(
-                    messages,
-                    content=f"Error:\n\n```text\n{exc}\n```",
-                    chunks=[],
-                    status="error",
-                    phase="error",
-                    status_text="",
-                    cursor=None,
-                )
-
-            self.background(
-                run_reply,
-                on_error=fail_reply,
-                flush_interval=stream_profile["flush_interval"],
-            ).start()
+        def stop_handler(_val=None):
+            task = _get_chat_submit_task(store, cid)
+            if task is None:
+                return
+            task.cancel()
         
         # Use static_actions for initial registration, but the handler
         # captures the session-specific on_submit callback via closure
         self.static_actions[cid] = handler
+        self.static_actions[stop_cid] = stop_handler
             
         def builder():
             # Fixed bottom input
             # We use window.lastActiveChatInput to restore focus after re-render/replacement
+            server_submit_pending = _is_chat_submit_inflight(store, cid)
+            effective_disabled = bool(disabled)
+            stop_button_active = bool(show_stop_button and server_submit_pending)
             placeholder_js = json.dumps(placeholder)
             submit_on_enter_js = "true" if submit_on_enter else "false"
             scroll_mode = self._resolve_chat_scroll_mode(auto_scroll)
             scroll_mode_js = json.dumps(scroll_mode)
             scroll_behavior_js = json.dumps(scroll_behavior)
+            stop_button_js = "true" if stop_button_active else "false"
             width_style = "width: 100%;"
             if isinstance(width, int):
                 width_style = f"width: min(100%, {int(width)}px);"
@@ -1306,7 +1467,7 @@ class ChatWidgetsMixin:
             <div class="chat-input-container vl-chat-input-container{(' ' + html_lib.escape(cls, quote=True)) if cls else ''}" data-chat-pinned="{'true' if effective_pinned else 'false'}" data-chat-part="input-container" style="
                 {container_style}
             ">
-                <div class="vl-chat-input-root" data-chat-input-root="{cid}" data-chat-part="input-root" style="
+                <div class="vl-chat-input-root" data-chat-input-root="{cid}" data-chat-submit-pending="{'true' if server_submit_pending else 'false'}" data-chat-part="input-root" style="
                     {width_style}
                     max-width: 860px;
                     display: flex;
@@ -1326,7 +1487,7 @@ class ChatWidgetsMixin:
                         <textarea id="input_{cid}" class="chat-input-box vl-chat-input-box" data-chat-part="input-textarea" placeholder={placeholder_js}
                             rows="1"
                             {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
-                            {"disabled" if disabled else ""}
+                            {"disabled" if effective_disabled else ""}
                             style="
                                 width: 100%;
                                 border: none;
@@ -1344,11 +1505,11 @@ class ChatWidgetsMixin:
                             "
                         ></textarea>
                     </div>
-                    <wa-button id="send_{cid}" type="button" size="small" variant="brand" appearance="accent" {"disabled" if disabled else ""} style="flex: 0 0 var(--vl-chat-input-button-size, 48px); min-width: var(--vl-chat-input-button-size, 48px); width: var(--vl-chat-input-button-size, 48px); height: var(--vl-chat-input-button-size, 48px); margin-bottom: 2px; --wa-button-padding-inline: 0;" onclick="
-                        window.submitChatInput_{cid}();
+                    <wa-button id="send_{cid}" type="button" size="small" variant="brand" appearance="accent" {"" if stop_button_active else ("disabled" if disabled else "")} style="flex: 0 0 var(--vl-chat-input-button-size, 48px); min-width: var(--vl-chat-input-button-size, 48px); width: var(--vl-chat-input-button-size, 48px); height: var(--vl-chat-input-button-size, 48px); margin-bottom: 2px; --wa-button-padding-inline: 0;" onclick="
+                        {f'window.stopChatInput_{cid}();' if stop_button_active else f'window.submitChatInput_{cid}();'}
                     ">
                         <span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0;">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1rem;height:1rem;display:block;fill:currentColor;transform:translate(-1.5px, 1px);transform-origin:center;"><path d="M476.6 3.2c18.6 10.5 27.5 32.4 21.8 53.1l-96 352c-4 14.8-18.2 25.3-33.5 25.7s-30-9.1-34.8-23.6l-48.6-145.9-145.9-48.6C125.1 211 115.2 196.4 115.6 181s10.9-29.5 25.7-33.5l352-96c20.7-5.7 42.6 3.2 53.1 21.8zM176.9 177.1l125.4 41.8 41.8 125.4L426.7 41.6 176.9 177.1z"/></svg>
+                            {('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1rem;height:1rem;display:block;fill:currentColor;"><rect x="128" y="128" width="256" height="256" rx="32" ry="32"/></svg>') if stop_button_active else ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1rem;height:1rem;display:block;fill:currentColor;transform:translate(-1.5px, 1px);transform-origin:center;"><path d="M476.6 3.2c18.6 10.5 27.5 32.4 21.8 53.1l-96 352c-4 14.8-18.2 25.3-33.5 25.7s-30-9.1-34.8-23.6l-48.6-145.9-145.9-48.6C125.1 211 115.2 196.4 115.6 181s10.9-29.5 25.7-33.5l352-96c20.7-5.7 42.6 3.2 53.1 21.8zM176.9 177.1l125.4 41.8 41.8 125.4L426.7 41.6 176.9 177.1z"/></svg>')}
                         </span>
                     </wa-button>
                 </div>
@@ -1360,6 +1521,93 @@ class ChatWidgetsMixin:
                     const sendButton = document.getElementById('send_{cid}');
                     const root = document.querySelector('[data-chat-input-root="{cid}"]');
                     if (!el) return;
+                    const clientPendingKey = '__violitChatClientPending_{cid}';
+                    const pendingPhaseKey = '__violitChatPendingPhase_{cid}';
+                    const pendingSeenChatKey = '__violitChatPendingSeenChat_{cid}';
+                    const draftKey = '__violitChatDraft_{cid}';
+                    const initialDisabled = {'true' if effective_disabled else 'false'};
+                    const autoDisableWhilePending = {'true' if auto_disable_while_pending else 'false'};
+                    const submitPolicy = {json.dumps(normalized_submit_policy)};
+                    const isServerPending = () => root?.dataset.chatSubmitPending === 'true';
+                    if (typeof window[pendingPhaseKey] !== 'string') {{
+                        window[pendingPhaseKey] = 'idle';
+                    }}
+                    if (typeof window[pendingSeenChatKey] !== 'boolean') {{
+                        window[pendingSeenChatKey] = false;
+                    }}
+                    const getPendingPhase = () => {{
+                        const phase = window[pendingPhaseKey];
+                        return phase === 'submitted' || phase === 'server' || phase === 'stopping' ? phase : 'idle';
+                    }};
+                    const setPendingPhase = (phase) => {{
+                        const nextPhase = phase === 'submitted' || phase === 'server' || phase === 'stopping' ? phase : 'idle';
+                        window[pendingPhaseKey] = nextPhase;
+                        window[clientPendingKey] = nextPhase !== 'idle';
+                        if (nextPhase === 'idle') {{
+                            window[pendingSeenChatKey] = false;
+                        }}
+                    }};
+                    const hasRunningAssistantMessage = () => {{
+                        const chatThread = getChatThread();
+                        if (!chatThread) return false;
+                        return !!chatThread.querySelector(
+                            '[data-chat-message="true"][data-chat-role="assistant"][data-chat-phase="thinking"], ' +
+                            '[data-chat-message="true"][data-chat-role="assistant"][data-chat-phase="running"], ' +
+                            '[data-chat-message="true"][data-chat-role="assistant"][data-chat-thinking="true"]'
+                        );
+                    }};
+                    const syncPendingPhase = () => {{
+                        if (getPendingPhase() === 'stopping') {{
+                            if (isServerPending() || hasRunningAssistantMessage()) {{
+                                setPendingPhase('server');
+                                window[pendingSeenChatKey] = true;
+                                return;
+                            }}
+                            setPendingPhase('idle');
+                            return;
+                        }}
+                        if (isServerPending()) {{
+                            setPendingPhase('server');
+                            window[pendingSeenChatKey] = true;
+                            return;
+                        }}
+                        if (hasRunningAssistantMessage()) {{
+                            setPendingPhase('server');
+                            window[pendingSeenChatKey] = true;
+                            return;
+                        }}
+                        if (getPendingPhase() === 'server') {{
+                            setPendingPhase('idle');
+                            return;
+                        }}
+                        if (getPendingPhase() === 'submitted' && window[pendingSeenChatKey]) {{
+                            setPendingPhase('idle');
+                        }}
+                    }};
+                    setPendingPhase(getPendingPhase());
+                    const isClientPending = () => getPendingPhase() !== 'idle';
+                    const isPending = () => isServerPending() || isClientPending();
+                    const isStopping = () => getPendingPhase() === 'stopping';
+                    const isInputHardDisabled = () => {'true' if disabled else 'false'};
+                    const renderSendButtonMode = () => {{
+                        if (!sendButton) return;
+                        const stopActive = {'true' if show_stop_button else 'false'} && isPending();
+                        sendButton.innerHTML = stopActive
+                            ? '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1rem;height:1rem;display:block;fill:currentColor;"><rect x="128" y="128" width="256" height="256" rx="32" ry="32"/></svg></span>'
+                            : '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;line-height:0;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1rem;height:1rem;display:block;fill:currentColor;transform:translate(-1.5px, 1px);transform-origin:center;"><path d="M476.6 3.2c18.6 10.5 27.5 32.4 21.8 53.1l-96 352c-4 14.8-18.2 25.3-33.5 25.7s-30-9.1-34.8-23.6l-48.6-145.9-145.9-48.6C125.1 211 115.2 196.4 115.6 181s10.9-29.5 25.7-33.5l352-96c20.7-5.7 42.6 3.2 53.1 21.8zM176.9 177.1l125.4 41.8 41.8 125.4L426.7 41.6 176.9 177.1z"/></svg></span>';
+                        sendButton.onclick = stopActive
+                            ? () => window.stopChatInput_{cid}()
+                            : () => window.submitChatInput_{cid}();
+                    }};
+                    const syncTextareaDisabledState = () => {{
+                        el.disabled = isInputHardDisabled() || isStopping();
+                    }};
+                    if (!initialDisabled && !isPending()) {{
+                        setPendingPhase('idle');
+                    }}
+                    if (typeof window[draftKey] !== 'string') {{
+                        window[draftKey] = '';
+                    }}
 
                     const resolveChatScope = () => {{
                         if (!root) return document.body;
@@ -1383,6 +1631,17 @@ class ChatWidgetsMixin:
                     const autoResize = () => {{
                         el.style.height = 'auto';
                         el.style.height = Math.min(el.scrollHeight, {max_height_px}) + 'px';
+                    }};
+
+                    const syncDraftState = () => {{
+                        window[draftKey] = el.value || '';
+                    }};
+
+                    const restoreDraftState = () => {{
+                        const savedDraft = typeof window[draftKey] === 'string' ? window[draftKey] : '';
+                        if (!savedDraft) return;
+                        if ((el.value || '') === savedDraft) return;
+                        el.value = savedDraft;
                     }};
 
                     const scrollMode = {scroll_mode_js};
@@ -1461,14 +1720,33 @@ class ChatWidgetsMixin:
                     }};
 
                     const syncSendButtonState = () => {{
-                        if (!sendButton || {'true' if disabled else 'false'}) return;
+                        if (!sendButton) return;
+                        syncPendingPhase();
+                        syncTextareaDisabledState();
+                        renderSendButtonMode();
+                        if (isStopping()) {{
+                            sendButton.disabled = true;
+                            sendButton.setAttribute('aria-disabled', 'true');
+                            return;
+                        }}
+                        if ({'true' if show_stop_button else 'false'} && isPending()) {{
+                            sendButton.disabled = false;
+                            sendButton.setAttribute('aria-disabled', 'false');
+                            return;
+                        }}
+                        if (isInputHardDisabled() || isPending()) {{
+                            sendButton.disabled = true;
+                            sendButton.setAttribute('aria-disabled', 'true');
+                            return;
+                        }}
                         const hasValue = !!((el.value || '').trim());
                         sendButton.disabled = !hasValue;
                         sendButton.setAttribute('aria-disabled', hasValue ? 'false' : 'true');
                     }};
 
                     window.submitChatInput_{cid} = function() {{
-                        if ({'true' if disabled else 'false'}) return;
+                        syncPendingPhase();
+                        if (isInputHardDisabled() || isStopping()) return;
                         const viewport = {{ x: window.scrollX, y: window.scrollY }};
                         const rawValue = el.value || '';
                         const trimmed = rawValue.trim();
@@ -1479,17 +1757,39 @@ class ChatWidgetsMixin:
                             preserveViewport(viewport);
                             return;
                         }}
+                        const pending = isPending();
+                        if (pending && autoDisableWhilePending) return;
+                        if (pending && submitPolicy === 'drop') {{
+                            window[draftKey] = '';
+                            el.value = '';
+                            autoResize();
+                            syncSendButtonState();
+                            return;
+                        }}
                         window.lastActiveChatInput = 'input_{cid}';
+                        if (!pending) {{
+                            setPendingPhase('submitted');
+                            window[pendingSeenChatKey] = false;
+                        }}
                         {f"window.sendAction('{cid}', trimmed);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: trimmed, _csrf_token: window._csrf_token || '', _vl_lite_stream_dirty: 'true'}}, swap: 'none'}});"}
+                        window[draftKey] = '';
                         el.value = '';
                         autoResize();
                         syncSendButtonState();
                         scheduleScrollToLatest();
                     }};
 
+                    window.stopChatInput_{cid} = function() {{
+                        if (!{'true' if show_stop_button else 'false'} || !isPending()) return;
+                        setPendingPhase('stopping');
+                        {f"window.sendAction('{stop_cid}', 'stop');" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{stop_cid}', {{values: {{value: 'stop', _csrf_token: window._csrf_token || '', _vl_lite_stream_dirty: 'true'}}, swap: 'none'}});"}
+                        syncSendButtonState();
+                    }};
+
                     if (!el.dataset.chatReady) {{
                         el.dataset.chatReady = 'true';
                         el.addEventListener('input', () => {{
+                            syncDraftState();
                             autoResize();
                             syncSendButtonState();
                         }});
@@ -1527,6 +1827,7 @@ class ChatWidgetsMixin:
                         if (scrollMode !== 'bottom') return;
                         for (const mutation of mutationList) {{
                             if ((mutation.type === 'childList' || mutation.type === 'characterData') && mutationTouchesChat(mutation)) {{
+                                syncSendButtonState();
                                 scheduleScrollToLatest();
                                 break;
                             }}
@@ -1539,6 +1840,7 @@ class ChatWidgetsMixin:
                         characterData: true,
                     }});
 
+                    restoreDraftState();
                     autoResize();
                     syncSendButtonState();
 

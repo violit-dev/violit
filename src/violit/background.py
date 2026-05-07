@@ -82,6 +82,7 @@ class BackgroundTask:
         fn: Callable,
         app: Any,  # App instance (avoid circular import)
         on_complete: Optional[Callable] = None,
+        on_cancel: Optional[Callable] = None,
         on_error: Optional[Callable] = None,
         singleton: bool = False,
         max_workers: int = 4,
@@ -91,6 +92,7 @@ class BackgroundTask:
         self._fn = fn
         self._app = app
         self._on_complete = on_complete
+        self._on_cancel = on_cancel
         self._on_error = on_error
         self._singleton = singleton
         self._max_workers = max_workers
@@ -207,6 +209,12 @@ class BackgroundTask:
             if self._cancel_event.is_set():
                 self._state = "cancelled"
                 logger.debug("[background] Task cancelled during execution")
+                if self._on_cancel:
+                    try:
+                        self._on_cancel()
+                        self._push_dirty_to_session(sid, current_view_id)
+                    except Exception:
+                        pass
                 self._push_dirty_to_session(sid, current_view_id)
                 return
 
@@ -225,6 +233,12 @@ class BackgroundTask:
         except CancelledError:
             self._state = "cancelled"
             logger.debug("[background] Task cancelled via check_cancelled()")
+            if self._on_cancel:
+                try:
+                    self._on_cancel()
+                    self._push_dirty_to_session(sid, current_view_id)
+                except Exception:
+                    pass
             self._push_dirty_to_session(sid, current_view_id)
 
         except Exception as e:

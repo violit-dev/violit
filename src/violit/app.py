@@ -1497,6 +1497,7 @@ class App(
         self,
         fn: Callable,
         on_complete: Optional[Callable] = None,
+        on_cancel: Optional[Callable] = None,
         on_error: Optional[Callable] = None,
         singleton: bool = False,
         max_workers: int = 4,
@@ -1512,6 +1513,7 @@ class App(
         Args:
             fn:          Function to run in the background
             on_complete: Optional callback when the task finishes successfully
+            on_cancel:   Optional callback when the task is cancelled cooperatively
             on_error:    Optional callback(exception) when the task fails
             singleton:   If True, prevents starting a second instance while running
             max_workers: Max concurrent background tasks (shared pool, default: 4)
@@ -1542,6 +1544,7 @@ class App(
             fn=fn,
             app=self,
             on_complete=on_complete,
+            on_cancel=on_cancel,
             on_error=on_error,
             singleton=singleton,
             max_workers=max_workers,
