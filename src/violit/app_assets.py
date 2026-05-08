@@ -148,13 +148,28 @@ LOCAL_VENDOR_RESOURCES = """
             return 'solid';
         }
 
+        function resolveLocalIconFolder(name, family, variant, manifest) {
+            const requestedFolder = getLocalIconFolder(family, variant);
+
+            if (manifest[requestedFolder] && manifest[requestedFolder].has(name)) {
+                return requestedFolder;
+            }
+
+            for (const folder of ['solid', 'regular', 'brands']) {
+                if (folder !== requestedFolder && manifest[folder] && manifest[folder].has(name)) {
+                    return folder;
+                }
+            }
+
+            return null;
+        }
+
         registerIconLibrary('default', {
             resolver: async (name, family = 'classic', variant = 'solid') => {
                 const manifest = await localIconManifestPromise;
-                const folder = getLocalIconFolder(family, variant);
-                const iconNames = manifest[folder] || manifest.solid;
+                const folder = resolveLocalIconFolder(name, family, variant, manifest);
 
-                if (iconNames && iconNames.has(name)) {
+                if (folder) {
                     return `/static/vendor/fontawesome/${folder}/${name}.svg`;
                 }
 
