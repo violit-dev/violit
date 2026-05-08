@@ -68,11 +68,12 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, use_cdn_fontawesome_only=False, disconnect_timeout=0, db: Optional[str] = None, migrate='auto'):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, use_cdn_fontawesome_only=False, disconnect_timeout=0, root_path: str = "", db: Optional[str] = None, migrate='auto'):
         self.mode = mode
         self.use_cdn = use_cdn
         self.use_cdn_fontawesome_only = use_cdn_fontawesome_only
         self.disconnect_timeout = disconnect_timeout
+        self.root_path = self._normalize_root_path(root_path)
         self.boot_id = uuid.uuid4().hex
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
@@ -96,7 +97,7 @@ class App(
             threading.Thread(target=_do, daemon=True).start()
             yield
 
-        self.fastapi = FastAPI(lifespan=lifespan)
+        self.fastapi = FastAPI(lifespan=lifespan, root_path=self.root_path)
         self.fastapi.add_middleware(GZipMiddleware, minimum_size=1000)
         
         # Mount static files for offline support
@@ -423,6 +424,69 @@ class App(
         """Get current engine (WS or Lite)"""
         return self.ws_engine if self.mode == 'ws' else self.lite_engine
 
+    @staticmethod
+    def _normalize_root_path(root_path: Optional[str]) -> str:
+        if not root_path:
+            return ""
+
+        normalized = str(root_path).strip()
+        if not normalized or normalized == "/":
+            return ""
+        if not normalized.startswith("/"):
+            normalized = f"/{normalized}"
+        normalized = normalized.rstrip("/")
+        return "" if normalized == "/" else normalized
+
+    def _public_path(self, path: str) -> str:
+        if not path:
+            return self.root_path
+        if path.startswith(("http://", "https://", "//")):
+            return path
+
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        return f"{self.root_path}{normalized_path}" if self.root_path else normalized_path
+
+    def _rewrite_public_urls(self, text: str) -> str:
+        if not self.root_path or not text:
+            return text
+
+        rewritten = text
+        replacements = {
+            "'/static/": f"'{self.root_path}/static/",
+            '"/static/': f'"{self.root_path}/static/',
+            "`/static/": f"`{self.root_path}/static/",
+            "'/action/": f"'{self.root_path}/action/",
+            '"/action/': f'"{self.root_path}/action/',
+            "`/action/": f"`{self.root_path}/action/",
+            "'/lite-stream'": f"'{self.root_path}/lite-stream'",
+            '"/lite-stream"': f'"{self.root_path}/lite-stream"',
+            "`/lite-stream`": f"`{self.root_path}/lite-stream`",
+            "'/__violit_boot'": f"'{self.root_path}/__violit_boot'",
+            '"/__violit_boot"': f'"{self.root_path}/__violit_boot"',
+            "`/__violit_boot`": f"`{self.root_path}/__violit_boot`",
+            "'/ws'": f"'{self.root_path}/ws'",
+            '"/ws"': f'"{self.root_path}/ws"',
+            "`/ws`": f"`{self.root_path}/ws`",
+        }
+        for old, new in replacements.items():
+            rewritten = rewritten.replace(old, new)
+        return rewritten
+
+    def _wrap_component_builder(self, builder: Callable) -> Callable:
+        if not self.root_path:
+            return builder
+
+        def wrapped_builder():
+            component = builder()
+            if component is None:
+                return None
+
+            rendered = component.render()
+            rewritten = self._rewrite_public_urls(rendered)
+            return Component(None, id=getattr(component, "id", ""), content=rewritten)
+
+        return wrapped_builder
+
     def debug_print(self, *args, **kwargs):
         """Print only in debug mode"""
         if self.debug_mode:
@@ -445,6 +509,19 @@ class App(
             app.configure_widget("card", cls="rounded-2xl shadow-lg")
         """
         self._widget_defaults[widget_type] = {'cls': cls, 'style': style, 'part_cls': part_cls or {}}
+
+    def add_middleware(self, middleware_class, **options):
+        """Register FastAPI or Starlette middleware on the underlying app.
+
+        Args:
+            middleware_class: Middleware class passed to FastAPI.add_middleware()
+            **options: Keyword arguments forwarded to the middleware constructor
+
+        Example:
+            app.add_middleware(CORSMiddleware, allow_origins=["*"])
+        """
+        self.fastapi.add_middleware(middleware_class, **options)
+        return self
 
     def add_css(self, css: str):
         """Add custom CSS rules to the page.
@@ -526,7 +603,7 @@ class App(
         Defaults to view-local state. Prefer the dedicated helpers for wider scopes:
         ``session_state()``, ``app_state()``, and ``shared_state()``.
         """
-        name = self._resolve_state_name(key, stack_depth=1)
+        name = self._resolve_state_name(key, stack_depth=2)
         return State(name, default_value, scope=scope, namespace=namespace)
 
     def view_state(self, default_value, key=None) -> State:
@@ -614,6 +691,7 @@ class App(
         """Register a component with builder and optional action"""
         store = get_session_store()
         sid = session_ctx.get()
+        builder = self._wrap_component_builder(builder)
         
         store['builders'][cid] = builder
         if action:

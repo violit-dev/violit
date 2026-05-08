@@ -515,7 +515,8 @@ HTML_TEMPLATE = r"""
             sidebarResizable: %SIDEBAR_RESIZABLE%,
             disconnectTimeout: %DISCONNECT_TIMEOUT%,
             viewId: "%VIEW_ID%",
-            viewRestoreToken: "%VIEW_RESTORE_TOKEN%"
+            viewRestoreToken: "%VIEW_RESTORE_TOKEN%",
+            rootPath: "%ROOT_PATH%"
         };
     </script>
     <script src="/static/runtime/violit_app_runtime.js?v=%RUNTIME_ASSET_VERSION%"></script>

@@ -2,6 +2,9 @@
         const disconnectTimeout = Number.isFinite(Number(runtimeConfig.disconnectTimeout))
             ? Number(runtimeConfig.disconnectTimeout)
             : -1;
+        const rootPath = typeof runtimeConfig.rootPath === 'string' && runtimeConfig.rootPath && runtimeConfig.rootPath !== '/'
+            ? runtimeConfig.rootPath.replace(/\/+$/, '')
+            : '';
         const viewId = typeof runtimeConfig.viewId === 'string' && runtimeConfig.viewId
             ? runtimeConfig.viewId
             : null;
@@ -13,6 +16,17 @@
         const viewStorageKey = 'violit:view-id:' + window.location.pathname;
         const viewRestoreTokenStorageKey = 'violit:view-restore-token:' + window.location.pathname;
         const viewRestoreCookieName = '_vl_reload_view';
+        const withRootPath = (path) => {
+            if (typeof path !== 'string' || !path) {
+                return path;
+            }
+            if (/^[a-z]+:/i.test(path) || path.startsWith('//')) {
+                return path;
+            }
+            const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+            return rootPath ? `${rootPath}${normalizedPath}` : normalizedPath;
+        };
+        const buildAppUrl = (path) => new URL(withRootPath(path), window.location.origin);
         const logViewIdIssue = (...args) => {
             if (window._debug_mode === true) {
                 console.log(...args);
@@ -102,6 +116,9 @@
 
         window._vlViewId = viewId;
         window._vlViewRestoreToken = viewRestoreToken;
+        window._vlRootPath = rootPath;
+        window._vlWithRootPath = withRootPath;
+        window._vlBuildAppUrl = buildAppUrl;
         writeStoredViewId(viewId);
         writeStoredViewRestoreToken(viewRestoreToken);
         clearReloadViewCookie();
@@ -346,7 +363,7 @@
                 }
             }
 
-            const streamUrl = new URL('/lite-stream', window.location.origin);
+            const streamUrl = buildAppUrl('/lite-stream');
             if (window._vlViewId) {
                 streamUrl.searchParams.set('_vl_view_id', window._vlViewId);
             }
@@ -1537,7 +1554,7 @@
                         return;
                     }
 
-                    const probeUrl = new URL('/__violit_boot', window.location.origin);
+                    const probeUrl = buildAppUrl('/__violit_boot');
                     probeUrl.searchParams.set('_t', Date.now().toString());
 
                     fetch(probeUrl.toString(), { cache: 'no-store' })
@@ -1765,7 +1782,7 @@
             };
 
             window._vlBuildWsUrl = () => {
-                const wsUrl = new URL((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + "/ws");
+                const wsUrl = new URL((location.protocol === 'https:' ? 'wss:' : 'ws:') + "//" + location.host + withRootPath('/ws'));
                 if (window._vlViewId) {
                     wsUrl.searchParams.set('_vl_view_id', window._vlViewId);
                 }

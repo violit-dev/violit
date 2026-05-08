@@ -44,6 +44,7 @@ def build_shell_html(
     disconnect_timeout: int,
     view_id: str,
     view_restore_token: str,
+    root_path: str,
     runtime_asset_version: str,
 ) -> str:
     return (
@@ -74,6 +75,7 @@ def build_shell_html(
         .replace("%DISCONNECT_TIMEOUT%", str(disconnect_timeout))
         .replace("%VIEW_ID%", view_id)
         .replace("%VIEW_RESTORE_TOKEN%", view_restore_token)
+        .replace("%ROOT_PATH%", root_path)
         .replace("%RUNTIME_ASSET_VERSION%", runtime_asset_version)
     )
 
