@@ -340,7 +340,7 @@ with app.sidebar:
 app.navigation([
     vl.Page(home_page, title="Home", icon="house"),
     vl.Page(write_page, title="Write", icon="pencil"),
-    vl.Page(my_posts_page, title="My Posts", icon="journal-text"),
+    vl.Page(my_posts_page, title="My Posts", icon="note-sticky"),
     vl.Page(settings_page, title="Settings", icon="gear"),
     vl.Page(login_page, title="Login/Info", icon="person"),
     vl.Page(register_page, title="Register", icon="person-plus"),

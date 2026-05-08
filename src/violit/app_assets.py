@@ -4,38 +4,9 @@ CDN_VENDOR_RESOURCES = """
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/styles/themes/default.css" /></noscript>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js"></script>
     <script type="module">
-        import { getIconLibrary, registerIconLibrary, setDefaultIconFamily } from 'https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js';
-
-        const legacyViolitIconAliases = Object.freeze({
-            'person-fill': 'user',
-            'check-circle': 'circle-check',
-            'x-circle': 'circle-xmark',
-            'info-circle': 'circle-info',
-            'exclamation-triangle': 'triangle-exclamation',
-            'exclamation-circle': 'circle-exclamation',
-            'exclamation-octagon': 'octagon-exclamation',
-            'plus-circle': 'circle-plus',
-            'circle-fill': 'circle',
-            'journal-text': 'note-sticky',
-            'check2': 'check'
-        });
-
-        const defaultLibrary = getIconLibrary('default');
-        if (defaultLibrary) {
-            registerIconLibrary('default', {
-                resolver: (name, family, variant, autoWidth) => {
-                    const normalized = legacyViolitIconAliases[name] || name;
-                    return defaultLibrary.resolver(normalized, family, variant, autoWidth);
-                },
-                mutator: defaultLibrary.mutator,
-                spriteSheet: defaultLibrary.spriteSheet
-            });
-        }
+        import { setDefaultIconFamily } from 'https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/webawesome.loader.js';
 
         setDefaultIconFamily('classic');
-        window.__vlNormalizeIconName = function(name) {
-            return legacyViolitIconAliases[name] || name || 'circle-question';
-        };
     </script>
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -142,38 +113,9 @@ LOCAL_VENDOR_RESOURCES = """
     <noscript><link rel="stylesheet" href="/static/vendor/webawesome/styles/themes/default.css" /></noscript>
     <script type="module" src="/static/vendor/webawesome/webawesome.loader.js"></script>
     <script type="module">
-        import { getIconLibrary, registerIconLibrary, setDefaultIconFamily } from '/static/vendor/webawesome/webawesome.loader.js';
-
-        const legacyViolitIconAliases = Object.freeze({
-            'person-fill': 'user',
-            'check-circle': 'circle-check',
-            'x-circle': 'circle-xmark',
-            'info-circle': 'circle-info',
-            'exclamation-triangle': 'triangle-exclamation',
-            'exclamation-circle': 'circle-exclamation',
-            'exclamation-octagon': 'octagon-exclamation',
-            'plus-circle': 'circle-plus',
-            'circle-fill': 'circle',
-            'journal-text': 'note-sticky',
-            'check2': 'check'
-        });
-
-        const defaultLibrary = getIconLibrary('default');
-        if (defaultLibrary) {
-            registerIconLibrary('default', {
-                resolver: (name, family, variant, autoWidth) => {
-                    const normalized = legacyViolitIconAliases[name] || name;
-                    return defaultLibrary.resolver(normalized, family, variant, autoWidth);
-                },
-                mutator: defaultLibrary.mutator,
-                spriteSheet: defaultLibrary.spriteSheet
-            });
-        }
+        import { setDefaultIconFamily } from '/static/vendor/webawesome/webawesome.loader.js';
 
         setDefaultIconFamily('classic');
-        window.__vlNormalizeIconName = function(name) {
-            return legacyViolitIconAliases[name] || name || 'circle-question';
-        };
     </script>
     <script src="/static/vendor/htmx/htmx.min.js" defer></script>
     <script src="/static/vendor/tailwindcss/tailwind.browser.js" defer onload="window.__vlTailwindReady = true; window.dispatchEvent(new Event('violit:tailwind-ready'));" onerror="window.__vlTailwindReady = true; window.dispatchEvent(new Event('violit:tailwind-ready')); console.error('Failed to load Tailwind CSS browser runtime');"></script>
