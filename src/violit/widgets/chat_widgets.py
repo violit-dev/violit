@@ -1527,6 +1527,7 @@ class ChatWidgetsMixin:
                     const draftKey = '__violitChatDraft_{cid}';
                     const initialDisabled = {'true' if effective_disabled else 'false'};
                     const autoDisableWhilePending = {'true' if auto_disable_while_pending else 'false'};
+                    const tracksAssistantMessages = {'true' if messages is not None else 'false'};
                     const submitPolicy = {json.dumps(normalized_submit_policy)};
                     const isServerPending = () => root?.dataset.chatSubmitPending === 'true';
                     if (typeof window[pendingPhaseKey] !== 'string') {{
@@ -1577,6 +1578,10 @@ class ChatWidgetsMixin:
                             return;
                         }}
                         if (getPendingPhase() === 'server') {{
+                            setPendingPhase('idle');
+                            return;
+                        }}
+                        if (getPendingPhase() === 'submitted' && !tracksAssistantMessages) {{
                             setPendingPhase('idle');
                             return;
                         }}
