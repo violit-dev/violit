@@ -1,3 +1,12 @@
+CDN_PRECONNECT_LINKS = """
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://cdn.plot.ly">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+"""
+
+
 CDN_VENDOR_RESOURCES = """
     <link rel="stylesheet" data-vl-critical="true" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/styles/webawesome.css" />
     <link rel="preload" data-vl-critical="true" as="style" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.5.0/dist-cdn/styles/themes/default.css" onload="this.onload=null;this.rel='stylesheet'">
@@ -25,7 +34,7 @@ CDN_VENDOR_RESOURCES = """
             'Plotly':  'https://cdn.plot.ly/plotly-2.27.0.min.js',
             'agGrid':  'https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.1/dist/ag-grid-community.min.js',
                 'hljs':    'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js',
-                'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js'
+                'katex':   '/static/vendor/katex/katex.min.js'
         };
         var _q = {};  // callback queues per lib
         var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
@@ -113,7 +122,53 @@ LOCAL_VENDOR_RESOURCES = """
     <noscript><link rel="stylesheet" href="/static/vendor/webawesome/styles/themes/default.css" /></noscript>
     <script type="module" src="/static/vendor/webawesome/webawesome.loader.js"></script>
     <script type="module">
-        import { setDefaultIconFamily } from '/static/vendor/webawesome/webawesome.loader.js';
+        import { getIconLibrary, registerIconLibrary, setDefaultIconFamily } from '/static/vendor/webawesome/components/icon/library.js';
+
+        const allowRemoteFontAwesomeFallback = %FONTAWESOME_REMOTE_FALLBACK%;
+        const fallbackIconUrl = '/static/vendor/fontawesome/regular/circle-question.svg';
+        const originalDefaultIconLibrary = getIconLibrary('default');
+        const localIconManifestPromise = fetch('/static/vendor/fontawesome/manifest.json')
+            .then((response) => response.ok ? response.json() : { solid: [], regular: ['circle-question'], brands: [] })
+            .catch(() => ({ solid: [], regular: ['circle-question'], brands: [] }))
+            .then((manifest) => ({
+                solid: new Set(manifest.solid || []),
+                regular: new Set(manifest.regular || []),
+                brands: new Set(manifest.brands || []),
+            }));
+
+        function getLocalIconFolder(family = 'classic', variant = 'solid') {
+            if (family === 'brands') {
+                return 'brands';
+            }
+
+            if (family === 'classic' && variant === 'regular') {
+                return 'regular';
+            }
+
+            return 'solid';
+        }
+
+        registerIconLibrary('default', {
+            resolver: async (name, family = 'classic', variant = 'solid') => {
+                const manifest = await localIconManifestPromise;
+                const folder = getLocalIconFolder(family, variant);
+                const iconNames = manifest[folder] || manifest.solid;
+
+                if (iconNames && iconNames.has(name)) {
+                    return `/static/vendor/fontawesome/${folder}/${name}.svg`;
+                }
+
+                if (allowRemoteFontAwesomeFallback && originalDefaultIconLibrary && typeof originalDefaultIconLibrary.resolver === 'function') {
+                    return originalDefaultIconLibrary.resolver(name, family, variant);
+                }
+
+                return fallbackIconUrl;
+            },
+            mutator: originalDefaultIconLibrary && typeof originalDefaultIconLibrary.mutator === 'function'
+                ? originalDefaultIconLibrary.mutator
+                : undefined,
+            spriteSheet: originalDefaultIconLibrary ? originalDefaultIconLibrary.spriteSheet : undefined,
+        });
 
         setDefaultIconFamily('classic');
     </script>
@@ -132,7 +187,7 @@ LOCAL_VENDOR_RESOURCES = """
             'Plotly':  '/static/vendor/plotly/plotly-2.27.0.min.js',
             'agGrid':  '/static/vendor/ag-grid/ag-grid-community.min.js',
             'hljs':    '/static/vendor/highlightjs/highlight.min.js',
-            'katex':   'https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js'
+            'katex':   '/static/vendor/katex/katex.min.js'
         };
         var _q = {};  // callback queues per lib
         var _s = {};  // loading state: 0=idle, 1=loading, 2=ready
@@ -233,6 +288,15 @@ LOCAL_VENDOR_RESOURCES = """
                 """
 
 
-def get_vendor_resources(use_cdn: bool, active_theme_name: str, inactive_theme_name: str) -> str:
+def get_vendor_resources(use_cdn: bool, use_cdn_fontawesome_only: bool, active_theme_name: str, inactive_theme_name: str) -> str:
     template = CDN_VENDOR_RESOURCES if use_cdn else LOCAL_VENDOR_RESOURCES
-    return template.replace("__ACTIVE_THEME__", active_theme_name).replace("__INACTIVE_THEME__", inactive_theme_name)
+    return (
+        template
+        .replace("__ACTIVE_THEME__", active_theme_name)
+        .replace("__INACTIVE_THEME__", inactive_theme_name)
+        .replace("%FONTAWESOME_REMOTE_FALLBACK%", "true" if use_cdn_fontawesome_only else "false")
+    )
+
+
+def get_preconnect_links(use_cdn: bool) -> str:
+    return CDN_PRECONNECT_LINKS if use_cdn else ""

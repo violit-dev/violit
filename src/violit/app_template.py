@@ -5,11 +5,7 @@ HTML_TEMPLATE = r"""
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="htmx-config" content='{"defaultSwapDelay":0,"defaultSettleDelay":0}'>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link rel="preconnect" href="https://unpkg.com">
-    <link rel="preconnect" href="https://cdn.plot.ly">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    %PRECONNECT_LINKS%
     <title>%TITLE%</title>
     %FAVICON_LINKS%
     <script>var mode = window.__vlMode = "%MODE%";</script>

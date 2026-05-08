@@ -68,9 +68,10 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, disconnect_timeout=0, db: Optional[str] = None, migrate='auto'):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, use_cdn_fontawesome_only=False, disconnect_timeout=0, db: Optional[str] = None, migrate='auto'):
         self.mode = mode
         self.use_cdn = use_cdn
+        self.use_cdn_fontawesome_only = use_cdn_fontawesome_only
         self.disconnect_timeout = disconnect_timeout
         self.boot_id = uuid.uuid4().hex
         self.app_title = title  # Renamed to avoid conflict with title() method

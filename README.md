@@ -277,6 +277,7 @@ Under the hood, Violit utilizes a pragmatic, modern stack focused on performance
 - **Visualization:** Vega-Lite, Plotly integration
 - **Desktop:** pywebview for native executables
 - **Assets:** Local bundled assets for offline-friendly deployments
+- **Icons:** `use_cdn=False` keeps Font Awesome icons local-only by default; set `use_cdn_fontawesome_only=True` to allow remote fallback only for icons missing from the bundled local pack.
 
 ## Roadmap
 

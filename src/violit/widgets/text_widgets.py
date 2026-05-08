@@ -932,7 +932,7 @@ class TextWidgetsMixin:
                 if (!document.getElementById('_vl_katex_css')) {{
                     var lnk = document.createElement('link');
                     lnk.id = '_vl_katex_css'; lnk.rel = 'stylesheet';
-                    lnk.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+                    lnk.href = '/static/vendor/katex/katex.min.css';
                     document.head.appendChild(lnk);
                 }}
                 window._vlLoadLib('katex', function() {{

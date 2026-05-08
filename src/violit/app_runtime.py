@@ -11,7 +11,7 @@ from fastapi import Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.websockets import WebSocketState
 
-from .app_assets import get_vendor_resources
+from .app_assets import get_preconnect_links, get_vendor_resources
 from .app_shell import build_html_response, build_shell_html, build_user_css
 from .app_template import HTML_TEMPLATE
 from .component import Component
@@ -373,6 +373,7 @@ class AppRuntimeMixin:
             inactive_theme_name = "light" if active_theme_name == "dark" else "dark"
             vendor_resources = get_vendor_resources(
                 use_cdn=self.use_cdn,
+                use_cdn_fontawesome_only=self.use_cdn_fontawesome_only,
                 active_theme_name=active_theme_name,
                 inactive_theme_name=inactive_theme_name,
             )
@@ -392,6 +393,7 @@ class AppRuntimeMixin:
                 main_class=main_class,
                 mode=self.mode,
                 title=self.app_title,
+                preconnect_links=get_preconnect_links(self.use_cdn),
                 favicon_links=self._build_favicon_links(),
                 html_class=html_class,
                 body_class=body_class,
