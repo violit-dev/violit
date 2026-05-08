@@ -126,7 +126,7 @@ class App(
         default_icon = os.path.join(base_path, "assets", "violit_icon_sol.ico")
         self._default_app_icon = default_icon if os.path.exists(default_icon) else None
         self.app_icon = icon or self._default_app_icon
-        self.app_favicon = favicon if favicon is not None else self.app_icon
+        self.app_favicon = favicon if favicon is not None else self._default_app_icon
 
         self.width = width
         self.height = height
@@ -1252,7 +1252,7 @@ class App(
 
     # Theme and settings methods
     def _resolve_favicon_href(self, favicon: Optional[str] = None) -> str:
-        source = favicon if favicon is not None else self.app_favicon or self.app_icon
+        source = favicon if favicon is not None else self.app_favicon or self._default_app_icon
         if not source:
             return "data:,"
 
@@ -1309,7 +1309,7 @@ class App(
 
     def set_favicon(self, favicon: Optional[str]):
         """Set browser favicon. Local file paths are embedded as data URLs."""
-        self.app_favicon = favicon if favicon is not None else self.app_icon or self._default_app_icon
+        self.app_favicon = favicon if favicon is not None else self._default_app_icon
 
     def _selection_updater(self):
         """Update selection mode"""
