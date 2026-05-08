@@ -392,6 +392,7 @@ class AppRuntimeMixin:
                 main_class=main_class,
                 mode=self.mode,
                 title=self.app_title,
+                favicon_links=self._build_favicon_links(),
                 html_class=html_class,
                 body_class=body_class,
                 css_vars=theme.to_css_vars(),

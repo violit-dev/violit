@@ -11,6 +11,9 @@ import queue
 import warnings
 import secrets
 import logging
+import base64
+import html
+import mimetypes
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -65,7 +68,7 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon=None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, disconnect_timeout=0, db: str = None, migrate='auto'):
+    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, disconnect_timeout=0, db: Optional[str] = None, migrate='auto'):
         self.mode = mode
         self.use_cdn = use_cdn
         self.disconnect_timeout = disconnect_timeout
@@ -118,13 +121,11 @@ class App(
                 print("[WARNING] Native mode flag set but no token found!")
         
         # Icon Setup
-        self.app_icon = icon
-        if self.app_icon is None:
-            # Set default icon path
-            base_path = os.path.dirname(os.path.abspath(__file__))
-            default_icon = os.path.join(base_path, "assets", "violit_icon_sol.ico")
-            if os.path.exists(default_icon):
-                self.app_icon = default_icon
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        default_icon = os.path.join(base_path, "assets", "violit_icon_sol.ico")
+        self._default_app_icon = default_icon if os.path.exists(default_icon) else None
+        self.app_icon = icon or self._default_app_icon
+        self.app_favicon = favicon if favicon is not None else self.app_icon
 
         self.width = width
         self.height = height
@@ -1249,6 +1250,36 @@ class App(
             loop.close()
 
     # Theme and settings methods
+    def _resolve_favicon_href(self, favicon: Optional[str] = None) -> str:
+        source = favicon if favicon is not None else self.app_favicon or self.app_icon
+        if not source:
+            return "data:,"
+
+        if source.startswith(("data:", "http://", "https://", "//", "/")):
+            return source
+
+        resolved_path = os.path.abspath(source)
+        if os.path.exists(resolved_path):
+            mime_type, _ = mimetypes.guess_type(resolved_path)
+            if not mime_type:
+                suffix = Path(resolved_path).suffix.lower()
+                if suffix == ".ico":
+                    mime_type = "image/x-icon"
+                elif suffix == ".svg":
+                    mime_type = "image/svg+xml"
+                else:
+                    mime_type = "application/octet-stream"
+
+            with open(resolved_path, "rb") as favicon_file:
+                encoded = base64.b64encode(favicon_file.read()).decode("ascii")
+            return f"data:{mime_type};base64,{encoded}"
+
+        return source
+
+    def _build_favicon_links(self) -> str:
+        favicon_href = html.escape(self._resolve_favicon_href(), quote=True)
+        return f'<link rel="icon" href="{favicon_href}"><link rel="shortcut icon" href="{favicon_href}">'
+
     def set_theme(self, p):
         """Set theme preset"""
         import time
@@ -1274,6 +1305,10 @@ class App(
         store['theme'].set_color('primary', c)
         if self._theme_state: 
             self._theme_state.set(str(time.time()))
+
+    def set_favicon(self, favicon: Optional[str]):
+        """Set browser favicon. Local file paths are embedded as data URLs."""
+        self.app_favicon = favicon if favicon is not None else self.app_icon or self._default_app_icon
 
     def _selection_updater(self):
         """Update selection mode"""

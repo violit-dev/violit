@@ -11,6 +11,7 @@ HTML_TEMPLATE = r"""
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <title>%TITLE%</title>
+    %FAVICON_LINKS%
     <script>var mode = window.__vlMode = "%MODE%";</script>
     %CSRF_SCRIPT%
     %DEBUG_SCRIPT%

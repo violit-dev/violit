@@ -194,6 +194,18 @@ app.button("+1", on_click=lambda: count.set(count.value + 1))
 app.run()
 ```
 
+Browser tabs can use `favicon=...`, while native desktop windows continue to use `icon=...`:
+
+```python
+app = vl.App(
+    title="Hello Violit",
+    icon="./my_app.ico",
+    favicon="./my_app.ico",
+)
+
+app.set_favicon("https://example.com/favicon.ico")
+```
+
 ## Very Easy ORM Example
 
 Violit bridges the gap between a quick prototype and a production-ready application by offering built-in persistence.

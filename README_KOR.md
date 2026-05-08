@@ -192,6 +192,18 @@ app.button("+1", on_click=lambda: count.set(count.value + 1))
 app.run()
 ```
 
+브라우저 탭 아이콘은 `favicon=...`, 네이티브 데스크톱 창 아이콘은 계속 `icon=...`으로 설정할 수 있습니다.
+
+```python
+app = vl.App(
+    title="Hello Violit",
+    icon="./my_app.ico",
+    favicon="./my_app.ico",
+)
+
+app.set_favicon("https://example.com/favicon.ico")
+```
+
 ## 아주 쉬운 ORM 예제
 
 Violit은 내장 영속성 계층을 통해 빠른 프로토타입과 실제 서비스용 애플리케이션 사이의 간극을 줄여줍니다.

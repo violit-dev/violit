@@ -24,6 +24,7 @@ def build_shell_html(
     main_class: str,
     mode: str,
     title: str,
+    favicon_links: str,
     html_class: str,
     body_class: str,
     css_vars: str,
@@ -52,6 +53,7 @@ def build_shell_html(
         .replace("%MAIN_CLASS%", main_class)
         .replace("%MODE%", mode)
         .replace("%TITLE%", title)
+        .replace("%FAVICON_LINKS%", favicon_links)
         .replace("%HTML_CLASS%", html_class)
         .replace("%BODY_CLASS%", body_class)
         .replace("%CSS_VARS%", css_vars)
