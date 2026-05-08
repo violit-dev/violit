@@ -1256,14 +1256,19 @@ class App(
         if not source:
             return "data:,"
 
-        if source.startswith(("data:", "http://", "https://", "//", "/")):
+        if source.startswith(("data:", "http://", "https://", "//")):
             return source
 
+        candidate_paths = [source]
         resolved_path = os.path.abspath(source)
-        if os.path.exists(resolved_path):
-            mime_type, _ = mimetypes.guess_type(resolved_path)
+        if resolved_path != source:
+            candidate_paths.append(resolved_path)
+
+        existing_path = next((path for path in candidate_paths if os.path.exists(path)), None)
+        if existing_path:
+            mime_type, _ = mimetypes.guess_type(existing_path)
             if not mime_type:
-                suffix = Path(resolved_path).suffix.lower()
+                suffix = Path(existing_path).suffix.lower()
                 if suffix == ".ico":
                     mime_type = "image/x-icon"
                 elif suffix == ".svg":
@@ -1271,9 +1276,12 @@ class App(
                 else:
                     mime_type = "application/octet-stream"
 
-            with open(resolved_path, "rb") as favicon_file:
+            with open(existing_path, "rb") as favicon_file:
                 encoded = base64.b64encode(favicon_file.read()).decode("ascii")
             return f"data:{mime_type};base64,{encoded}"
+
+        if source.startswith("/"):
+            return source
 
         return source
 
