@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import re
@@ -58,6 +59,88 @@ messages = app.state([
 api_key = app.state("", key="demo_gemini_agent_api_key")
 mode = app.state("streaming", key="demo_gemini_agent_mode")
 busy = app.state(False, key="demo_gemini_agent_busy")
+
+
+def _normalize_prompt_payload(prompt: Any) -> dict[str, Any]:
+    if not isinstance(prompt, dict):
+        return {"text": str(prompt or "").strip(), "files": [], "audio": None}
+
+    return {
+        "text": str(prompt.get("text") or "").strip(),
+        "files": [entry for entry in list(prompt.get("files") or []) if entry is not None],
+        "audio": prompt.get("audio"),
+    }
+
+
+def _prompt_text(prompt: Any) -> str:
+    payload = _normalize_prompt_payload(prompt)
+
+    parts: list[str] = []
+    text = payload["text"]
+    if text:
+        parts.append(text)
+
+    files = list(payload["files"])
+    if files:
+        names = ", ".join(str(getattr(entry, "name", "attachment")) for entry in files[:3])
+        extra = f" (+{len(files) - 3} more)" if len(files) > 3 else ""
+        parts.append(f"Attached files: {names}{extra}.")
+
+    audio = payload["audio"]
+    if audio is not None:
+        parts.append(f"Attached audio: {getattr(audio, 'name', 'voice-note') }.")
+
+    return "\n\n".join(part for part in parts if part).strip()
+
+
+def _guess_mime_type(file_name: str) -> str:
+    suffix = Path(file_name or "").suffix.lower()
+    return {
+        ".gif": "image/gif",
+        ".jpeg": "image/jpeg",
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }.get(suffix, "application/octet-stream")
+
+
+def _entry_mime_type(entry: Any) -> str:
+    return str(getattr(entry, "type", "") or "").strip() or _guess_mime_type(str(getattr(entry, "name", "")))
+
+
+def _image_inline_parts(prompt: Any) -> list[dict[str, Any]]:
+    payload = _normalize_prompt_payload(prompt)
+    parts: list[dict[str, Any]] = []
+    for entry in payload["files"][:4]:
+        mime_type = _entry_mime_type(entry)
+        if not mime_type.startswith("image/"):
+            continue
+        file_bytes = b""
+        if hasattr(entry, "getvalue"):
+            file_bytes = cast(Any, entry).getvalue() or b""
+        if not file_bytes:
+            continue
+        parts.append(
+            {
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": base64.b64encode(file_bytes).decode("utf-8"),
+                }
+            }
+        )
+    return parts
+
+
+def _has_image_attachment(prompt: Any) -> bool:
+    return bool(_image_inline_parts(prompt))
+
+
+def _build_gemini_user_parts(prompt_text: str, prompt: Any) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    body = prompt_text.strip() or "Analyze the provided attachment(s) and answer clearly."
+    parts.append({"text": body})
+    parts.extend(_image_inline_parts(prompt))
+    return parts
 
 
 def _post_json(url: str, payload: dict, *, accept_sse: bool = False):
@@ -282,6 +365,28 @@ def _extract_text_from_gemini_response(data: dict[str, Any]) -> str:
     return "".join(parts).strip()
 
 
+def _next_gemini_stream_delta(emitted_text: str, event_text: str) -> tuple[str, str]:
+    if not event_text:
+        return "", emitted_text
+    if not emitted_text:
+        return event_text, event_text
+    if event_text == emitted_text or event_text in emitted_text:
+        return "", emitted_text
+    if event_text.startswith(emitted_text):
+        delta = event_text[len(emitted_text):]
+        return delta, emitted_text + delta
+
+    overlap = 0
+    max_overlap = min(len(emitted_text), len(event_text))
+    for size in range(max_overlap, 0, -1):
+        if emitted_text.endswith(event_text[:size]):
+            overlap = size
+            break
+
+    delta = event_text[overlap:]
+    return delta, emitted_text + delta
+
+
 def _parse_json_text(raw_text: str) -> dict[str, Any]:
     text = raw_text.strip()
     if text.startswith("```"):
@@ -324,7 +429,17 @@ def _serialize_tool_history(tool_history: list[dict[str, Any]]) -> str:
     return json.dumps(compact, ensure_ascii=False, indent=2)
 
 
-def _build_planner_prompt(user_prompt: str, tool_history: list[dict[str, Any]], step_index: int) -> str:
+def _build_planner_prompt(user_prompt: str, tool_history: list[dict[str, Any]], step_index: int, *, source_prompt: Any = None) -> str:
+    attachment_guidance = ""
+    if _has_image_attachment(source_prompt):
+        attachment_guidance = """
+
+Direct attachment capability:
+- The latest user message includes attached image input in the same multimodal request.
+- You can inspect that image directly.
+- Do not say you cannot analyze the image just because the workspace tools are file-oriented.
+- If the user is asking mainly about the attached image, it is valid to choose action \"answer\" immediately and answer from the image itself.
+""".strip()
     return f"""
 You are the planning brain for a Violit workspace agent.
 
@@ -347,6 +462,7 @@ Rules:
 - Keep public_reasoning to one or two short sentences.
 - Use action "answer" only when you already have enough evidence.
 - Respond with JSON only.
+{attachment_guidance}
 
 Return this exact object shape:
 {{
@@ -371,13 +487,23 @@ Tool history so far:
 """.strip()
 
 
-def _build_final_answer_prompt(user_prompt: str, tool_history: list[dict[str, Any]], summary_hint: str) -> str:
+def _build_final_answer_prompt(user_prompt: str, tool_history: list[dict[str, Any]], summary_hint: str, *, source_prompt: Any = None) -> str:
+    attachment_guidance = ""
+    if _has_image_attachment(source_prompt):
+        attachment_guidance = """
+
+The latest user message includes an attached image in the same multimodal input.
+You can analyze that image directly.
+Do not claim that you cannot inspect images or that you are limited to workspace-file tools when the image is attached.
+Use the image itself as primary evidence when the request asks about the image.
+""".strip()
     return f"""
 You are writing the final answer for a Violit workspace agent.
 
 Use the gathered tool results when they are relevant. Do not invent files or facts that are not present in the evidence.
 Keep the answer helpful and concrete. Mention specific files when they matter.
 If the user wrote in Korean, answer in Korean.
+{attachment_guidance}
 
 Public reasoning summary:
 {summary_hint}
@@ -393,9 +519,9 @@ Evidence from tools:
 """.strip()
 
 
-def _call_gemini_json(key: str, prompt: str) -> dict[str, Any]:
+def _call_gemini_json(key: str, prompt: str, *, source_prompt: Any = None) -> dict[str, Any]:
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": _build_gemini_user_parts(prompt, source_prompt)}],
         "generationConfig": {
             "temperature": 0.2,
             "responseMimeType": "application/json",
@@ -411,11 +537,12 @@ def _call_gemini_json(key: str, prompt: str) -> dict[str, Any]:
     return _parse_json_text(text)
 
 
-def _stream_gemini_answer(key: str, prompt: str):
+def _stream_gemini_answer(key: str, prompt: str, *, source_prompt: Any = None):
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": _build_gemini_user_parts(prompt, source_prompt)}],
         "generationConfig": {"temperature": 0.45},
     }
+    emitted_text = ""
     with _post_json(_model_url(key, stream=True), payload, accept_sse=True) as response:
         for raw_line in response:
             line = raw_line.decode("utf-8", errors="replace").strip()
@@ -427,16 +554,17 @@ def _stream_gemini_answer(key: str, prompt: str):
             event = json.loads(data_line)
             if event.get("error"):
                 raise RuntimeError(str(event["error"]))
-            for candidate in event.get("candidates") or []:
-                for part in ((candidate.get("content") or {}).get("parts") or []):
-                    text = part.get("text") if isinstance(part, dict) else ""
-                    if text:
-                        yield text
+            text = _extract_text_from_gemini_response(event)
+            if not text:
+                continue
+            delta, emitted_text = _next_gemini_stream_delta(emitted_text, text)
+            if delta:
+                yield delta
 
 
-def _generate_gemini_answer(key: str, prompt: str) -> str:
+def _generate_gemini_answer(key: str, prompt: str, *, source_prompt: Any = None) -> str:
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": _build_gemini_user_parts(prompt, source_prompt)}],
         "generationConfig": {"temperature": 0.45},
     }
     with _post_json(_model_url(key, stream=False), payload, accept_sse=False) as response:
@@ -449,7 +577,9 @@ def _generate_gemini_answer(key: str, prompt: str) -> str:
     return text
 
 
-def reply(prompt: str):
+def reply(prompt: Any):
+    prompt_payload = _normalize_prompt_payload(prompt)
+    prompt_text = _prompt_text(prompt_payload)
     key = api_key.value.strip()
     if not key:
         raise RuntimeError("Paste your Gemini API key above.")
@@ -465,7 +595,11 @@ def reply(prompt: str):
             yield {"type": "status", "text": f"Planning with Gemini {MODEL}"}
 
             for step_index in range(1, MAX_AGENT_STEPS + 1):
-                plan = _call_gemini_json(key, _build_planner_prompt(prompt, tool_history, step_index))
+                plan = _call_gemini_json(
+                    key,
+                    _build_planner_prompt(prompt_text, tool_history, step_index, source_prompt=prompt_payload),
+                    source_prompt=prompt_payload,
+                )
                 public_reasoning = str(plan.get("public_reasoning", "")).strip() or "Checking the next best step."
                 step_title = str(plan.get("step_title", "")).strip() or f"Planner step {step_index}"
                 action = str(plan.get("action", "answer")).strip().lower() or "answer"
@@ -513,17 +647,17 @@ def reply(prompt: str):
             yield {"type": "summary", "text": final_summary}
             yield {"type": "status", "text": f"Writing the final answer ({answer_mode})"}
 
-            final_prompt = _build_final_answer_prompt(prompt, tool_history, final_summary)
+            final_prompt = _build_final_answer_prompt(prompt_text, tool_history, final_summary, source_prompt=prompt_payload)
             if answer_mode == "streaming":
                 saw_text = False
-                for text in _stream_gemini_answer(key, final_prompt):
+                for text in _stream_gemini_answer(key, final_prompt, source_prompt=prompt_payload):
                     saw_text = True
                     yield {"type": "text", "text": text}
                 if not saw_text:
                     raise RuntimeError("Gemini returned an empty final answer.")
             else:
                 yield {"type": "step", "kind": "status", "title": "Answer mode", "text": "Using non-streaming final answer mode."}
-                yield {"type": "text", "text": _generate_gemini_answer(key, final_prompt), "stream": False}
+                yield {"type": "text", "text": _generate_gemini_answer(key, final_prompt, source_prompt=prompt_payload), "stream": False}
 
             seen_titles = set()
             for artifact in artifacts:
@@ -666,12 +800,21 @@ def fail_reply(exc: Exception) -> None:
     busy.set(False)
 
 
-def submit_prompt(prompt: str) -> None:
-    cleaned = (prompt or "").strip()
+def submit_prompt(prompt: Any) -> None:
+    prompt_payload = _normalize_prompt_payload(prompt)
+    cleaned = _prompt_text(prompt_payload)
     if not cleaned or busy.value:
         return
 
-    append_message({"role": "user", "content": cleaned})
+    user_message: dict[str, Any] = {
+        "role": "user",
+        "content": prompt_payload["text"],
+        "files": list(prompt_payload["files"]),
+    }
+    if prompt_payload["audio"] is not None:
+        user_message["audio"] = prompt_payload["audio"]
+
+    append_message(user_message)
     append_message({
         "role": "assistant",
         "content": "",
@@ -685,7 +828,7 @@ def submit_prompt(prompt: str) -> None:
     busy.set(True)
 
     app.background(
-        lambda prompt=cleaned: run_reply(prompt),
+        lambda prompt=prompt: run_reply(prompt),
         on_complete=lambda: busy.set(False),
         on_error=fail_reply,
     ).start()
@@ -711,8 +854,7 @@ def render_chat():
                         with app.status(status_label or ("Failed" if phase == "error" else "Done"), state=_status_state(message), expanded=False):
                             pass
 
-                if message.get("content"):
-                    app.markdown(str(message["content"]))
+                app.render_chat_message_body(message)
 
                 summary = str(message.get("summary") or "").strip()
                 if summary:
@@ -733,7 +875,14 @@ def render_chat():
 
 
 render_chat()
-app.chat_input("Ask Gemini Agent", on_submit=submit_prompt, disabled=bool(busy.value))
+app.chat_input(
+    "Ask Gemini Agent",
+    on_submit=submit_prompt,
+    disabled=bool(busy.value),
+    accept_file="multiple",
+    accept_audio=True,
+    audio_sample_rate=16000,
+)
 
 
 app.run()

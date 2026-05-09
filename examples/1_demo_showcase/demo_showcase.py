@@ -176,12 +176,40 @@ def _pseudo_chat_reply(prompt: str):
 
 
 def _submit_chat_prompt(prompt: str):
-    cleaned = (prompt or "").strip()
+    if isinstance(prompt, dict):
+        prompt_payload = {
+            "text": str(prompt.get("text") or "").strip(),
+            "files": [entry for entry in list(prompt.get("files") or []) if entry is not None],
+            "audio": prompt.get("audio"),
+        }
+        parts: list[str] = []
+        if prompt_payload["text"]:
+            parts.append(prompt_payload["text"])
+        if prompt_payload["files"]:
+            names = ", ".join(str(getattr(entry, "name", "attachment")) for entry in prompt_payload["files"][:3])
+            extra = f" (+{len(prompt_payload['files']) - 3} more)" if len(prompt_payload["files"]) > 3 else ""
+            parts.append(f"Attached files: {names}{extra}.")
+        if prompt_payload["audio"] is not None:
+            parts.append(f"Attached audio: {getattr(prompt_payload['audio'], 'name', 'voice-note') }.")
+        cleaned = "\n\n".join(part for part in parts if part).strip()
+    else:
+        prompt_payload = {"text": (prompt or "").strip(), "files": [], "audio": None}
+        cleaned = prompt_payload["text"]
     if not cleaned or chat_busy.value:
         return
 
+    user_message: dict[str, Any] = {
+        "role": "user",
+        "content": cleaned,
+        "text": prompt_payload["text"],
+    }
+    if prompt_payload["files"]:
+        user_message["files"] = list(prompt_payload["files"])
+    if prompt_payload["audio"] is not None:
+        user_message["audio"] = prompt_payload["audio"]
+
     chat_history.set(chat_history.value + [
-        {"role": "user", "content": cleaned},
+        user_message,
         {"role": "assistant", "content": ""},
     ])
     chat_busy.set(True)
@@ -582,8 +610,7 @@ def chat_page():
         with app.chat_thread(height="62vh", border=True):
             for message in chat_history.value:
                 with app.chat_message(message.get("role", "assistant")):
-                    if message.get("content"):
-                        app.markdown(str(message["content"]))
+                    app.render_chat_message_body(message)
 
     cast(Any, render_chat)()
 
@@ -591,6 +618,9 @@ def chat_page():
         "Ask about themes, auth, ORM, Lite mode, or styling...",
         on_submit=_submit_chat_prompt,
         disabled=bool(chat_busy.value),
+        accept_file="multiple",
+        accept_audio=True,
+        audio_sample_rate=16000,
     )
 
 

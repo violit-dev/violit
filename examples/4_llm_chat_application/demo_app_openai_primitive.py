@@ -16,7 +16,6 @@ messages = app.state([
     {"role": "assistant", "content": "Hello. Ask ChatGPT anything."}
 ], key="demo_openai_messages")
 api_key = app.state("", key="demo_openai_api_key")
-mode = app.state("streaming", key="demo_openai_mode")
 busy = app.state(False, key="demo_openai_busy")
 
 
@@ -83,12 +82,10 @@ def reply(_prompt: str):
             if item.get("content")
         ],
         "temperature": 0.4,
-        "stream": mode.value == "streaming",
+        "stream": True,
     }
 
-    if mode.value == "streaming":
-        return _reply_streaming(payload, key)
-    return _reply_non_streaming(payload, key)
+    return _reply_streaming(payload, key)
 
 
 def append_message(message: dict[str, Any]) -> None:
@@ -133,7 +130,7 @@ def fail_reply(exc: Exception) -> None:
 
 
 def submit_prompt(prompt: str) -> None:
-    cleaned = (prompt or "").strip()
+    cleaned = str(prompt or "").strip()
     if not cleaned or busy.value:
         return
 
@@ -151,9 +148,8 @@ def submit_prompt(prompt: str) -> None:
 reactivity = cast(Any, app.reactivity)
 
 app.title("Simple OpenAI Chat")
-app.caption("A very small Violit chat example.")
+app.caption("A small text-only Violit chat example.")
 app.text_input("OPENAI_API_KEY", value=api_key.value, key="demo_openai_api_key", type="password")
-app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_openai_mode")
 
 
 @reactivity
@@ -161,12 +157,15 @@ def render_chat():
     with app.chat_thread(height="60vh"):
         for message in messages.value:
             with app.chat_message(message.get("role", "assistant")):
-                if message.get("content"):
-                    app.markdown(str(message["content"]))
+                app.render_chat_message_body(message)
 
 
 render_chat()
-app.chat_input("Ask ChatGPT", on_submit=submit_prompt, disabled=bool(busy.value))
+app.chat_input(
+    "Ask ChatGPT",
+    on_submit=submit_prompt,
+    disabled=bool(busy.value),
+)
 
 
 app.run()

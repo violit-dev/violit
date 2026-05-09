@@ -1,6 +1,6 @@
 import json
 import urllib.request
-from typing import Any, cast
+from typing import cast
 
 from _local_violit_bootstrap import bootstrap_local_violit
 
@@ -93,7 +93,7 @@ def reply(_prompt: str):
 reactivity = cast(Any, app.reactivity)
 
 app.title("Simple OpenAI Chat (High-level)")
-app.caption("High-level Violit chat example using chat_history and managed_chat_input.")
+app.caption("A small text-only high-level Violit chat example.")
 app.text_input("OPENAI_API_KEY", value=api_key.value, key="demo_openai_highlevel_api_key", type="password")
 app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_openai_highlevel_mode")
 
