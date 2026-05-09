@@ -342,7 +342,7 @@ class LayoutWidgetsMixin:
                     html = f'''
                     <wa-details {open_attr} style="margin-bottom:1rem;">
                         {summary_html}
-                        <div style="padding:0.5rem 0;">{inner_html}</div>
+                        <div style="padding:0.5rem 0; display:flex; flex-direction:column; width:100%; min-width:0;">{inner_html}</div>
                     </wa-details>
                     '''
                     _wd = self.app._get_widget_defaults("expander")
