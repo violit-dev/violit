@@ -697,33 +697,6 @@ def patch_last_message(**updates: Any) -> None:
     messages.set(items)
 
 
-def _status_state(message: dict[str, Any]) -> str:
-    phase = str(message.get("phase", "")).strip().lower()
-    if phase == "error":
-        return "error"
-    if phase in {"thinking", "running"}:
-        return "running"
-    return "complete"
-
-
-def _render_trace_steps(trace: list[dict[str, Any]]) -> None:
-    for step in trace:
-        title = str(step.get("title") or step.get("kind") or "Step").strip()
-        text = str(step.get("text") or "").strip()
-        app.markdown(f"**{title}**")
-        if text:
-            app.markdown(text)
-
-
-def _render_artifacts(artifacts: list[dict[str, Any]]) -> None:
-    for artifact in artifacts:
-        title = str(artifact.get("title") or artifact.get("kind") or "Artifact").strip()
-        text = str(artifact.get("text") or "").strip()
-        app.markdown(f"**{title}**")
-        if text:
-            app.markdown(text)
-
-
 def run_reply(prompt: str) -> None:
     text_parts: list[str] = []
     trace: list[dict[str, Any]] = []
@@ -846,31 +819,41 @@ app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="dem
 def render_chat():
     with app.chat_thread(height="64vh", border=True):
         for message in messages.value:
-            with app.chat_message(message.get("role", "assistant")):
-                if message.get("role") == "assistant":
-                    status_label = str(message.get("status_text") or "").strip()
-                    phase = str(message.get("phase") or "done").strip().lower()
-                    if status_label or phase in {"thinking", "running", "error"}:
-                        with app.status(status_label or ("Failed" if phase == "error" else "Done"), state=_status_state(message), expanded=False):
-                            pass
+            phase = str(message.get("phase") or "done").strip().lower()
+            status = str(message.get("status") or "").strip().lower()
+            content = str(message.get("content") or "").strip()
+            summary = str(message.get("summary") or "").strip()
+            trace = message.get("trace") if isinstance(message.get("trace"), list) else None
+            artifacts = message.get("artifacts") if isinstance(message.get("artifacts"), list) else None
+            error_text = str(message.get("error") or "").strip()
+            thinking_label = str(message.get("thinking_label") or message.get("status_text") or "Thinking...").strip() or "Thinking..."
 
-                app.render_chat_message_body(message)
+            show_status_text = ""
+            if message.get("role") == "assistant" and not content:
+                show_status_text = str(message.get("status_text") or "").strip()
+                if not show_status_text and phase in {"thinking", "running"}:
+                    show_status_text = thinking_label
 
-                summary = str(message.get("summary") or "").strip()
-                if summary:
-                    app.markdown(f"**Summary**\n\n{summary}")
+            thinking = message.get("role") == "assistant" and not content and (phase in {"thinking", "running"} or status in {"thinking", "streaming"})
 
-                trace = message.get("trace") if isinstance(message.get("trace"), list) else []
-                if trace:
-                    with app.expander("Trace", expanded=False):
-                        _render_trace_steps(cast(list[dict[str, Any]], trace))
-
-                artifacts = message.get("artifacts") if isinstance(message.get("artifacts"), list) else []
-                if artifacts:
-                    with app.expander("Artifacts", expanded=False):
-                        _render_artifacts(cast(list[dict[str, Any]], artifacts))
-
-                if not message.get("content") and not summary and not trace and not artifacts and str(message.get("phase") or "").strip().lower() in {"thinking", "running"}:
+            with app.agent_turn(
+                message.get("role", "assistant"),
+                avatar=message.get("avatar") if isinstance(message, dict) else None,
+                thinking=thinking,
+                thinking_label=thinking_label,
+                phase=phase,
+                status_text=show_status_text,
+                summary=summary,
+                trace=trace,
+                artifacts=artifacts,
+                error_text=error_text,
+                key=message.get("key") if isinstance(message, dict) else None,
+            ):
+                if app.render_chat_message_body(message):
+                    continue
+                if error_text or show_status_text or summary or trace or artifacts:
+                    continue
+                if thinking:
                     app.caption(str(message.get("status_text") or "Gemini is working..."))
 
 

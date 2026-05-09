@@ -206,6 +206,19 @@ def _chat_history_display_text(item: Any) -> str:
     return _coerce_chat_text(item.get("content"))
 
 
+def _normalize_chat_content_format(value: Any) -> str:
+    normalized = _coerce_chat_text(value).strip().lower()
+    return "text" if normalized == "text" else "markdown"
+
+
+def _resolve_chat_content_format(item: Any, content_format: Optional[str] = None) -> str:
+    if content_format is not None:
+        return _normalize_chat_content_format(content_format)
+    if isinstance(item, dict):
+        return _normalize_chat_content_format(item.get("content_format"))
+    return "markdown"
+
+
 def _render_chat_attachment_html(item: Any) -> str:
     files = _chat_message_files(item)
     audio_file = _chat_message_audio(item)
@@ -914,18 +927,31 @@ class ChatWidgetsMixin:
         avatar: Optional[str] = None,
         *,
         width: Union[str, int] = "stretch",
+        thinking: bool = False,
+        thinking_label: str = "Thinking...",
+        phase: Optional[str] = None,
+        status: str = "",
         cls: str = "",
         style: str = "",
         key: Optional[str] = None,
     ):
         """
         Insert a primitive chat message container.
+
+        Use ``thinking=True`` and ``thinking_label=...`` for a lightweight
+        assistant placeholder. Use ``phase=...`` and ``status=...`` when you
+        want the primitive bubble to expose a small built-in status treatment
+        without switching to ``agent_turn(...)``.
         """
 
         return self._chat_message_impl(
             name,
             avatar,
             width=width,
+            thinking=thinking,
+            thinking_label=thinking_label,
+            phase=phase,
+            status_text=status,
             cls=cls,
             style=style,
             key=key,
@@ -998,7 +1024,7 @@ class ChatWidgetsMixin:
         artifacts_collapsed: bool = True,
         key: Optional[str] = None,
     ):
-        cid = self._get_next_cid("chat_message")
+        cid = f"chat_message_{_sanitize_chat_key(key)}" if key is not None else self._get_next_cid("chat_message")
         
         class ChatMessageContext:
             def __init__(self, app, message_id, name, avatar, user_cls="", user_style="", thinking=False, thinking_label="Thinking...", phase=None, status_text="", summary="", trace=None, artifacts=None, error_text="", trace_collapsed=True, artifacts_collapsed=True, key=None):
@@ -1082,9 +1108,9 @@ class ChatWidgetsMixin:
                         bubble_border = "1px solid color-mix(in srgb, var(--vl-danger) 28%, var(--vl-border) 72%)"
                         bubble_shadow = "0 14px 30px color-mix(in srgb, var(--vl-danger) 12%, transparent)"
                     elif self.thinking:
-                        bubble_bg = "linear-gradient(180deg, color-mix(in srgb, var(--vl-text-muted) 10%, var(--vl-bg-card) 90%) 0%, color-mix(in srgb, var(--vl-primary) 8%, var(--vl-bg-card) 92%) 100%)"
-                        bubble_border = "1px solid color-mix(in srgb, var(--vl-primary) 18%, var(--vl-border) 82%)"
-                        bubble_shadow = "0 14px 30px color-mix(in srgb, var(--vl-primary) 10%, transparent)"
+                        bubble_bg = "linear-gradient(180deg, color-mix(in srgb, var(--vl-text-muted) 12%, var(--vl-bg-card) 88%) 0%, color-mix(in srgb, var(--vl-bg) 16%, var(--vl-bg-card) 84%) 100%)"
+                        bubble_border = "1px solid color-mix(in srgb, var(--vl-text-muted) 16%, var(--vl-border) 84%)"
+                        bubble_shadow = "0 14px 30px color-mix(in srgb, var(--vl-text-muted) 10%, transparent)"
 
                     before_content_html = "".join(
                         part
@@ -1289,9 +1315,11 @@ class ChatWidgetsMixin:
         item: Any,
         *,
         cursor: Optional[str] = "|",
+        content_format: Optional[str] = None,
     ) -> bool:
         content = _chat_history_display_text(item)
         chunks = item.get("chunks") if isinstance(item, dict) else None
+        resolved_content_format = _resolve_chat_content_format(item, content_format)
         rendered = False
         rendered_text_from_chunks = False
 
@@ -1301,7 +1329,10 @@ class ChatWidgetsMixin:
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
                 if status == "streaming" and cursor:
                     streamed_text += str(cursor)
-                self.markdown(streamed_text)
+                if resolved_content_format == "text":
+                    self.text(streamed_text)
+                else:
+                    self.markdown(streamed_text)
             else:
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
                 self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
@@ -1309,7 +1340,10 @@ class ChatWidgetsMixin:
             rendered = True
 
         if content and not rendered_text_from_chunks:
-            self.markdown(content)
+            if resolved_content_format == "text":
+                self.text(content)
+            else:
+                self.markdown(content)
             rendered = True
 
         attachment_html = _render_chat_attachment_html(item)
@@ -1324,14 +1358,18 @@ class ChatWidgetsMixin:
         item: Any,
         *,
         cursor: Optional[str] = "|",
+        content_format: Optional[str] = None,
     ) -> bool:
         """Render the shared chat transcript body inside a manual chat_message block.
 
         Use this helper when building primitive chat UIs with ``chat_thread(...)`` and
         ``chat_message(...)`` directly. It renders plain text, streamed chunks, and the
         default attachment previews used by ``chat_history(...)`` and ``agent_history(...)``.
+
+        ``content_format`` accepts ``"markdown"`` or ``"text"``. When omitted,
+        a dict item may supply ``item["content_format"]``; otherwise markdown is used.
         """
-        return self._render_chat_history_body(item, cursor=cursor)
+        return self._render_chat_history_body(item, cursor=cursor, content_format=content_format)
 
     def _chat_history_plain_impl(
         self,
@@ -1339,6 +1377,7 @@ class ChatWidgetsMixin:
         *,
         height: Union[int, str] = "58vh",
         cursor: Optional[str] = "|",
+        content_format: Optional[str] = None,
         cls: str = "",
         style: str = "",
         border: bool = False,
@@ -1348,6 +1387,10 @@ class ChatWidgetsMixin:
         with self.chat_thread(height=height, cls=cls, style=style, border=border):
             for item in items or []:
                 role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
+                phase = _normalize_chat_phase(item)
+                status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
+                thinking_label = _coerce_chat_text(item.get("thinking_label") or "Thinking...").strip() if isinstance(item, dict) else "Thinking..."
+                status_text = ""
                 if isinstance(item, dict):
                     has_text_output = False
                     chunks = item.get("chunks")
@@ -1356,15 +1399,30 @@ class ChatWidgetsMixin:
                     if not has_text_output:
                         has_text_output = bool(_chat_history_display_text(item).strip())
                     has_attachment_output = _chat_message_has_attachments(item)
-                    if not has_text_output and not has_attachment_output and role == "assistant":
+                    status_text = _coerce_chat_text(item.get("status_text")).strip()
+                    thinking = role == "assistant" and not has_text_output and not has_attachment_output and (
+                        phase in {"thinking", "running"} or status in {"thinking", "streaming"}
+                    )
+                    has_visible_primitive_meta = bool(status_text) or thinking
+                    if not has_text_output and not has_attachment_output and not has_visible_primitive_meta and role == "assistant":
                         continue
+                else:
+                    thinking = False
+                    has_attachment_output = False
+                    has_visible_primitive_meta = False
 
                 with self.chat_message(
                     role,
                     avatar=item.get("avatar") if isinstance(item, dict) else None,
+                    thinking=thinking,
+                    thinking_label=thinking_label,
+                    phase=phase or None,
+                    status=status_text,
                     key=item.get("key") if isinstance(item, dict) else None,
                 ):
-                    if self._render_chat_history_body(item, cursor=cursor):
+                    if self._render_chat_history_body(item, cursor=cursor, content_format=content_format):
+                        continue
+                    if isinstance(item, dict) and has_visible_primitive_meta:
                         continue
                     if isinstance(item, dict) and _coerce_chat_text(item.get("error")).strip():
                         self.markdown(_coerce_chat_text(item.get("error")))
@@ -1472,6 +1530,7 @@ class ChatWidgetsMixin:
         *,
         height: Union[int, str] = "58vh",
         cursor: Optional[str] = "|",
+        content_format: Optional[str] = None,
         show_status: bool = True,
         show_summary: bool = True,
         show_trace: bool = True,
@@ -1491,6 +1550,7 @@ class ChatWidgetsMixin:
             messages,
             height=height,
             cursor=cursor,
+            content_format=content_format,
             cls=cls,
             style=style,
             border=border,

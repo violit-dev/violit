@@ -150,10 +150,23 @@ def replace_last_message(message: dict[str, Any]) -> None:
     messages.set(items)
 
 
+def last_message_content() -> str:
+    items = messages.value
+    if not items:
+        return ""
+    return str(items[-1].get("content", ""))
+
+
 def run_reply(prompt: str) -> None:
     result = reply(prompt)
     if isinstance(result, str):
-        replace_last_message({"role": "assistant", "content": result})
+        replace_last_message({
+            "role": "assistant",
+            "content": result,
+            "phase": "done",
+            "thinking_label": "Thinking...",
+            "content_format": "markdown",
+        })
         return
 
     chunks: list[str] = []
@@ -162,18 +175,33 @@ def run_reply(prompt: str) -> None:
         if not text:
             continue
         chunks.append(text)
-        replace_last_message({"role": "assistant", "content": "".join(chunks)})
+        replace_last_message({
+            "role": "assistant",
+            "content": "".join(chunks),
+            "phase": "running",
+            "thinking_label": "Thinking...",
+            "content_format": "markdown",
+        })
 
     final_text = "".join(chunks).strip()
     if not final_text:
         raise RuntimeError("Gemini returned an empty response.")
-    replace_last_message({"role": "assistant", "content": final_text})
+    if last_message_content() != final_text:
+        replace_last_message({
+            "role": "assistant",
+            "content": final_text,
+            "phase": "done",
+            "thinking_label": "Thinking...",
+            "content_format": "markdown",
+        })
 
 
 def fail_reply(exc: Exception) -> None:
     replace_last_message({
         "role": "assistant",
         "content": f"Error:\n\n```text\n{exc}\n```",
+        "phase": "error",
+        "content_format": "markdown",
     })
     busy.set(False)
 
@@ -183,14 +211,21 @@ def submit_prompt(prompt: str) -> None:
     if not cleaned or busy.value:
         return
 
-    append_message({"role": "user", "content": cleaned})
-    append_message({"role": "assistant", "content": ""})
+    append_message({"role": "user", "content": cleaned, "content_format": "text"})
+    append_message({
+        "role": "assistant",
+        "content": "",
+        "phase": "thinking",
+        "thinking_label": "Thinking...",
+        "content_format": "markdown",
+    })
     busy.set(True)
 
     app.background(
         lambda prompt=cleaned: run_reply(prompt),
         on_complete=lambda: busy.set(False),
         on_error=fail_reply,
+        flush_interval=0.03,
     ).start()
 
 
@@ -204,8 +239,21 @@ app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_api_key",
 @reactivity
 def render_chat():
     with app.chat_thread(height="60vh"):
-        for message in messages.value:
-            with app.chat_message(message.get("role", "assistant")):
+        for index, message in enumerate(messages.value):
+            role = str(message.get("role", "assistant") or "assistant")
+            phase = str(message.get("phase", "") or "").strip().lower()
+            status = str(message.get("status_text", "") or "")
+            thinking_label = str(message.get("thinking_label", "Thinking...") or "Thinking...")
+            thinking = role == "assistant" and not str(message.get("content", "") or "").strip() and phase in {"thinking", "running"}
+            message_key = str(message.get("key") or f"msg_{index}_{role}")
+            with app.chat_message(
+                role,
+                phase=phase or None,
+                thinking=thinking,
+                thinking_label=thinking_label,
+                status=status,
+                key=message_key,
+            ):
                 app.render_chat_message_body(message)
 
 
