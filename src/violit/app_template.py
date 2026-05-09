@@ -334,6 +334,7 @@ HTML_TEMPLATE = r"""
         }
         .vl-metric-card {
             box-sizing: border-box;
+            min-width: 0;
         }
         .vl-metric-card--fill {
             height: 100%;
@@ -370,8 +371,32 @@ HTML_TEMPLATE = r"""
         
         .gradient-text { background: linear-gradient(to right, var(--vl-primary), var(--vl-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .text-muted { color: var(--vl-text-muted); }
-        .metric-label { color: var(--vl-text-muted); font-size: 0.875rem; margin-bottom: 0.25rem; }
-        .metric-value { font-size: 2rem; font-weight: 600; }
+        .metric-label {
+            color: var(--vl-text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            min-width: 0;
+        }
+        .metric-value {
+            color: var(--vl-text);
+            font-size: clamp(1.2rem, 3vw, 1.75rem);
+            font-weight: 700;
+            line-height: 1.08;
+            letter-spacing: -0.03em;
+            min-width: 0;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            text-wrap: balance;
+        }
+        .metric-delta {
+            font-size: 0.9rem;
+            margin-top: 0.35rem;
+            font-weight: 500;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
         .no-select { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
         
         @keyframes fade-in {

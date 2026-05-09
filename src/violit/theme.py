@@ -807,10 +807,10 @@ class Theme:
         'violit_light_jewel': {
             'mode': 'light',
             'primary': '#6D28D9',       # Royal purple anchor color
-            'secondary': '#7C3AED',     # Violet-600
-            'success': '#16A34A',       # Green-600
-            'warning': '#EA580C',       # Orange-600
-            'danger': '#DC2626',        # Red-600
+            'secondary': '#8B5CF6',     # Brighter jewel violet
+            'success': '#0F9F6E',       # Emerald jewel accent
+            'warning': '#C98512',       # Amber topaz accent
+            'danger': '#C24164',        # Ruby accent
             'bg': '#FFFFFF',            # Bright white background
             'bg_card': '#FFFFFF',       # White card surface
             'border': '#E9E5F0',        # Soft purple-tinted border
@@ -901,6 +901,92 @@ class Theme:
                 wa-button::part(base):active {
                     background: #5B21B6 !important;
                     box-shadow: 0 1px 2px rgba(109, 40, 217, 0.1) !important;
+                    transform: scale(0.97);
+                }
+
+                /* --- Semantic button variants: distinct but still jewel-toned --- */
+                wa-button[variant='neutral'][appearance='outlined']::part(base) {
+                    background: #F6F2FB !important;
+                    border-color: #DDD3EE !important;
+                    color: #4C3F63 !important;
+                    box-shadow: 0 1px 2px rgba(76, 63, 99, 0.05), 0 0 0 1px rgba(221, 211, 238, 0.38) inset !important;
+                }
+                wa-button[variant='neutral'][appearance='outlined']::part(base):hover {
+                    background: #EFE8F9 !important;
+                    border-color: #D1C4E6 !important;
+                    box-shadow: 0 2px 5px rgba(109, 40, 217, 0.08), 0 0 0 1px rgba(209, 196, 230, 0.5) inset !important;
+                }
+                wa-button[variant='neutral'][appearance='outlined']::part(base):active {
+                    background: #E7DFF5 !important;
+                    border-color: #C7B8E2 !important;
+                    transform: scale(0.97);
+                }
+
+                wa-button[variant='neutral'][appearance='plain']::part(base) {
+                    background: transparent !important;
+                    border-color: transparent !important;
+                    color: #6B5F7B !important;
+                    box-shadow: none !important;
+                }
+                wa-button[variant='neutral'][appearance='plain']::part(base):hover {
+                    background: rgba(109, 40, 217, 0.06) !important;
+                    color: #6D28D9 !important;
+                    box-shadow: none !important;
+                }
+                wa-button[variant='neutral'][appearance='plain']::part(base):active {
+                    background: rgba(109, 40, 217, 0.1) !important;
+                    color: #5B21B6 !important;
+                    transform: scale(0.98);
+                }
+
+                wa-button[variant='success']::part(base) {
+                    background: #E9F8F1 !important;
+                    border-color: #B9E6D3 !important;
+                    color: #0D7A56 !important;
+                    box-shadow: 0 1px 2px rgba(15, 159, 110, 0.08), 0 0 0 1px rgba(15, 159, 110, 0.16) inset !important;
+                }
+                wa-button[variant='success']::part(base):hover {
+                    background: #DBF2E7 !important;
+                    border-color: #9EDCBF !important;
+                    box-shadow: 0 3px 8px rgba(15, 159, 110, 0.14), 0 0 0 1px rgba(15, 159, 110, 0.18) inset !important;
+                }
+                wa-button[variant='success']::part(base):active {
+                    background: #CEEAD9 !important;
+                    border-color: #8FD3B1 !important;
+                    transform: scale(0.97);
+                }
+
+                wa-button[variant='warning']::part(base) {
+                    background: #FFF4E5 !important;
+                    border-color: #F2D19B !important;
+                    color: #A66208 !important;
+                    box-shadow: 0 1px 2px rgba(201, 133, 18, 0.08), 0 0 0 1px rgba(201, 133, 18, 0.16) inset !important;
+                }
+                wa-button[variant='warning']::part(base):hover {
+                    background: #FDEBCC !important;
+                    border-color: #EABF73 !important;
+                    box-shadow: 0 3px 8px rgba(201, 133, 18, 0.14), 0 0 0 1px rgba(201, 133, 18, 0.18) inset !important;
+                }
+                wa-button[variant='warning']::part(base):active {
+                    background: #F8DFB2 !important;
+                    border-color: #E0B05E !important;
+                    transform: scale(0.97);
+                }
+
+                wa-button[variant='danger']::part(base) {
+                    background: #FDECEF !important;
+                    border-color: #F0B8C8 !important;
+                    color: #A63A54 !important;
+                    box-shadow: 0 1px 2px rgba(194, 65, 100, 0.08), 0 0 0 1px rgba(194, 65, 100, 0.16) inset !important;
+                }
+                wa-button[variant='danger']::part(base):hover {
+                    background: #F9DDE5 !important;
+                    border-color: #E79BB4 !important;
+                    box-shadow: 0 3px 8px rgba(194, 65, 100, 0.14), 0 0 0 1px rgba(194, 65, 100, 0.18) inset !important;
+                }
+                wa-button[variant='danger']::part(base):active {
+                    background: #F3CFDA !important;
+                    border-color: #DB88A4 !important;
                     transform: scale(0.97);
                 }
 
@@ -1225,7 +1311,7 @@ class Theme:
 })();
             """
         },
-        'violit_vercel_refined': {
+        'violit_edge_refined': {
             'mode': 'light',
             'primary': '#171717',
             'secondary': '#0a72ef',
@@ -1277,7 +1363,7 @@ class Theme:
                 }
             """
         },
-        'violit_linear_midnight': {
+        'violit_midnight_grid': {
             'mode': 'dark',
             'primary': '#5e6ad2',
             'secondary': '#828fff',
@@ -1328,7 +1414,7 @@ class Theme:
                 }
             """
         },
-        'violit_stripe_mesh': {
+        'violit_mesh_light': {
             'mode': 'light',
             'primary': '#533afd',
             'secondary': '#0d253d',
@@ -1381,7 +1467,7 @@ class Theme:
                 code, pre { font-feature-settings: 'tnum' 1; }
             """
         },
-        'violit_claude_warm': {
+        'violit_warm_canvas': {
             'mode': 'light',
             'primary': '#cc785c',
             'secondary': '#181715',
@@ -1434,7 +1520,7 @@ class Theme:
                 }
             """
         },
-        'violit_cursor_editorial': {
+        'violit_editorial_dark': {
             'mode': 'light',
             'primary': '#f54e00',
             'secondary': '#26251e',
@@ -1486,7 +1572,7 @@ class Theme:
                 }
             """
         },
-        'violit_mintlify_docs': {
+        'violit_docs_fresh': {
             'mode': 'light',
             'primary': '#0a0a0a',
             'secondary': '#00d4a4',
@@ -1537,7 +1623,7 @@ class Theme:
                 }
             """
         },
-        'violit_raycast_command': {
+        'violit_command_panel': {
             'mode': 'dark',
             'primary': '#ffffff',
             'secondary': '#57c1ff',
@@ -1584,7 +1670,7 @@ class Theme:
                 code, pre { font-family: 'JetBrains Mono', Menlo, monospace !important; }
             """
         },
-        'violit_apple_gallery': {
+        'violit_gallery_clean': {
             'mode': 'light',
             'primary': '#0066cc',
             'secondary': '#2997ff',
@@ -1631,7 +1717,7 @@ class Theme:
                 }
             """
         },
-        'violit_figma_blocks': {
+        'violit_blocks_play': {
             'mode': 'light',
             'primary': '#000000',
             'secondary': '#cf5ff0',
@@ -1678,7 +1764,7 @@ class Theme:
                 }
             """
         },
-        'violit_airbnb_rausch': {
+        'violit_living_coral': {
             'mode': 'light',
             'primary': '#ff385c',
             'secondary': '#222222',
@@ -1721,7 +1807,7 @@ class Theme:
                 }
             """
         },
-        'violit_intercom_fin': {
+        'violit_fin_messenger': {
             'mode': 'light',
             'primary': '#111111',
             'secondary': '#ff5600',
@@ -1770,7 +1856,7 @@ class Theme:
                 }
             """
         },
-        'violit_nvidia_signal': {
+        'violit_signal_green': {
             'mode': 'light',
             'primary': '#76b900',
             'secondary': '#000000',
@@ -2194,3 +2280,856 @@ class Theme:
     @property
     def theme_class(self) -> str:
         return f"wa-theme-default wa-{self.mode}"
+
+
+def _premium_light_theme_css(font_stack, body_background, *, heading_font=None, heading_weight="650", card_radius="18px", button_radius="12px", sidebar_background=None, special_css=""):
+    heading_font = heading_font or font_stack
+    sidebar_background = sidebar_background or "linear-gradient(180deg, color-mix(in srgb, var(--vl-bg) 92%, white 8%), color-mix(in srgb, var(--vl-bg-card) 72%, white 28%))"
+    css = """
+                body {
+                    font-family: __FONT__ !important;
+                    color: var(--vl-text);
+                    background: __BODY_BG__;
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                    font-feature-settings: 'liga' 1, 'calt' 1;
+                    letter-spacing: -0.011em;
+                }
+
+                h1, h2, h3, h4, h5, h6 {
+                    font-family: __HEADING_FONT__ !important;
+                    color: var(--vl-text);
+                    font-weight: __HEADING_WEIGHT__;
+                    letter-spacing: -0.035em;
+                    line-height: 1.15;
+                }
+
+                h1 { letter-spacing: -0.045em; }
+
+                .card {
+                    background: color-mix(in srgb, var(--vl-bg-card) 88%, white 12%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-border) 84%, white 16%) !important;
+                    border-radius: __CARD_RADIUS__ !important;
+                    box-shadow:
+                        rgba(15, 23, 42, 0.06) 0 12px 34px -24px,
+                        rgba(15, 23, 42, 0.04) 0 1px 0 inset,
+                        rgba(255, 255, 255, 0.84) 0 1px 0 inset !important;
+                    backdrop-filter: blur(16px) saturate(115%) !important;
+                    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease !important;
+                }
+
+                .card:hover {
+                    transform: translateY(-2px);
+                    border-color: color-mix(in srgb, var(--vl-primary) 14%, var(--vl-border) 86%) !important;
+                    box-shadow:
+                        rgba(15, 23, 42, 0.09) 0 20px 44px -28px,
+                        rgba(15, 23, 42, 0.04) 0 1px 0 inset,
+                        rgba(255, 255, 255, 0.92) 0 1px 0 inset !important;
+                }
+
+                wa-button::part(base) {
+                    background: linear-gradient(135deg, var(--vl-primary) 0%, color-mix(in srgb, var(--vl-primary) 72%, var(--vl-secondary) 28%) 100%) !important;
+                    border: none !important;
+                    color: #ffffff !important;
+                    border-radius: __BUTTON_RADIUS__ !important;
+                    font-family: __FONT__ !important;
+                    font-weight: 600 !important;
+                    letter-spacing: -0.01em;
+                    box-shadow:
+                        rgba(15, 23, 42, 0.10) 0 14px 28px -18px,
+                        color-mix(in srgb, var(--vl-primary) 18%, white 82%) 0 1px 0 inset !important;
+                    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
+                }
+
+                wa-button::part(base):hover {
+                    transform: translateY(-1px);
+                    filter: saturate(1.06);
+                    box-shadow:
+                        rgba(15, 23, 42, 0.14) 0 18px 36px -20px,
+                        color-mix(in srgb, var(--vl-primary) 20%, white 80%) 0 1px 0 inset !important;
+                }
+
+                wa-button::part(base):active {
+                    transform: translateY(0) scale(0.985);
+                    box-shadow: rgba(15, 23, 42, 0.08) 0 8px 18px -16px !important;
+                }
+
+                wa-button[variant='neutral'][appearance='outlined']::part(base) {
+                    background: color-mix(in srgb, white 84%, var(--vl-bg-card) 16%) !important;
+                    color: var(--vl-text) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-border) 88%, white 12%) !important;
+                    box-shadow: rgba(15, 23, 42, 0.05) 0 8px 22px -22px !important;
+                }
+
+                wa-button[variant='neutral'][appearance='outlined']::part(base):hover {
+                    background: color-mix(in srgb, white 72%, var(--vl-primary) 6%, var(--vl-bg-card) 22%) !important;
+                    color: var(--vl-primary) !important;
+                    border-color: color-mix(in srgb, var(--vl-primary) 18%, var(--vl-border) 82%) !important;
+                }
+
+                wa-button[variant='neutral'][appearance='plain']::part(base) {
+                    background: transparent !important;
+                    color: var(--vl-text-muted) !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+
+                wa-button[variant='neutral'][appearance='plain']::part(base):hover {
+                    background: color-mix(in srgb, var(--vl-primary) 8%, transparent) !important;
+                    color: var(--vl-primary) !important;
+                    box-shadow: none !important;
+                }
+
+                wa-button[variant='success']::part(base) {
+                    background: color-mix(in srgb, var(--vl-success) 14%, white 86%) !important;
+                    color: color-mix(in srgb, var(--vl-success) 78%, black 22%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-success) 26%, white 74%) !important;
+                    box-shadow: rgba(15, 23, 42, 0.04) 0 8px 18px -18px !important;
+                }
+
+                wa-button[variant='warning']::part(base) {
+                    background: color-mix(in srgb, var(--vl-warning) 18%, white 82%) !important;
+                    color: color-mix(in srgb, var(--vl-warning) 82%, black 18%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-warning) 28%, white 72%) !important;
+                    box-shadow: rgba(15, 23, 42, 0.04) 0 8px 18px -18px !important;
+                }
+
+                wa-button[variant='danger']::part(base) {
+                    background: color-mix(in srgb, var(--vl-danger) 14%, white 86%) !important;
+                    color: color-mix(in srgb, var(--vl-danger) 78%, black 22%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-danger) 26%, white 74%) !important;
+                    box-shadow: rgba(15, 23, 42, 0.04) 0 8px 18px -18px !important;
+                }
+
+                wa-input::part(base),
+                wa-textarea::part(base),
+                wa-select::part(combobox) {
+                    background: color-mix(in srgb, white 88%, var(--vl-bg-card) 12%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-border) 86%, white 14%) !important;
+                    border-radius: calc(__BUTTON_RADIUS__ - 2px) !important;
+                    box-shadow: rgba(15, 23, 42, 0.04) 0 1px 2px !important;
+                    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease !important;
+                }
+
+                wa-input::part(base):focus-within,
+                wa-textarea::part(base):focus-within,
+                wa-select::part(combobox):focus-within {
+                    border-color: color-mix(in srgb, var(--vl-primary) 58%, white 42%) !important;
+                    box-shadow: color-mix(in srgb, var(--vl-primary) 16%, transparent) 0 0 0 4px !important;
+                }
+
+                #sidebar {
+                    background: __SIDEBAR_BG__ !important;
+                    border-right: 1px solid color-mix(in srgb, var(--vl-border) 76%, white 24%) !important;
+                    backdrop-filter: blur(16px) saturate(116%) !important;
+                }
+
+                #sidebar wa-button::part(base) {
+                    background: transparent !important;
+                    color: var(--vl-text-muted) !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    border-radius: calc(__BUTTON_RADIUS__ + 2px) !important;
+                }
+
+                #sidebar wa-button::part(base):hover {
+                    background: color-mix(in srgb, var(--vl-primary) 8%, transparent) !important;
+                    color: var(--vl-primary) !important;
+                    box-shadow: none !important;
+                    transform: none !important;
+                }
+
+                #sidebar wa-button[data-nav-active='true'][variant='brand']::part(base) {
+                    background: linear-gradient(135deg, var(--vl-primary) 0%, color-mix(in srgb, var(--vl-primary) 72%, var(--vl-secondary) 28%) 100%) !important;
+                    color: #ffffff !important;
+                    box-shadow: rgba(15, 23, 42, 0.12) 0 12px 24px -18px !important;
+                }
+
+                #sidebar wa-button[data-nav-active='true']::part(base) {
+                    background: color-mix(in srgb, var(--vl-primary) 12%, white 88%) !important;
+                    color: var(--vl-primary) !important;
+                    box-shadow: rgba(15, 23, 42, 0.05) 0 10px 20px -18px !important;
+                }
+
+                a {
+                    color: var(--vl-primary);
+                    text-decoration: none;
+                }
+
+                a:hover {
+                    color: color-mix(in srgb, var(--vl-primary) 82%, black 18%);
+                }
+
+                ::selection {
+                    background: color-mix(in srgb, var(--vl-primary) 16%, white 84%);
+                    color: var(--vl-text);
+                }
+
+                __SPECIAL__
+    """
+    return (
+        css.replace("__FONT__", font_stack)
+        .replace("__BODY_BG__", body_background)
+        .replace("__HEADING_FONT__", heading_font)
+        .replace("__HEADING_WEIGHT__", heading_weight)
+        .replace("__CARD_RADIUS__", card_radius)
+        .replace("__BUTTON_RADIUS__", button_radius)
+        .replace("__SIDEBAR_BG__", sidebar_background)
+        .replace("__SPECIAL__", special_css.strip())
+        .strip()
+    )
+
+
+def _premium_dark_theme_css(font_stack, body_background, *, heading_font=None, heading_weight="650", card_radius="18px", button_radius="12px", sidebar_background=None, special_css=""):
+    heading_font = heading_font or font_stack
+    sidebar_background = sidebar_background or "linear-gradient(180deg, color-mix(in srgb, var(--vl-bg) 86%, black 14%), color-mix(in srgb, var(--vl-bg-card) 82%, black 18%))"
+    css = """
+                body {
+                    font-family: __FONT__ !important;
+                    color: var(--vl-text);
+                    background: __BODY_BG__;
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                    font-feature-settings: 'liga' 1, 'calt' 1;
+                    letter-spacing: -0.011em;
+                }
+
+                h1, h2, h3, h4, h5, h6 {
+                    font-family: __HEADING_FONT__ !important;
+                    color: var(--vl-text);
+                    font-weight: __HEADING_WEIGHT__;
+                    letter-spacing: -0.035em;
+                    line-height: 1.14;
+                }
+
+                .card {
+                    background: color-mix(in srgb, var(--vl-bg-card) 90%, black 10%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-border) 86%, white 14%) !important;
+                    border-radius: __CARD_RADIUS__ !important;
+                    box-shadow:
+                        rgba(2, 6, 23, 0.36) 0 18px 42px -30px,
+                        color-mix(in srgb, var(--vl-primary) 8%, transparent) 0 1px 0 inset !important;
+                    backdrop-filter: blur(16px) saturate(118%) !important;
+                    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease !important;
+                }
+
+                .card:hover {
+                    transform: translateY(-2px);
+                    border-color: color-mix(in srgb, var(--vl-primary) 22%, var(--vl-border) 78%) !important;
+                    box-shadow:
+                        rgba(2, 6, 23, 0.42) 0 24px 54px -30px,
+                        color-mix(in srgb, var(--vl-primary) 10%, transparent) 0 1px 0 inset !important;
+                }
+
+                wa-button::part(base) {
+                    background: linear-gradient(135deg, var(--vl-primary) 0%, color-mix(in srgb, var(--vl-primary) 64%, var(--vl-secondary) 36%) 100%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-primary) 36%, black 64%) !important;
+                    color: color-mix(in srgb, white 94%, var(--vl-bg) 6%) !important;
+                    border-radius: __BUTTON_RADIUS__ !important;
+                    font-family: __FONT__ !important;
+                    font-weight: 600 !important;
+                    letter-spacing: -0.01em;
+                    box-shadow:
+                        rgba(2, 6, 23, 0.30) 0 18px 36px -24px,
+                        color-mix(in srgb, var(--vl-primary) 18%, transparent) 0 0 0 1px inset !important;
+                    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
+                }
+
+                wa-button::part(base):hover {
+                    transform: translateY(-1px);
+                    filter: saturate(1.08);
+                    box-shadow:
+                        rgba(2, 6, 23, 0.36) 0 22px 42px -24px,
+                        color-mix(in srgb, var(--vl-primary) 24%, transparent) 0 0 0 1px inset !important;
+                }
+
+                wa-button::part(base):active {
+                    transform: translateY(0) scale(0.985);
+                    box-shadow: rgba(2, 6, 23, 0.26) 0 10px 24px -20px !important;
+                }
+
+                wa-button[variant='neutral'][appearance='outlined']::part(base) {
+                    background: color-mix(in srgb, var(--vl-bg-card) 82%, black 18%) !important;
+                    color: var(--vl-text) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-border) 90%, white 10%) !important;
+                    box-shadow: rgba(2, 6, 23, 0.20) 0 12px 24px -24px !important;
+                }
+
+                wa-button[variant='neutral'][appearance='outlined']::part(base):hover {
+                    background: color-mix(in srgb, var(--vl-bg-card) 74%, var(--vl-primary) 8%, black 18%) !important;
+                    color: color-mix(in srgb, var(--vl-text) 90%, white 10%) !important;
+                    border-color: color-mix(in srgb, var(--vl-primary) 24%, var(--vl-border) 76%) !important;
+                }
+
+                wa-button[variant='neutral'][appearance='plain']::part(base) {
+                    background: transparent !important;
+                    color: var(--vl-text-muted) !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                }
+
+                wa-button[variant='neutral'][appearance='plain']::part(base):hover {
+                    background: color-mix(in srgb, var(--vl-primary) 10%, transparent) !important;
+                    color: var(--vl-text) !important;
+                    box-shadow: none !important;
+                }
+
+                wa-button[variant='success']::part(base) {
+                    background: color-mix(in srgb, var(--vl-success) 22%, black 78%) !important;
+                    color: color-mix(in srgb, var(--vl-success) 82%, white 18%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-success) 34%, black 66%) !important;
+                }
+
+                wa-button[variant='warning']::part(base) {
+                    background: color-mix(in srgb, var(--vl-warning) 22%, black 78%) !important;
+                    color: color-mix(in srgb, var(--vl-warning) 82%, white 18%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-warning) 34%, black 66%) !important;
+                }
+
+                wa-button[variant='danger']::part(base) {
+                    background: color-mix(in srgb, var(--vl-danger) 22%, black 78%) !important;
+                    color: color-mix(in srgb, var(--vl-danger) 82%, white 18%) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-danger) 34%, black 66%) !important;
+                }
+
+                wa-input::part(base),
+                wa-textarea::part(base),
+                wa-select::part(combobox) {
+                    background: color-mix(in srgb, var(--vl-bg-card) 82%, black 18%) !important;
+                    color: var(--vl-text) !important;
+                    border: 1px solid color-mix(in srgb, var(--vl-border) 88%, white 12%) !important;
+                    border-radius: calc(__BUTTON_RADIUS__ - 2px) !important;
+                    box-shadow: rgba(2, 6, 23, 0.18) 0 8px 18px -18px !important;
+                }
+
+                wa-input::part(base):focus-within,
+                wa-textarea::part(base):focus-within,
+                wa-select::part(combobox):focus-within {
+                    border-color: color-mix(in srgb, var(--vl-primary) 58%, white 42%) !important;
+                    box-shadow: color-mix(in srgb, var(--vl-primary) 18%, transparent) 0 0 0 4px !important;
+                }
+
+                #sidebar {
+                    background: __SIDEBAR_BG__ !important;
+                    border-right: 1px solid color-mix(in srgb, var(--vl-border) 82%, white 18%) !important;
+                    backdrop-filter: blur(18px) saturate(115%) !important;
+                }
+
+                #sidebar wa-button::part(base) {
+                    background: transparent !important;
+                    color: var(--vl-text-muted) !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    border-radius: calc(__BUTTON_RADIUS__ + 2px) !important;
+                }
+
+                #sidebar wa-button::part(base):hover {
+                    background: color-mix(in srgb, var(--vl-primary) 10%, transparent) !important;
+                    color: var(--vl-text) !important;
+                    box-shadow: none !important;
+                }
+
+                #sidebar wa-button[data-nav-active='true'][variant='brand']::part(base) {
+                    background: linear-gradient(135deg, var(--vl-primary) 0%, color-mix(in srgb, var(--vl-primary) 64%, var(--vl-secondary) 36%) 100%) !important;
+                    color: color-mix(in srgb, white 94%, var(--vl-bg) 6%) !important;
+                }
+
+                #sidebar wa-button[data-nav-active='true']::part(base) {
+                    background: color-mix(in srgb, var(--vl-primary) 12%, var(--vl-bg-card) 88%) !important;
+                    color: color-mix(in srgb, var(--vl-text) 92%, white 8%) !important;
+                    box-shadow: rgba(2, 6, 23, 0.18) 0 12px 24px -22px !important;
+                }
+
+                a {
+                    color: color-mix(in srgb, var(--vl-primary) 84%, white 16%);
+                    text-decoration: none;
+                }
+
+                a:hover {
+                    color: color-mix(in srgb, var(--vl-primary) 72%, white 28%);
+                }
+
+                ::selection {
+                    background: color-mix(in srgb, var(--vl-primary) 18%, transparent);
+                    color: color-mix(in srgb, white 92%, var(--vl-text) 8%);
+                }
+
+                __SPECIAL__
+    """
+    return (
+        css.replace("__FONT__", font_stack)
+        .replace("__BODY_BG__", body_background)
+        .replace("__HEADING_FONT__", heading_font)
+        .replace("__HEADING_WEIGHT__", heading_weight)
+        .replace("__CARD_RADIUS__", card_radius)
+        .replace("__BUTTON_RADIUS__", button_radius)
+        .replace("__SIDEBAR_BG__", sidebar_background)
+        .replace("__SPECIAL__", special_css.strip())
+        .strip()
+    )
+
+
+def _soft_surface_theme_css(font_stack, body_background, *, relief_dark, relief_light, radius="24px", special_css=""):
+    css = """
+                body {
+                    font-family: __FONT__ !important;
+                    background: __BODY_BG__;
+                    color: var(--vl-text);
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                }
+
+                .card {
+                    background: var(--vl-bg-card) !important;
+                    border: none !important;
+                    border-radius: __RADIUS__ !important;
+                    box-shadow:
+                        18px 18px 36px __RELIEF_DARK__,
+                        -18px -18px 36px __RELIEF_LIGHT__ !important;
+                }
+
+                wa-button::part(base) {
+                    background: linear-gradient(135deg, color-mix(in srgb, var(--vl-primary) 18%, white 82%), color-mix(in srgb, var(--vl-secondary) 18%, white 82%)) !important;
+                    border: none !important;
+                    color: var(--vl-text) !important;
+                    border-radius: calc(__RADIUS__ - 8px) !important;
+                    font-family: __FONT__ !important;
+                    font-weight: 600 !important;
+                    box-shadow:
+                        10px 10px 22px __RELIEF_DARK__,
+                        -10px -10px 22px __RELIEF_LIGHT__ !important;
+                }
+
+                wa-button::part(base):active {
+                    box-shadow:
+                        inset 10px 10px 18px __RELIEF_DARK__,
+                        inset -10px -10px 18px __RELIEF_LIGHT__ !important;
+                }
+
+                wa-button[variant='success']::part(base),
+                wa-button[variant='warning']::part(base),
+                wa-button[variant='danger']::part(base) {
+                    color: var(--vl-text) !important;
+                }
+
+                wa-input::part(base),
+                wa-textarea::part(base),
+                wa-select::part(combobox) {
+                    background: var(--vl-bg-card) !important;
+                    border: none !important;
+                    border-radius: calc(__RADIUS__ - 10px) !important;
+                    box-shadow:
+                        inset 8px 8px 16px __RELIEF_DARK__,
+                        inset -8px -8px 16px __RELIEF_LIGHT__ !important;
+                }
+
+                __SPECIAL__
+    """
+    return (
+        css.replace("__FONT__", font_stack)
+        .replace("__BODY_BG__", body_background)
+        .replace("__RADIUS__", radius)
+        .replace("__RELIEF_DARK__", relief_dark)
+        .replace("__RELIEF_LIGHT__", relief_light)
+        .replace("__SPECIAL__", special_css.strip())
+        .strip()
+    )
+
+
+Theme.PRESETS['light'].update({
+    'primary': '#6d28d9',
+    'secondary': '#8b5cf6',
+    'success': '#0f9f6e',
+    'warning': '#c98512',
+    'danger': '#c24164',
+    'border': '#e8e2f1',
+    'text': '#191225',
+    'text_muted': '#655a75',
+    'radius': '14px',
+    'input_border_radius_small': '10px',
+    'input_border_radius_medium': '12px',
+    'input_border_radius_large': '16px',
+    'extra_css': _premium_light_theme_css(
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 10% -6%, rgba(139, 92, 246, 0.14), transparent 28%), radial-gradient(circle at 88% 0%, rgba(236, 72, 153, 0.10), transparent 24%), linear-gradient(180deg, #ffffff 0%, #fbfaff 100%)",
+        card_radius='18px',
+        button_radius='14px',
+    ),
+})
+
+Theme.PRESETS['dark'].update({
+    'primary': '#9b8cff',
+    'secondary': '#f472b6',
+    'success': '#36d399',
+    'warning': '#f4b942',
+    'danger': '#fb7185',
+    'bg': '#0b0b12',
+    'bg_card': '#141420',
+    'border': '#2a2a3d',
+    'text': '#f5f7fb',
+    'text_muted': '#9aa0b3',
+    'radius': '16px',
+    'input_border_radius_small': '10px',
+    'input_border_radius_medium': '12px',
+    'input_border_radius_large': '16px',
+    'extra_css': _premium_dark_theme_css(
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 14% -10%, rgba(155, 140, 255, 0.18), transparent 30%), radial-gradient(circle at 88% 0%, rgba(244, 114, 182, 0.12), transparent 24%), linear-gradient(180deg, #0b0b12 0%, #10111a 100%)",
+        card_radius='18px',
+        button_radius='14px',
+    ),
+})
+
+Theme.PRESETS['ocean'].update({
+    'bg': '#081522',
+    'bg_card': '#102235',
+    'border': '#1f4664',
+    'text': '#ecf7ff',
+    'text_muted': '#8fb6cc',
+    'radius': '18px',
+    'extra_css': _premium_dark_theme_css(
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 12% -8%, rgba(34, 211, 238, 0.18), transparent 28%), radial-gradient(circle at 82% 0%, rgba(59, 130, 246, 0.14), transparent 24%), linear-gradient(180deg, #081522 0%, #0d1b2d 100%)",
+        card_radius='20px',
+        button_radius='14px',
+    ),
+})
+
+Theme.PRESETS['sunset'].update({
+    'bg': '#17110f',
+    'bg_card': '#241715',
+    'border': '#4f332b',
+    'text': '#fff5ef',
+    'text_muted': '#d4b3a5',
+    'radius': '18px',
+    'extra_css': _premium_dark_theme_css(
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 14% -8%, rgba(249, 115, 22, 0.22), transparent 30%), radial-gradient(circle at 86% 0%, rgba(236, 72, 153, 0.12), transparent 22%), linear-gradient(180deg, #17110f 0%, #241715 100%)",
+        card_radius='18px',
+        button_radius='14px',
+        special_css="h1, h2, h3 { text-shadow: 0 12px 28px rgba(249, 115, 22, 0.12); }",
+    ),
+})
+
+Theme.PRESETS['forest'].update({
+    'bg': '#08100a',
+    'bg_card': '#112117',
+    'border': '#255235',
+    'text': '#eefbf1',
+    'text_muted': '#95c6a2',
+    'radius': '18px',
+    'extra_css': _premium_dark_theme_css(
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 18% -8%, rgba(34, 197, 94, 0.18), transparent 30%), radial-gradient(circle at 88% 0%, rgba(132, 204, 22, 0.12), transparent 22%), linear-gradient(180deg, #08100a 0%, #0f1a12 100%)",
+        card_radius='18px',
+        button_radius='14px',
+    ),
+})
+
+Theme.PRESETS['cyberpunk'].update({
+    'radius': '6px',
+    'input_border_radius_small': '4px',
+    'input_border_radius_medium': '6px',
+    'input_border_radius_large': '8px',
+    'extra_css': _premium_dark_theme_css(
+        "'Space Grotesk', Inter, system-ui, sans-serif",
+        "radial-gradient(circle at 16% -10%, rgba(0, 255, 234, 0.22), transparent 24%), radial-gradient(circle at 84% 0%, rgba(255, 0, 255, 0.18), transparent 22%), linear-gradient(180deg, #040512 0%, #090b1f 100%)",
+        card_radius='10px',
+        button_radius='8px',
+        special_css="""
+                body { background-image: linear-gradient(rgba(0, 255, 234, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 0, 255, 0.04) 1px, transparent 1px), radial-gradient(circle at 16% -10%, rgba(0, 255, 234, 0.22), transparent 24%), radial-gradient(circle at 84% 0%, rgba(255, 0, 255, 0.18), transparent 22%), linear-gradient(180deg, #040512 0%, #090b1f 100%); background-size: 32px 32px, 32px 32px, auto, auto, auto; }
+                .card, wa-button::part(base), wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+            """,
+    ),
+})
+
+Theme.PRESETS['pastel'].update({
+    'text': '#514d68',
+    'text_muted': '#8d8395',
+    'extra_css': _premium_light_theme_css(
+        "'Nunito', Inter, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 10% 0%, rgba(184, 192, 255, 0.32), transparent 30%), radial-gradient(circle at 88% 4%, rgba(255, 200, 221, 0.34), transparent 30%), linear-gradient(180deg, #fff4f8 0%, #fffdfd 100%)",
+        card_radius='28px',
+        button_radius='9999px',
+        heading_weight='700',
+        special_css="body { letter-spacing: -0.006em; } .card { box-shadow: rgba(164, 174, 197, 0.10) 0 18px 34px -28px, rgba(255, 255, 255, 0.94) 0 1px 0 inset !important; }",
+    ),
+})
+
+Theme.PRESETS['retro'].update({
+    'extra_css': _premium_light_theme_css(
+        "'Fraunces', Georgia, serif",
+        "linear-gradient(180deg, #fff7dd 0%, #fffbef 100%)",
+        heading_font="'Fraunces', Georgia, serif",
+        heading_weight='600',
+        card_radius='14px',
+        button_radius='10px',
+        special_css="body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: 0.22; background-image: radial-gradient(rgba(146, 64, 14, 0.08) 0.6px, transparent 0.6px); background-size: 12px 12px; } wa-button::part(base) { text-transform: uppercase; letter-spacing: 0.08em; }",
+    ),
+})
+
+Theme.PRESETS['dracula'].update({
+    'radius': '16px',
+    'input_border_radius_small': '10px',
+    'input_border_radius_medium': '12px',
+    'input_border_radius_large': '16px',
+    'extra_css': _premium_dark_theme_css(
+        "'Inter', system-ui, sans-serif",
+        "radial-gradient(circle at 12% -10%, rgba(189, 147, 249, 0.20), transparent 28%), radial-gradient(circle at 90% 0%, rgba(255, 121, 198, 0.14), transparent 22%), linear-gradient(180deg, #282a36 0%, #232530 100%)",
+        card_radius='18px',
+        button_radius='14px',
+    ),
+})
+
+Theme.PRESETS['monokai'].update({
+    'radius': '14px',
+    'input_border_radius_small': '10px',
+    'input_border_radius_medium': '12px',
+    'input_border_radius_large': '14px',
+    'extra_css': _premium_dark_theme_css(
+        "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace",
+        "radial-gradient(circle at 12% -10%, rgba(166, 226, 46, 0.18), transparent 28%), radial-gradient(circle at 86% 0%, rgba(249, 38, 114, 0.14), transparent 22%), linear-gradient(180deg, #272822 0%, #23241e 100%)",
+        card_radius='16px',
+        button_radius='12px',
+        special_css="code, pre { font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace !important; }",
+    ),
+})
+
+Theme.PRESETS['ant'].update({
+    'radius': '10px',
+    'input_border_radius_small': '8px',
+    'input_border_radius_medium': '10px',
+    'input_border_radius_large': '12px',
+    'extra_css': _premium_light_theme_css(
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "linear-gradient(180deg, #f4f6fb 0%, #ffffff 100%)",
+        card_radius='14px',
+        button_radius='10px',
+        special_css="wa-button::part(base) { font-weight: 550 !important; }",
+    ),
+})
+
+Theme.PRESETS['bootstrap'].update({
+    'radius': '10px',
+    'input_border_radius_small': '8px',
+    'input_border_radius_medium': '10px',
+    'input_border_radius_large': '12px',
+    'extra_css': _premium_light_theme_css(
+        "Inter, 'Segoe UI', sans-serif",
+        "linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%)",
+        card_radius='14px',
+        button_radius='10px',
+    ),
+})
+
+Theme.PRESETS['material'].update({
+    'radius': '24px',
+    'input_border_radius_small': '12px',
+    'input_border_radius_medium': '16px',
+    'input_border_radius_large': '20px',
+    'extra_css': _premium_light_theme_css(
+        "'Inter', 'Roboto Flex', 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 12% 0%, rgba(103, 80, 164, 0.12), transparent 28%), linear-gradient(180deg, #fffbfe 0%, #f9f4fc 100%)",
+        card_radius='24px',
+        button_radius='18px',
+        special_css="wa-button::part(base) { letter-spacing: 0 !important; }",
+    ),
+})
+
+Theme.PRESETS['glass'].update({
+    'extra_css': _premium_light_theme_css(
+        "'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 14% 0%, rgba(0, 122, 255, 0.16), transparent 26%), radial-gradient(circle at 88% 0%, rgba(88, 86, 214, 0.14), transparent 24%), linear-gradient(180deg, #f4f6fb 0%, #eef3fb 100%)",
+        card_radius='22px',
+        button_radius='9999px',
+        special_css=".card { backdrop-filter: blur(22px) saturate(130%) !important; background: rgba(255, 255, 255, 0.62) !important; } #sidebar { backdrop-filter: blur(22px) saturate(130%) !important; }",
+    ),
+})
+
+Theme.PRESETS['nord'].update({
+    'radius': '16px',
+    'input_border_radius_small': '10px',
+    'input_border_radius_medium': '12px',
+    'input_border_radius_large': '16px',
+    'extra_css': _premium_dark_theme_css(
+        "Inter, system-ui, sans-serif",
+        "radial-gradient(circle at 12% -8%, rgba(136, 192, 208, 0.18), transparent 28%), radial-gradient(circle at 86% 0%, rgba(129, 161, 193, 0.14), transparent 24%), linear-gradient(180deg, #2e3440 0%, #252a34 100%)",
+        card_radius='18px',
+        button_radius='14px',
+    ),
+})
+
+Theme.PRESETS['neo_brutalism'].update({
+    'extra_css': """
+                body { font-family: 'Space Grotesk', 'Arial Black', sans-serif !important; background: linear-gradient(180deg, #f5f5f5 0%, #ececec 100%); color: #000000; }
+                h1, h2, h3, h4 { text-transform: uppercase; letter-spacing: -0.04em; }
+                .card { background: #ffffff !important; border: 3px solid #000000 !important; border-radius: 18px !important; box-shadow: 14px 14px 0 rgba(0,0,0,0.92) !important; }
+                .card:hover { transform: translate(-2px, -2px); box-shadow: 18px 18px 0 rgba(0,0,0,0.92) !important; }
+                wa-button::part(base) { background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, var(--vl-secondary) 16%, white 84%) 100%) !important; color: #000000 !important; border: 3px solid #000000 !important; border-radius: 16px !important; box-shadow: 8px 8px 0 rgba(0,0,0,0.96) !important; text-transform: uppercase; font-weight: 800 !important; letter-spacing: 0.04em; }
+                wa-button::part(base):hover { transform: translate(-1px, -1px); }
+                wa-button::part(base):active { transform: translate(3px, 3px) !important; box-shadow: 4px 4px 0 rgba(0,0,0,0.96) !important; }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) { border: 3px solid #000000 !important; border-radius: 16px !important; box-shadow: 6px 6px 0 rgba(0,0,0,0.18) !important; }
+            """.strip(),
+})
+
+Theme.PRESETS['soft_neu'].update({
+    'text': '#465266',
+    'text_muted': '#7c899d',
+    'extra_css': _soft_surface_theme_css(
+        "Inter, 'Segoe UI', sans-serif",
+        "linear-gradient(180deg, #e8edf5 0%, #dde4ee 100%)",
+        relief_dark='rgba(164, 177, 198, 0.36)',
+        relief_light='rgba(255, 255, 255, 0.92)',
+        radius='28px',
+    ),
+})
+
+Theme.PRESETS['cyber_hud'].update({
+    'radius': '8px',
+    'input_border_radius_small': '6px',
+    'input_border_radius_medium': '8px',
+    'input_border_radius_large': '10px',
+    'extra_css': _premium_dark_theme_css(
+        "'Space Grotesk', 'JetBrains Mono', system-ui, sans-serif",
+        "linear-gradient(rgba(0, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.04) 1px, transparent 1px), radial-gradient(circle at 16% -10%, rgba(0, 255, 255, 0.18), transparent 22%), linear-gradient(180deg, #000000 0%, #050a10 100%)",
+        card_radius='12px',
+        button_radius='8px',
+        special_css="body { background-size: 20px 20px, 20px 20px, auto, auto; } .card, wa-button::part(base), wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }",
+    ),
+})
+
+Theme.PRESETS['hand_drawn'].update({
+    'extra_css': _premium_light_theme_css(
+        "'Patrick Hand', 'Comic Sans MS', 'Segoe UI', sans-serif",
+        "linear-gradient(180deg, #fffefa 0%, #fff8ef 100%)",
+        heading_font="'Patrick Hand', 'Comic Sans MS', sans-serif",
+        heading_weight='700',
+        card_radius='28px 14px 26px 12px / 14px 22px 16px 28px',
+        button_radius='24px 14px 22px 10px / 12px 20px 14px 24px',
+        special_css=".card, wa-button::part(base), wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) { border-width: 2px !important; border-style: solid !important; }",
+    ),
+})
+
+Theme.PRESETS['terminal'].update({
+    'extra_css': _premium_dark_theme_css(
+        "'JetBrains Mono', 'Courier New', monospace",
+        "radial-gradient(circle at 50% -10%, rgba(0, 255, 0, 0.14), transparent 26%), linear-gradient(180deg, #050705 0%, #0a0a0a 100%)",
+        card_radius='8px',
+        button_radius='6px',
+        special_css="body::after { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: 0.08; background: repeating-linear-gradient(180deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 3px); } * { text-shadow: 0 0 6px rgba(0,255,0,0.18); } wa-button[variant='neutral'][appearance='outlined']::part(base) { background: #050705 !important; }",
+    ),
+})
+
+Theme.PRESETS['win95'].update({
+    'extra_css': """
+                body { font-family: Tahoma, 'MS Sans Serif', sans-serif !important; background: linear-gradient(180deg, #0b8a8a 0%, #067171 100%); color: #000000; }
+                .card, wa-button::part(base), wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) { background: #c0c0c0 !important; border-top: 2px solid #ffffff !important; border-left: 2px solid #ffffff !important; border-right: 2px solid #3c3c3c !important; border-bottom: 2px solid #3c3c3c !important; box-shadow: 1px 1px 0 #808080 inset, -1px -1px 0 #dfdfdf inset !important; border-radius: 0 !important; }
+                .card { padding-top: 0.25rem; }
+                wa-button::part(base) { color: #000000 !important; font-weight: 700 !important; }
+                wa-button::part(base):active { border-top: 2px solid #3c3c3c !important; border-left: 2px solid #3c3c3c !important; border-right: 2px solid #ffffff !important; border-bottom: 2px solid #ffffff !important; }
+                h1, h2, h3 { font-weight: 700; text-shadow: 1px 1px 0 rgba(255,255,255,0.55); }
+            """.strip(),
+})
+
+Theme.PRESETS['bauhaus'].update({
+    'extra_css': _premium_light_theme_css(
+        "'Space Grotesk', Inter, sans-serif",
+        "linear-gradient(180deg, #f6f4f0 0%, #f1ede7 100%)",
+        heading_font="'Space Grotesk', Inter, sans-serif",
+        heading_weight='700',
+        card_radius='10px',
+        button_radius='9999px',
+        special_css=".card { box-shadow: 10px 10px 0 color-mix(in srgb, var(--vl-secondary) 82%, white 18%), 20px 20px 0 color-mix(in srgb, var(--vl-primary) 82%, white 18%) !important; } h1, h2, h3 { text-transform: uppercase; } wa-button::part(base) { border: 2px solid #111 !important; color: #111 !important; background: color-mix(in srgb, var(--vl-warning) 34%, white 66%) !important; }",
+    ),
+})
+
+Theme.PRESETS['vaporwave'].update({
+    'extra_css': _premium_dark_theme_css(
+        "'Space Grotesk', Inter, sans-serif",
+        "radial-gradient(circle at 16% -10%, rgba(255, 113, 206, 0.22), transparent 26%), radial-gradient(circle at 84% 0%, rgba(1, 205, 254, 0.18), transparent 24%), linear-gradient(180deg, #2b2144 0%, #140d22 100%)",
+        card_radius='18px',
+        button_radius='14px',
+        special_css="h1, h2, h3, h4 { background: linear-gradient(90deg, #ff71ce, #01cdfe); -webkit-background-clip: text; -webkit-text-fill-color: transparent; } .card { box-shadow: rgba(1, 205, 254, 0.14) 0 22px 48px -30px, rgba(185, 103, 255, 0.18) 0 0 0 1px inset !important; }",
+    ),
+})
+
+Theme.PRESETS['blueprint'].update({
+    'extra_css': _premium_dark_theme_css(
+        "'IBM Plex Mono', 'Courier New', monospace",
+        "linear-gradient(rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(180deg, #0044bb 0%, #00318d 100%)",
+        card_radius='10px',
+        button_radius='8px',
+        special_css="body { background-size: 24px 24px, 24px 24px, auto; } .card { background: rgba(0, 47, 140, 0.48) !important; } wa-button::part(base) { background: rgba(255,255,255,0.06) !important; border: 1px solid rgba(255,255,255,0.58) !important; color: white !important; }",
+    ),
+})
+
+Theme.PRESETS['rgb_gamer'].update({
+    'extra_css': _premium_dark_theme_css(
+        "'Space Grotesk', Inter, sans-serif",
+        "radial-gradient(circle at 14% -10%, rgba(255, 0, 0, 0.16), transparent 26%), radial-gradient(circle at 84% 0%, rgba(0, 255, 0, 0.14), transparent 22%), linear-gradient(180deg, #050505 0%, #101010 100%)",
+        card_radius='16px',
+        button_radius='12px',
+        special_css="@keyframes vl-rgb-hue { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } } .card, wa-button::part(base) { animation: vl-rgb-hue 12s linear infinite; }",
+    ),
+})
+
+Theme.PRESETS['editorial'].update({
+    'extra_css': _premium_light_theme_css(
+        "'Instrument Serif', 'Times New Roman', serif",
+        "linear-gradient(180deg, #ffffff 0%, #fbfaf8 100%)",
+        heading_font="'Cormorant Garamond', Georgia, serif",
+        heading_weight='600',
+        card_radius='6px',
+        button_radius='8px',
+        special_css="h1, h2, h3 { font-style: italic; border-bottom: 1px solid rgba(0,0,0,0.14); padding-bottom: 0.35rem; } wa-button[variant='neutral'][appearance='outlined']::part(base) { background: transparent !important; border-color: #111 !important; }",
+    ),
+})
+
+Theme.PRESETS['claymorphism'].update({
+    'extra_css': _soft_surface_theme_css(
+        "'Inter', 'Segoe UI', sans-serif",
+        "linear-gradient(180deg, #f4f7fb 0%, #ecf1f7 100%)",
+        relief_dark='rgba(184, 196, 214, 0.40)',
+        relief_light='rgba(255, 255, 255, 0.95)',
+        radius='30px',
+        special_css="wa-button::part(base) { color: white !important; background: linear-gradient(135deg, var(--vl-primary), color-mix(in srgb, var(--vl-primary) 72%, var(--vl-secondary) 28%)) !important; }",
+    ),
+})
+
+Theme.PRESETS['inno'].update({
+    'radius': '10px',
+    'input_border_radius_small': '8px',
+    'input_border_radius_medium': '10px',
+    'input_border_radius_large': '12px',
+    'extra_css': _premium_light_theme_css(
+        "'Inter', 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 10% 0%, rgba(165, 0, 52, 0.08), transparent 24%), linear-gradient(180deg, #ffffff 0%, #faf9fb 100%)",
+        card_radius='14px',
+        button_radius='10px',
+        special_css=".card { border-top: 3px solid #A50034 !important; } wa-button::part(base) { text-transform: uppercase; letter-spacing: 0.04em; }",
+    ),
+})
+
+Theme.PRESETS['light_2nd'].update({
+    'extra_css': _premium_light_theme_css(
+        "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "radial-gradient(circle at 12% 0%, rgba(124, 58, 237, 0.10), transparent 28%), linear-gradient(180deg, #ffffff 0%, #fbfbff 100%)",
+        card_radius='16px',
+        button_radius='12px',
+        special_css="body { font-feature-settings: 'liga' 1, 'kern' 1; }",
+    ),
+})
+
+Theme.PRESETS['violit_dark'].update({
+    'radius': '10px',
+    'input_border_radius_small': '8px',
+    'input_border_radius_medium': '10px',
+    'input_border_radius_large': '12px',
+    'extra_css': _premium_dark_theme_css(
+        "'Space Grotesk', Inter, system-ui, sans-serif",
+        "radial-gradient(circle at 16% -10%, rgba(139, 92, 246, 0.24), transparent 28%), radial-gradient(circle at 84% 0%, rgba(52, 211, 153, 0.14), transparent 20%), linear-gradient(180deg, #1e1b4b 0%, #0f0a20 100%)",
+        card_radius='14px',
+        button_radius='10px',
+        special_css="h1, h2, h3 { text-shadow: 0 0 18px rgba(139, 92, 246, 0.24); } wa-button::part(base) { text-transform: uppercase; letter-spacing: 0.05em; }",
+    ),
+})

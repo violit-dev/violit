@@ -809,7 +809,7 @@ class DataWidgetsMixin:
                 color = color_map.get(delta_color, "var(--vl-text-muted)")
                 icon = "arrow-up" if delta_color == "positive" else "arrow-down" if delta_color == "negative" else ""
                 icon_html = f'<wa-icon name="{icon}" style="font-size: 0.8em; margin-right: 2px;"></wa-icon>' if icon else ""
-                delta_html = f'<div style="color: {color}; font-size: 0.9rem; margin-top: 0.25rem; font-weight: 500;">{icon_html}{escaped_delta}</div>'
+                delta_html = f'<div class="metric-delta" style="color: {color};">{icon_html}{escaped_delta}</div>'
 
             border_style = "border:1px solid var(--vl-border);border-radius:0.5rem;" if border else ""
             resolved_height = None
@@ -829,8 +829,8 @@ class DataWidgetsMixin:
 
             html_output = f'''
             <div class="{card_cls}" style="{card_style}">
-                <div style="font-size: 0.875rem; color: var(--vl-text-muted); margin-bottom: 0.5rem; font-weight: 500;{label_style}">{escaped_label}{help_html}</div>
-                <div style="font-size: 1.75rem; font-weight: 700; color: var(--vl-text);">{escaped_val}</div>
+                <div class="metric-label" style="{label_style}">{escaped_label}{help_html}</div>
+                <div class="metric-value">{escaped_val}</div>
                 {delta_html}
             </div>
             '''
