@@ -677,7 +677,7 @@ class Theme:
                 }
             """
         },
-        'lg_innotek': {
+        'inno': {
             'mode': 'light',
             'primary': '#A50034',      # LG Red
             'secondary': '#6B6B6B',    # LG Gray
@@ -1223,6 +1223,844 @@ class Theme:
         });
     };
 })();
+            """
+        },
+        'violit_vercel_refined': {
+            'mode': 'light',
+            'primary': '#171717',
+            'secondary': '#0a72ef',
+            'success': '#0070f3',
+            'warning': '#de1d8d',
+            'danger': '#ff5b4f',
+            'bg': '#ffffff',
+            'bg_card': '#ffffff',
+            'border': '#ebebeb',
+            'text': '#171717',
+            'text_muted': '#4d4d4d',
+            'radius': '8px',
+            'input_border_radius_small': '6px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '12px',
+            'extra_css': """
+                body {
+                    font-family: Inter, Arial, sans-serif !important;
+                    font-feature-settings: 'liga' 1;
+                    letter-spacing: -0.01em;
+                    background:
+                        radial-gradient(circle at 50% 0%, rgba(10, 114, 239, 0.08), transparent 34%),
+                        #ffffff;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    letter-spacing: -0.04em;
+                    color: #171717;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: none !important;
+                    border-radius: 12px !important;
+                    box-shadow: rgba(0, 0, 0, 0.08) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 2px, #fafafa 0 0 0 1px inset !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 6px !important;
+                    border: none !important;
+                    font-weight: 500 !important;
+                    box-shadow: rgba(0, 0, 0, 0.08) 0 0 0 1px !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #ffffff !important;
+                    color: #171717 !important;
+                }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) {
+                    border: none !important;
+                    border-radius: 8px !important;
+                    box-shadow: rgba(0, 0, 0, 0.08) 0 0 0 1px !important;
+                }
+            """
+        },
+        'violit_linear_midnight': {
+            'mode': 'dark',
+            'primary': '#5e6ad2',
+            'secondary': '#828fff',
+            'success': '#27a644',
+            'warning': '#5e6ad2',
+            'danger': '#5e69d1',
+            'bg': '#010102',
+            'bg_card': '#0f1011',
+            'border': '#23252a',
+            'text': '#f7f8f8',
+            'text_muted': '#8a8f98',
+            'radius': '12px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '12px',
+            'extra_css': """
+                body {
+                    font-family: Inter, 'SF Pro Display', system-ui, sans-serif !important;
+                    background: #010102 !important;
+                    color: #f7f8f8;
+                    letter-spacing: -0.01em;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    color: #f7f8f8;
+                    letter-spacing: -0.04em;
+                }
+                .card {
+                    background: #0f1011 !important;
+                    border: 1px solid #23252a !important;
+                    border-radius: 16px !important;
+                    box-shadow: none !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 8px !important;
+                    border: 1px solid #23252a !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #0f1011 !important;
+                    color: #f7f8f8 !important;
+                }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) {
+                    background: #0f1011 !important;
+                    border: 1px solid #2e3138 !important;
+                    border-radius: 8px !important;
+                }
+                wa-input::part(base):focus-within, wa-textarea::part(base):focus-within, wa-select::part(combobox):focus-within {
+                    box-shadow: 0 0 0 2px rgba(94, 106, 210, 0.35) !important;
+                }
+            """
+        },
+        'violit_stripe_mesh': {
+            'mode': 'light',
+            'primary': '#533afd',
+            'secondary': '#0d253d',
+            'success': '#665efd',
+            'warning': '#f5e9d4',
+            'danger': '#ea2261',
+            'bg': '#ffffff',
+            'bg_card': '#ffffff',
+            'border': '#e3e8ee',
+            'text': '#0d253d',
+            'text_muted': '#64748d',
+            'radius': '12px',
+            'input_border_radius_small': '6px',
+            'input_border_radius_medium': '6px',
+            'input_border_radius_large': '12px',
+            'extra_css': """
+                body {
+                    font-family: Inter, 'SF Pro Display', system-ui, sans-serif !important;
+                    font-weight: 300;
+                    font-feature-settings: 'ss01' 1;
+                    color: #0d253d;
+                    background:
+                        radial-gradient(circle at 8% 0%, rgba(249, 107, 238, 0.22), transparent 26%),
+                        radial-gradient(circle at 26% 4%, rgba(83, 58, 253, 0.18), transparent 22%),
+                        radial-gradient(circle at 42% 0%, rgba(234, 34, 97, 0.16), transparent 18%),
+                        radial-gradient(circle at 64% 0%, rgba(245, 233, 212, 0.90), transparent 20%),
+                        linear-gradient(180deg, #ffffff 0%, #f6f9fc 28%, #ffffff 52%);
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    color: #0d253d;
+                    font-weight: 300;
+                    letter-spacing: -0.04em;
+                }
+                .card {
+                    background: rgba(255, 255, 255, 0.94) !important;
+                    border: 1px solid #e3e8ee !important;
+                    border-radius: 12px !important;
+                    box-shadow: rgba(0, 55, 112, 0.08) 0 8px 24px, rgba(0, 55, 112, 0.04) 0 2px 6px !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 9999px !important;
+                    font-weight: 400 !important;
+                    padding-inline: 16px !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #ffffff !important;
+                    color: #533afd !important;
+                    border: 1px solid #533afd !important;
+                }
+                code, pre { font-feature-settings: 'tnum' 1; }
+            """
+        },
+        'violit_claude_warm': {
+            'mode': 'light',
+            'primary': '#cc785c',
+            'secondary': '#181715',
+            'success': '#5db872',
+            'warning': '#e8a55a',
+            'danger': '#c64545',
+            'bg': '#faf9f5',
+            'bg_card': '#efe9de',
+            'border': '#e6dfd8',
+            'text': '#141413',
+            'text_muted': '#6c6a64',
+            'radius': '12px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '12px',
+            'extra_css': """
+                body {
+                    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    background: #faf9f5 !important;
+                    color: #141413;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    font-family: 'Cormorant Garamond', Georgia, serif !important;
+                    font-weight: 500;
+                    color: #141413;
+                    letter-spacing: -0.03em;
+                }
+                .card {
+                    background: #efe9de !important;
+                    border: 1px solid #e6dfd8 !important;
+                    border-radius: 12px !important;
+                    box-shadow: none !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 8px !important;
+                    font-weight: 500 !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #faf9f5 !important;
+                    color: #141413 !important;
+                    border: 1px solid #e6dfd8 !important;
+                }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) {
+                    background: #faf9f5 !important;
+                    border: 1px solid #e6dfd8 !important;
+                    border-radius: 8px !important;
+                }
+                pre, code {
+                    font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace !important;
+                }
+            """
+        },
+        'violit_cursor_editorial': {
+            'mode': 'light',
+            'primary': '#f54e00',
+            'secondary': '#26251e',
+            'success': '#1f8a65',
+            'warning': '#c08532',
+            'danger': '#cf2d56',
+            'bg': '#f7f7f4',
+            'bg_card': '#ffffff',
+            'border': '#e6e5e0',
+            'text': '#26251e',
+            'text_muted': '#5a5852',
+            'radius': '12px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '12px',
+            'extra_css': """
+                body {
+                    font-family: Inter, 'Helvetica Neue', Arial, sans-serif !important;
+                    background: #f7f7f4 !important;
+                    color: #26251e;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    font-weight: 400 !important;
+                    color: #26251e;
+                    letter-spacing: -0.03em;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: 1px solid #e6e5e0 !important;
+                    border-radius: 12px !important;
+                    box-shadow: none !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 8px !important;
+                    font-weight: 500 !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #ffffff !important;
+                    color: #26251e !important;
+                    border: 1px solid #cfcdc4 !important;
+                }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) {
+                    background: #ffffff !important;
+                    border: 1px solid #cfcdc4 !important;
+                    border-radius: 8px !important;
+                }
+                code, pre {
+                    font-family: 'JetBrains Mono', Consolas, monospace !important;
+                }
+            """
+        },
+        'violit_mintlify_docs': {
+            'mode': 'light',
+            'primary': '#0a0a0a',
+            'secondary': '#00d4a4',
+            'success': '#00d4a4',
+            'warning': '#fb7a59',
+            'danger': '#e5484d',
+            'bg': '#ffffff',
+            'bg_card': '#ffffff',
+            'border': '#e5e7eb',
+            'text': '#111827',
+            'text_muted': '#667085',
+            'radius': '12px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '12px',
+            'extra_css': """
+                body {
+                    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    background:
+                        linear-gradient(180deg, rgba(197, 237, 255, 0.55) 0%, rgba(255, 250, 240, 0.72) 18%, #ffffff 36%);
+                    color: #111827;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    color: #111827;
+                    letter-spacing: -0.03em;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: 1px solid #e5e7eb !important;
+                    border-radius: 12px !important;
+                    box-shadow: rgba(0, 0, 0, 0.04) 0 4px 12px !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 9999px !important;
+                    font-weight: 500 !important;
+                }
+                wa-button[variant='success']::part(base) {
+                    background: #00d4a4 !important;
+                    color: #0a0a0a !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #ffffff !important;
+                    color: #111827 !important;
+                    border: 1px solid #e5e7eb !important;
+                }
+                code, pre, .vl-mono {
+                    font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace !important;
+                }
+            """
+        },
+        'violit_raycast_command': {
+            'mode': 'dark',
+            'primary': '#ffffff',
+            'secondary': '#57c1ff',
+            'success': '#59d499',
+            'warning': '#ffc533',
+            'danger': '#ff6161',
+            'bg': '#07080a',
+            'bg_card': '#0d0d0d',
+            'border': '#242728',
+            'text': '#f4f4f6',
+            'text_muted': '#9c9c9d',
+            'radius': '10px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '16px',
+            'extra_css': """
+                body {
+                    font-family: Inter, system-ui, sans-serif !important;
+                    font-feature-settings: 'calt' 1, 'kern' 1, 'liga' 1, 'ss03' 1;
+                    background:
+                        linear-gradient(160deg, rgba(255, 87, 87, 0.16) 0%, rgba(161, 19, 26, 0.0) 14%),
+                        #07080a;
+                    color: #f4f4f6;
+                }
+                .card {
+                    background: #0d0d0d !important;
+                    border: 1px solid #242728 !important;
+                    border-radius: 10px !important;
+                    box-shadow: none !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 8px !important;
+                    border: 1px solid #242728 !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #101111 !important;
+                    color: #ffffff !important;
+                }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) {
+                    background: #101111 !important;
+                    border: 1px solid #242728 !important;
+                    border-radius: 8px !important;
+                }
+                code, pre { font-family: 'JetBrains Mono', Menlo, monospace !important; }
+            """
+        },
+        'violit_apple_gallery': {
+            'mode': 'light',
+            'primary': '#0066cc',
+            'secondary': '#2997ff',
+            'success': '#0066cc',
+            'warning': '#f5f5f7',
+            'danger': '#0071e3',
+            'bg': '#ffffff',
+            'bg_card': '#f5f5f7',
+            'border': '#e0e0e0',
+            'text': '#1d1d1f',
+            'text_muted': '#7a7a7a',
+            'radius': '18px',
+            'input_border_radius_small': '11px',
+            'input_border_radius_medium': '11px',
+            'input_border_radius_large': '18px',
+            'extra_css': """
+                body {
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif !important;
+                    background: linear-gradient(180deg, #ffffff 0%, #f5f5f7 100%);
+                    color: #1d1d1f;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    letter-spacing: -0.03em;
+                    color: #1d1d1f;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: 1px solid #e0e0e0 !important;
+                    border-radius: 18px !important;
+                    box-shadow: none !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 9999px !important;
+                    font-weight: 400 !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: transparent !important;
+                    color: #0066cc !important;
+                    border: 1px solid #0066cc !important;
+                }
+                #sidebar {
+                    background: rgba(245, 245, 247, 0.8) !important;
+                    backdrop-filter: saturate(180%) blur(20px) !important;
+                }
+            """
+        },
+        'violit_figma_blocks': {
+            'mode': 'light',
+            'primary': '#000000',
+            'secondary': '#cf5ff0',
+            'success': '#2fb344',
+            'warning': '#d8f65b',
+            'danger': '#ff4d9d',
+            'bg': '#ffffff',
+            'bg_card': '#ffffff',
+            'border': '#ebebeb',
+            'text': '#111111',
+            'text_muted': '#111111',
+            'radius': '24px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '24px',
+            'extra_css': """
+                body {
+                    font-family: Inter, system-ui, sans-serif !important;
+                    background:
+                        linear-gradient(180deg, #ffffff 0%, #ffffff 60%, #fff8db 60%, #fff8db 100%);
+                    color: #111111;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    letter-spacing: -0.03em;
+                    color: #111111;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: 1px solid #ebebeb !important;
+                    border-radius: 24px !important;
+                    box-shadow: none !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 9999px !important;
+                    font-weight: 500 !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #ffffff !important;
+                    color: #111111 !important;
+                    border: none !important;
+                }
+                wa-badge::part(base) {
+                    border-radius: 9999px !important;
+                }
+            """
+        },
+        'violit_airbnb_rausch': {
+            'mode': 'light',
+            'primary': '#ff385c',
+            'secondary': '#222222',
+            'success': '#ff385c',
+            'warning': '#f7f7f7',
+            'danger': '#e00b41',
+            'bg': '#ffffff',
+            'bg_card': '#ffffff',
+            'border': '#dddddd',
+            'text': '#222222',
+            'text_muted': '#6a6a6a',
+            'radius': '14px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '14px',
+            'extra_css': """
+                body {
+                    font-family: Inter, system-ui, sans-serif !important;
+                    background: #ffffff !important;
+                    color: #222222;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: 1px solid #dddddd !important;
+                    border-radius: 14px !important;
+                    box-shadow: rgba(0, 0, 0, 0.02) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 6px, rgba(0, 0, 0, 0.1) 0 4px 8px !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 8px !important;
+                    font-weight: 500 !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #ffffff !important;
+                    color: #222222 !important;
+                    border: 1px solid #222222 !important;
+                }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) {
+                    border-radius: 9999px !important;
+                    border: 1px solid #dddddd !important;
+                }
+            """
+        },
+        'violit_intercom_fin': {
+            'mode': 'light',
+            'primary': '#111111',
+            'secondary': '#ff5600',
+            'success': '#27ae60',
+            'warning': '#f5f1ec',
+            'danger': '#ff5600',
+            'bg': '#f5f1ec',
+            'bg_card': '#ffffff',
+            'border': '#d3cec6',
+            'text': '#111111',
+            'text_muted': '#626260',
+            'radius': '12px',
+            'input_border_radius_small': '8px',
+            'input_border_radius_medium': '8px',
+            'input_border_radius_large': '16px',
+            'extra_css': """
+                body {
+                    font-family: Inter, system-ui, sans-serif !important;
+                    background: #f5f1ec !important;
+                    color: #111111;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    color: #111111;
+                    letter-spacing: -0.03em;
+                    font-weight: 500;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: 1px solid #d3cec6 !important;
+                    border-radius: 16px !important;
+                    box-shadow: none !important;
+                }
+                wa-button::part(base) {
+                    border-radius: 8px !important;
+                    font-weight: 500 !important;
+                }
+                wa-button[variant='danger']::part(base) {
+                    background: #ff5600 !important;
+                    color: #ffffff !important;
+                    border: none !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: #ffffff !important;
+                    color: #111111 !important;
+                    border: 1px solid #d3cec6 !important;
+                }
+            """
+        },
+        'violit_nvidia_signal': {
+            'mode': 'light',
+            'primary': '#76b900',
+            'secondary': '#000000',
+            'success': '#3f8500',
+            'warning': '#df6500',
+            'danger': '#e52020',
+            'bg': '#ffffff',
+            'bg_card': '#f7f7f7',
+            'border': '#cccccc',
+            'text': '#000000',
+            'text_muted': '#757575',
+            'radius': '2px',
+            'input_border_radius_small': '2px',
+            'input_border_radius_medium': '2px',
+            'input_border_radius_large': '2px',
+            'extra_css': """
+                body {
+                    font-family: Inter, Arial, sans-serif !important;
+                    background: linear-gradient(180deg, #ffffff 0%, #f7f7f7 100%);
+                    color: #000000;
+                }
+                .card {
+                    background: #ffffff !important;
+                    border: 1px solid #cccccc !important;
+                    border-radius: 2px !important;
+                    box-shadow: none !important;
+                    position: relative;
+                }
+                .card::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 12px;
+                    height: 12px;
+                    background: #76b900;
+                }
+                wa-button::part(base) {
+                    border-radius: 2px !important;
+                    font-weight: 700 !important;
+                }
+                wa-button[variant='neutral']::part(base) {
+                    background: transparent !important;
+                    color: #000000 !important;
+                    border: 2px solid #76b900 !important;
+                }
+                wa-input::part(base), wa-textarea::part(base), wa-select::part(combobox) {
+                    border-radius: 2px !important;
+                    border: 1px solid #cccccc !important;
+                }
+            """
+        },
+        'violit_cloud_foundry': {
+            'mode': 'light',
+            'primary': '#171717',
+            'secondary': '#5b7cff',
+            'success': '#12b76a',
+            'warning': '#f79009',
+            'danger': '#f04438',
+            'bg': '#ffffff',
+            'bg_card': '#ffffff',
+            'border': '#e5e7eb',
+            'text': '#101828',
+            'text_muted': '#667085',
+            'radius': '12px',
+            'input_border_radius_small': '10px',
+            'input_border_radius_medium': '12px',
+            'input_border_radius_large': '16px',
+            'extra_css': """
+                @font-face {
+                    font-family: 'Inter';
+                    font-style: normal;
+                    font-weight: 100 900;
+                    font-display: swap;
+                    src: url('/static/vendor/fonts/inter/inter-latin-ext.woff2') format('woff2');
+                    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+                }
+                @font-face {
+                    font-family: 'Inter';
+                    font-style: normal;
+                    font-weight: 100 900;
+                    font-display: swap;
+                    src: url('/static/vendor/fonts/inter/inter-latin.woff2') format('woff2');
+                    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+                }
+
+                body {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    color: #101828;
+                    background:
+                        radial-gradient(circle at 12% -6%, rgba(91, 124, 255, 0.18), transparent 30%),
+                        radial-gradient(circle at 88% 0%, rgba(0, 212, 164, 0.14), transparent 24%),
+                        linear-gradient(180deg, #ffffff 0%, #fbfdff 46%, #f8fbff 100%);
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                    font-feature-settings: 'liga' 1, 'calt' 1;
+                    letter-spacing: -0.011em;
+                }
+
+                h1, h2, h3, h4, h5, h6 {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    color: #0f1728;
+                    letter-spacing: -0.035em;
+                }
+
+                h1 { font-weight: 700; }
+                h2, h3 { font-weight: 650; }
+
+                p, span, label, div, li {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+
+                code, pre, .vl-mono {
+                    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace !important;
+                    font-feature-settings: 'liga' 1, 'tnum' 1;
+                }
+
+                a {
+                    color: #2563eb;
+                    text-decoration: none;
+                }
+
+                a:hover {
+                    color: #1d4ed8;
+                }
+
+                .card {
+                    background: rgba(255, 255, 255, 0.82) !important;
+                    border: none !important;
+                    border-radius: 20px !important;
+                    backdrop-filter: blur(16px) !important;
+                    box-shadow:
+                        rgba(15, 23, 42, 0.08) 0 0 0 1px,
+                        rgba(15, 23, 42, 0.06) 0 10px 30px -16px,
+                        rgba(255, 255, 255, 0.92) 0 1px 0 inset !important;
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+
+                .card:hover {
+                    transform: translateY(-2px);
+                    box-shadow:
+                        rgba(15, 23, 42, 0.08) 0 0 0 1px,
+                        rgba(15, 23, 42, 0.10) 0 18px 42px -22px,
+                        rgba(255, 255, 255, 0.94) 0 1px 0 inset !important;
+                }
+
+                wa-button::part(base) {
+                    background: #171717 !important;
+                    color: #ffffff !important;
+                    border: none !important;
+                    border-radius: 9999px !important;
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+                    font-size: 0.875rem !important;
+                    font-weight: 500 !important;
+                    letter-spacing: -0.01em;
+                    box-shadow: rgba(15, 23, 42, 0.14) 0 10px 24px -16px !important;
+                    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease !important;
+                }
+
+                wa-button::part(base):hover {
+                    background: #0f1728 !important;
+                    transform: translateY(-1px);
+                    box-shadow: rgba(15, 23, 42, 0.18) 0 16px 28px -18px !important;
+                }
+
+                wa-button::part(base):active {
+                    transform: translateY(0) scale(0.985);
+                }
+
+                wa-button[variant="neutral"]::part(base) {
+                    background: rgba(255, 255, 255, 0.92) !important;
+                    color: #101828 !important;
+                    box-shadow:
+                        rgba(15, 23, 42, 0.08) 0 0 0 1px,
+                        rgba(15, 23, 42, 0.08) 0 8px 18px -16px !important;
+                }
+
+                wa-button[variant="success"]::part(base) {
+                    background: #ecfdf3 !important;
+                    color: #067647 !important;
+                    box-shadow: rgba(18, 183, 106, 0.22) 0 0 0 1px inset !important;
+                }
+
+                wa-button[variant="warning"]::part(base) {
+                    background: #fff7ed !important;
+                    color: #b54708 !important;
+                    box-shadow: rgba(247, 144, 9, 0.22) 0 0 0 1px inset !important;
+                }
+
+                wa-button[variant="danger"]::part(base) {
+                    background: #fff1f3 !important;
+                    color: #c01048 !important;
+                    box-shadow: rgba(240, 68, 56, 0.18) 0 0 0 1px inset !important;
+                }
+
+                wa-button:focus-visible::part(base) {
+                    outline: 2px solid rgba(10, 114, 239, 0.95) !important;
+                    outline-offset: 2px;
+                }
+
+                wa-input::part(base),
+                wa-textarea::part(base),
+                wa-select::part(combobox) {
+                    background: rgba(255, 255, 255, 0.96) !important;
+                    border: 1px solid #dfe3ea !important;
+                    border-radius: 14px !important;
+                    box-shadow:
+                        rgba(15, 23, 42, 0.05) 0 1px 1px,
+                        rgba(255, 255, 255, 0.9) 0 1px 0 inset !important;
+                    transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
+                }
+
+                wa-input::part(base):focus-within,
+                wa-textarea::part(base):focus-within,
+                wa-select::part(combobox):focus-within {
+                    border-color: #0a72ef !important;
+                    box-shadow:
+                        rgba(10, 114, 239, 0.14) 0 0 0 4px,
+                        rgba(15, 23, 42, 0.05) 0 1px 1px !important;
+                }
+
+                wa-textarea::part(form-control-input),
+                wa-textarea::part(textarea) {
+                    min-height: 6.5rem !important;
+                    line-height: 1.55 !important;
+                }
+
+                #sidebar {
+                    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.88)) !important;
+                    border-right: 1px solid rgba(15, 23, 42, 0.08) !important;
+                    backdrop-filter: blur(18px) !important;
+                }
+
+                #sidebar wa-button::part(base) {
+                    background: transparent !important;
+                    color: #667085 !important;
+                    box-shadow: none !important;
+                    border: none !important;
+                    border-radius: 16px !important;
+                }
+
+                #sidebar wa-button::part(base):hover {
+                    background: rgba(255, 255, 255, 0.72) !important;
+                    color: #0f1728 !important;
+                    box-shadow: rgba(15, 23, 42, 0.06) 0 0 0 1px !important;
+                    transform: none;
+                }
+
+                #sidebar wa-button[data-nav-active="true"]::part(base) {
+                    background: rgba(255, 255, 255, 0.94) !important;
+                    color: #0f1728 !important;
+                    box-shadow:
+                        rgba(15, 23, 42, 0.08) 0 0 0 1px,
+                        rgba(15, 23, 42, 0.08) 0 10px 26px -18px !important;
+                }
+
+                table {
+                    border-collapse: collapse;
+                }
+
+                th, td {
+                    border-bottom: 1px solid #edf1f6;
+                    padding: 0.75rem 0.875rem;
+                    font-size: 0.875rem;
+                }
+
+                th {
+                    color: #344054;
+                    font-weight: 600;
+                    text-align: left;
+                }
+
+                ::selection {
+                    background: rgba(91, 124, 255, 0.16);
+                    color: #0f1728;
+                }
+
+                ::-webkit-scrollbar {
+                    width: 8px;
+                    height: 8px;
+                }
+
+                ::-webkit-scrollbar-thumb {
+                    background: rgba(148, 163, 184, 0.65);
+                    border-radius: 9999px;
+                }
+
+                ::-webkit-scrollbar-track {
+                    background: transparent;
+                }
             """
         },
         'violit_dark': {
