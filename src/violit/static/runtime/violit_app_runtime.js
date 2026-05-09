@@ -1956,12 +1956,44 @@
                                         const baseCid = item.id.replace('_wrapper', '');
                                         const gridApi = window['gridApi_' + baseCid];
                                         if (gridApi) {
-                                            const match = item.html.match(/rowData:\s*(\[.*?\])/s);
-                                            if (match) {
+                                            const rowDataMatch = item.html.match(/rowData:\s*(\[.*?\])/s) || item.html.match(/const initialRowData =\s*(\[.*?\]);/s);
+                                            const temp = document.createElement('div');
+                                            temp.innerHTML = item.html;
+
+                                            const currentGridRoot = document.getElementById(baseCid) || el.querySelector(`#${baseCid}`) || el;
+                                            const nextGridRoot = temp.querySelector(`#${baseCid}`);
+                                            let canSmartUpdate = !!(rowDataMatch && currentGridRoot && nextGridRoot);
+
+                                            if (canSmartUpdate) {
+                                                const currentStyle = currentGridRoot.getAttribute('style') || '';
+                                                const nextStyle = nextGridRoot.getAttribute('style') || '';
+                                                if (currentStyle !== nextStyle) {
+                                                    canSmartUpdate = false;
+                                                }
+                                            }
+
+                                            if (canSmartUpdate) {
                                                 try {
-                                                    const newData = JSON.parse(match[1]);
-                                                    const gridRoot = document.getElementById(baseCid) || el.querySelector(`#${baseCid}`) || el;
-                                                    const agGridScrollState = window._vlCaptureAgGridScroll(gridRoot);
+                                                    const nextData = JSON.parse(rowDataMatch[1]);
+                                                    const currentColumnIds = typeof gridApi.getColumnState === 'function'
+                                                        ? gridApi.getColumnState().map((col) => String(col.colId || '').trim()).filter(Boolean)
+                                                        : [];
+                                                    const currentSchema = currentColumnIds.length ? currentColumnIds : Array.from(currentGridRoot.querySelectorAll('.ag-header-cell-text')).map((node) => (node.textContent || '').trim()).filter(Boolean);
+                                                    const nextSchema = nextData.length
+                                                        ? Object.keys(nextData[0]).map((key) => String(key).trim()).filter(Boolean)
+                                                        : currentSchema;
+                                                    if (currentSchema.length !== nextSchema.length || currentSchema.some((text, index) => text !== nextSchema[index])) {
+                                                        canSmartUpdate = false;
+                                                    }
+                                                } catch (e) {
+                                                    canSmartUpdate = false;
+                                                }
+                                            }
+
+                                            if (canSmartUpdate) {
+                                                try {
+                                                    const newData = JSON.parse(rowDataMatch[1]);
+                                                    const agGridScrollState = window._vlCaptureAgGridScroll(currentGridRoot);
 
                                                     if (typeof gridApi.setGridOption === 'function') {
                                                         gridApi.setGridOption('rowData', newData);
@@ -1969,11 +2001,18 @@
                                                         gridApi.setRowData(newData);
                                                     }
 
-                                                    window._vlRestoreAgGridScroll(gridRoot, agGridScrollState);
+                                                    window._vlRestoreAgGridScroll(currentGridRoot, agGridScrollState);
                                                     smartUpdated = true;
                                                 } catch (e) {
                                                     console.error('Failed to parse AG Grid data:', e);
                                                 }
+                                            } else if (typeof gridApi.destroy === 'function') {
+                                                try {
+                                                    gridApi.destroy();
+                                                } catch (e) {
+                                                    console.warn('Failed to destroy AG Grid before full replacement:', e);
+                                                }
+                                                delete window['gridApi_' + baseCid];
                                             }
                                         }
                                     }

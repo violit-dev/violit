@@ -102,6 +102,14 @@ class DataWidgetsMixin:
             token = rendering_ctx.set(cid)
             try:
                 current_df = resolve_value(df)
+                current_height = resolve_value(height)
+                current_column_defs = resolve_value(column_defs)
+                current_grid_options = resolve_value(grid_options) or {}
+                current_use_container_width = bool(resolve_value(use_container_width))
+                current_hide_index = bool(resolve_value(hide_index))
+                current_column_order = resolve_value(column_order)
+                current_theme = resolve_value(theme)
+                current_theme_colors = resolve_value(theme_colors)
             finally:
                 rendering_ctx.reset(token)
                 
@@ -110,25 +118,28 @@ class DataWidgetsMixin:
                 try: current_df = pd.DataFrame(current_df)
                 except: return Component("div", id=cid, content="Invalid data format")
 
-            data = current_df.to_dict('records')
+            display_df = current_df.copy()
+
+            if not current_hide_index:
+                display_df = display_df.reset_index()
             
             # Apply column_order if specified
-            if column_order:
-                ordered = [c for c in column_order if c in current_df.columns]
-                current_df = current_df[ordered]
+            if current_column_order:
+                ordered = [c for c in current_column_order if c in display_df.columns]
+                if ordered:
+                    remaining = [c for c in display_df.columns if c not in ordered]
+                    display_df = display_df[ordered + remaining]
 
-            # Optionally hide index
-            if hide_index and current_df.index.name:
-                current_df = current_df.reset_index(drop=True)
+            data = display_df.to_dict('records')
 
             # Use custom column_defs or generate defaults
-            if column_defs:
-                cols = column_defs
+            if current_column_defs:
+                cols = current_column_defs
             else:
-                cols = [{"field": c, "sortable": True, "filter": True} for c in current_df.columns]
+                cols = [{"field": c, "sortable": True, "filter": True} for c in display_df.columns]
             
             # Merge grid_options
-            extra_options = grid_options or {}
+            extra_options = current_grid_options
             
             # Add cell click handler if provided
             cell_click_handler = ""
@@ -145,7 +156,8 @@ class DataWidgetsMixin:
                 }},
                 '''
             
-            grid_style = self._build_ag_grid_theme_style(theme=theme, theme_colors=theme_colors)
+            grid_style = self._build_ag_grid_theme_style(theme=current_theme, theme_colors=current_theme_colors)
+            container_width = "100%" if current_use_container_width else f"min(100%, {max(520, len(cols) * 132)}px)"
             html = f'''
             <style>
                 #{cid}.vl-ag-grid .ag-body-viewport,
@@ -157,6 +169,16 @@ class DataWidgetsMixin:
                 #{cid}.vl-ag-grid .ag-center-cols-viewport {{
                     -ms-overflow-style: none !important;
                     scrollbar-width: none !important;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-vertical-scroll,
+                #{cid}.vl-ag-grid .ag-body-vertical-scroll-viewport,
+                #{cid}.vl-ag-grid .ag-body-vertical-scroll-container {{
+                    display: none !important;
+                    width: 0 !important;
+                    min-width: 0 !important;
+                    max-width: 0 !important;
+                    overflow: hidden !important;
                 }}
 
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar,
@@ -188,7 +210,7 @@ class DataWidgetsMixin:
                     background: color-mix(in srgb, var(--vl-primary), transparent 20%);
                 }}
             </style>
-            <div id="{cid}" style="height: {height}px; width: 100%; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
+            <div id="{cid}" style="height: {current_height}px; width: {container_width}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
             <script>(function(){{
                 function initGrid() {{
                     const opt = {{ 
@@ -251,13 +273,24 @@ class DataWidgetsMixin:
                         color: var(--vl-text);
                     }}
                     .data-table thead {{
-                        background: var(--vl-primary);
+                        background: color-mix(in srgb, var(--vl-primary), black 6%);
                         color: white;
                     }}
                     .data-table th, .data-table td {{
                         padding: 0.75rem;
                         text-align: left;
                         border-bottom: 1px solid var(--vl-border);
+                    }}
+                    .data-table thead th {{
+                        background: color-mix(in srgb, var(--vl-primary), black 6%);
+                        color: white !important;
+                        font-weight: 700;
+                    }}
+                    .data-table thead th * {{
+                        color: inherit !important;
+                    }}
+                    .data-table tbody td {{
+                        color: var(--vl-text);
                     }}
                     .data-table tbody tr:hover {{
                         background: color-mix(in srgb, var(--vl-bg-card), var(--vl-primary) 5%);
@@ -685,6 +718,16 @@ class DataWidgetsMixin:
                 #{cid}.vl-ag-grid .ag-center-cols-viewport {{
                     -ms-overflow-style: none !important;
                     scrollbar-width: none !important;
+                }}
+
+                #{cid}.vl-ag-grid .ag-body-vertical-scroll,
+                #{cid}.vl-ag-grid .ag-body-vertical-scroll-viewport,
+                #{cid}.vl-ag-grid .ag-body-vertical-scroll-container {{
+                    display: none !important;
+                    width: 0 !important;
+                    min-width: 0 !important;
+                    max-width: 0 !important;
+                    overflow: hidden !important;
                 }}
 
                 #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar,
