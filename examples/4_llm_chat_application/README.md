@@ -1,6 +1,6 @@
-# 4. Very Simple LLM Chat Application
+# 4. LLM Chat Application Examples
 
-This folder contains small chat examples:
+This folder contains six small Violit chat examples that show the same problem at different API levels:
 
 - `demo_app_gemini_primitive.py`
 - `demo_app_openai_primitive.py`
@@ -9,131 +9,205 @@ This folder contains small chat examples:
 - `demo_app_gemini_agent_primitive.py`
 - `demo_app_gemini_agent_highlevel.py`
 
-They intentionally share the same overall shape, so once you understand one file, the others should feel familiar.
+The set is intentionally split along two axes:
 
-## Files
+- provider: Gemini or OpenAI
+- API level: primitive or high-level
 
-- `demo_app_gemini_primitive.py`: primitive Gemini chat example
-- `demo_app_openai_primitive.py`: primitive OpenAI chat example
-- `demo_app_gemini_highlevel.py`: high-level Gemini chat example
-- `demo_app_openai_highlevel.py`: high-level OpenAI chat example
-- `demo_app_gemini_agent_primitive.py`: primitive Gemini agent example
-- `demo_app_gemini_agent_highlevel.py`: high-level Gemini agent example
+The two Gemini agent examples add a third axis:
+
+- transcript type: plain chat or agent-oriented chat with status, trace, summary, and artifacts
+
+## Before You Run
+
+These examples are written for normal Violit users.
+Install Violit first:
+
+```bash
+pip install violit
+```
+
+Then run whichever example file you want to try.
+
+## Example Matrix
+
+| File | Provider | Level | Main transcript API | Input API | Mode select | Attachments/audio |
+| --- | --- | --- | --- | --- | --- | --- |
+| `demo_app_gemini_primitive.py` | Gemini | Primitive | `chat_thread(...)` + `chat_message(...)` + `render_chat_message_body(...)` | `chat_input(...)` | No | No |
+| `demo_app_openai_primitive.py` | OpenAI | Primitive | `chat_thread(...)` + `chat_message(...)` + `render_chat_message_body(...)` | `chat_input(...)` | No | No |
+| `demo_app_gemini_highlevel.py` | Gemini | High-level | `chat_history(...)` | `managed_chat_input(...)` | Yes | No |
+| `demo_app_openai_highlevel.py` | OpenAI | High-level | `chat_history(...)` | `managed_chat_input(...)` | Yes | No |
+| `demo_app_gemini_agent_primitive.py` | Gemini | Primitive agent | `chat_thread(...)` + `agent_turn(...)` + `render_chat_message_body(...)` | `chat_input(...)` | Yes | Yes |
+| `demo_app_gemini_agent_highlevel.py` | Gemini | High-level agent | `agent_history(...)` | `managed_chat_input(...)` | Yes | Yes |
 
 ## Run
 
 ### Gemini Primitive
 
 ```bash
-cd examples/4_llm_chat_application
 python demo_app_gemini_primitive.py
 ```
 
 ### OpenAI Primitive
 
 ```bash
-cd examples/4_llm_chat_application
 python demo_app_openai_primitive.py
 ```
 
 ### Gemini High-level
 
 ```bash
-cd examples/4_llm_chat_application
 python demo_app_gemini_highlevel.py
 ```
 
 ### OpenAI High-level
 
 ```bash
-cd examples/4_llm_chat_application
 python demo_app_openai_highlevel.py
 ```
 
-### Gemini Agent
+### Gemini Agent Primitive
 
 ```bash
-cd examples/4_llm_chat_application
 python demo_app_gemini_agent_primitive.py
 ```
 
-## Configure
+### Gemini Agent High-level
 
-These examples do not rely on a local `.env` file.
+```bash
+python demo_app_gemini_agent_highlevel.py
+```
 
-Open the app and paste your API key into the password input.
-All examples start with an empty key field, so the credential is entered manually at runtime.
+Optional runtime flags also work, for example:
 
-- `demo_app_gemini_primitive.py` asks for `GEMINI_API_KEY`
-- `demo_app_gemini_highlevel.py` asks for `GEMINI_API_KEY`
-- `demo_app_gemini_agent_primitive.py` asks for `GEMINI_API_KEY`
-- `demo_app_gemini_agent_highlevel.py` asks for `GEMINI_API_KEY`
-- `demo_app_openai_primitive.py` asks for `OPENAI_API_KEY`
-- `demo_app_openai_highlevel.py` asks for `OPENAI_API_KEY`
+```bash
+python demo_app_gemini_highlevel.py --port 8002
+python demo_app_gemini_highlevel.py --lite
+```
+
+## Runtime Configuration
+
+These examples do not depend on a local `.env` file.
+
+Open the app and paste the API key into the password input at runtime.
+
+- Gemini examples ask for `GEMINI_API_KEY`
+- OpenAI examples ask for `OPENAI_API_KEY`
 
 For Git safety, keep real keys out of source files, screenshots, and committed config files.
 
-Each app also has a simple `Mode` selectbox:
+Only four of the six examples expose a `Mode` selectbox:
+
+- `demo_app_gemini_highlevel.py`
+- `demo_app_openai_highlevel.py`
+- `demo_app_gemini_agent_primitive.py`
+- `demo_app_gemini_agent_highlevel.py`
+
+The available options are:
 
 - `streaming`
 - `non-streaming`
 
-This lets you compare the two response styles in the same UI.
+The two plain primitive examples are intentionally simpler and always use the streaming path.
 
-## What The App Shows
+Only the two Gemini agent examples accept file and audio input.
 
-The simple provider-backed Violit examples follow the same pattern:
+## What Each Example Teaches
 
-- create `app`, `messages`, `api_key`, and `mode`
-- show a password input for the API key
-- show a mode selectbox
-- render chat messages in a reactive block
-- keep either `app.chat_input(...)` or `app.managed_chat_input(...)` outside the reactive block
+### 1. `demo_app_gemini_primitive.py`
 
-This keeps the message list reactive while the input widget stays simple and stable.
+This is the smallest Gemini chat that still feels like a real app.
 
-## Read The Code In This Order
+What to look at:
 
-### 1. Create app state
+- provider request helpers for Gemini streaming
+- manual state updates with `append_message(...)` and `replace_last_message(...)`
+- primitive rendering with `chat_thread(...)`, `chat_message(...)`, and `render_chat_message_body(...)`
+- `chat_input(...)` as the primitive submit surface
+
+This file is the right starting point if you want to understand the lowest-level plain chat flow.
+
+### 2. `demo_app_openai_primitive.py`
+
+This is the same primitive pattern, but with OpenAI request formatting.
+
+What changes relative to the Gemini primitive example:
+
+- OpenAI request URL and authorization header
+- OpenAI SSE chunk parsing
+- same primitive Violit rendering structure
+
+If you already understand the Gemini primitive version, this file mainly shows provider differences.
+
+### 3. `demo_app_gemini_highlevel.py`
+
+This is the smallest Gemini example built on Violit's high-level chat API.
+
+What to look at:
+
+- `chat_history(messages, height="60vh")`
+- `managed_chat_input(..., messages=messages, on_submit=reply)`
+- `mode` state controlling streaming vs non-streaming
+
+Compared with the primitive example, the input lifecycle and transcript mutations are mostly handled for you.
+
+### 4. `demo_app_openai_highlevel.py`
+
+This is the OpenAI counterpart to the Gemini high-level example.
+
+What changes relative to the Gemini high-level example:
+
+- OpenAI request payload and SSE parsing
+- same `chat_history(...)` plus `managed_chat_input(...)` structure
+
+This is the easiest file to compare against the Gemini high-level version when you only want provider-side differences.
+
+### 5. `demo_app_gemini_agent_primitive.py`
+
+This is a real Gemini-powered agent example rendered only with primitive Violit APIs.
+
+What to look at:
+
+- manual agent event generation
+- message items carrying `phase`, `status`, `status_text`, `summary`, `trace`, `artifacts`, and `error`
+- primitive transcript rendering with `agent_turn(...)`
+- `chat_input(...)` configured with `accept_file="multiple"` and `accept_audio=True`
+
+This is the file to read if you want full control over the agent transcript while still using Violit building blocks.
+
+### 6. `demo_app_gemini_agent_highlevel.py`
+
+This is the high-level version of the Gemini agent example.
+
+What to look at:
+
+- `agent_history(...)` for agent-oriented transcript rendering
+- `managed_chat_input(...)` for the input lifecycle
+- the same event schema as the primitive agent example, but with the rendering concerns mostly delegated to the framework
+
+This is the shortest path to a richer agent UI when you do not need to manually assemble each turn.
+
+## Primitive Vs High-level
+
+Use the primitive examples when you want to control the transcript row by row.
+
+Typical primitive shape:
 
 ```python
-app = vl.App(...)
-messages = app.state([...])
-api_key = app.state("")
-mode = app.state("streaming")
+@reactivity
+def render_chat():
+    with app.chat_thread(height="60vh"):
+        for message in messages.value:
+            with app.chat_message(message.get("role", "assistant")):
+                app.render_chat_message_body(message)
+
+
+app.chat_input("Ask...", on_submit=submit_prompt)
 ```
 
-- `messages` stores the chat history
-- `api_key` stores the pasted key
-- `mode` chooses streaming or non-streaming
+Use the high-level examples when you want the framework to own most of the chat lifecycle.
 
-### 2. Read the API helpers
-
-Each file now separates the two response paths:
-
-```python
-def _reply_non_streaming(...):
-    ...
-
-def _reply_streaming(...):
-    ...
-```
-
-This makes it obvious which code runs in each mode.
-
-### 3. Read `reply()`
-
-```python
-def reply(_prompt: str):
-    ...
-    if mode.value == "streaming":
-        return _reply_streaming(...)
-    return _reply_non_streaming(...)
-```
-
-`reply()` mainly builds the payload and chooses the correct helper.
-
-### 4. Read the UI
+Typical high-level shape:
 
 ```python
 @reactivity
@@ -141,38 +215,76 @@ def render_chat():
     app.chat_history(messages, height="60vh")
 
 
-render_chat()
-app.managed_chat_input(..., messages=messages, on_submit=reply)
+app.managed_chat_input(
+    "Ask...",
+    messages=messages,
+    on_submit=reply,
+)
 ```
 
-The reactive part only renders the messages.
-The input stays outside that block so it does not get rebuilt with every message update.
+For agent-oriented histories, replace `chat_history(...)` with `agent_history(...)` and, in primitive mode, replace `chat_message(...)` with `agent_turn(...)`.
 
-## What Is Different Between The Files
+## Read The Code In This Order
 
-The overall shape is the same.
+1. Read the top-level state: `app`, `messages`, `api_key`, and sometimes `mode`.
+2. Read the provider helper functions: request building, streaming parsing, and non-streaming fallback.
+3. Read `reply(...)` or `submit_prompt(...)` to see how each example maps UI input into API work.
+4. Read the reactive transcript renderer.
+5. Read the final input widget outside the reactive block.
 
-The main differences are the provider-specific request format and, in the agent example, the event schema:
+That order keeps the important distinction clear:
 
-- Gemini uses the Gemini API structure
-- OpenAI uses the OpenAI API structure
-- Gemini Agent uses Gemini both as planner and final answerer, then maps the run into `status`, `step`, `summary`, `text`, `artifact`, and `done` events
+- provider code decides what text or events come back
+- Violit code decides how those messages are rendered and submitted
 
-## The Smallest Mental Model
+## Smallest Mental Models
+
+### Plain primitive chat
 
 ```python
 messages = app.state([...])
-mode = app.state("streaming")
+
+def submit_prompt(prompt):
+    append_user_message(prompt)
+    append_empty_assistant_message()
+    app.background(run_reply).start()
+
+with app.chat_thread():
+    for message in messages.value:
+        with app.chat_message(message.get("role", "assistant")):
+            app.render_chat_message_body(message)
+
+app.chat_input(on_submit=submit_prompt)
+```
+
+### Plain high-level chat
+
+```python
+messages = app.state([...])
 
 def reply(prompt):
-    if mode.value == "streaming":
-        return stream_text_from_api(messages.value)
-    return get_text_from_api(messages.value)
+    return provider_reply(messages.value)
 
 app.chat_history(messages)
 app.managed_chat_input(messages=messages, on_submit=reply)
 ```
 
-That is the whole idea.
+### Agent primitive chat
 
-Everything else is provider-specific request formatting or, for the agent example, event generation and tool orchestration.
+```python
+with app.chat_thread():
+    for message in messages.value:
+        with app.agent_turn(...):
+            app.render_chat_message_body(message)
+
+app.chat_input(on_submit=submit_prompt, accept_file="multiple", accept_audio=True)
+```
+
+### Agent high-level chat
+
+```python
+app.agent_history(messages)
+app.managed_chat_input(messages=messages, on_submit=reply, accept_file="multiple", accept_audio=True)
+```
+
+Everything else in these files is either provider-specific HTTP formatting or agent-specific event generation.
