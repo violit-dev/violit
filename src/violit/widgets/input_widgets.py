@@ -87,7 +87,7 @@ class InputWidgetsMixin:
         return "top"
 
     def text_input(self, label, value="", key=None, on_change=None,
-                   on_submit=None,
+                   on_submit=None, live_update=False,
                    type="default", max_chars=None, placeholder="",
                    autocomplete=None, disabled=False,
                    label_visibility="visible", help=None,
@@ -101,6 +101,7 @@ class InputWidgetsMixin:
             autocomplete: HTML autocomplete attribute
             disabled: If True, widget is grayed out
             on_submit: Callback when Enter submits the current value
+            live_update: If True, update on each input event instead of only change/blur
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text shown below the input
         """
@@ -114,6 +115,7 @@ class InputWidgetsMixin:
         if help: extra["hint"] = help
         return self._input_component("input", "wa-input", label, value, on_change, key,
                          on_submit=on_submit,
+                                     live_update=live_update,
                                      cls=cls, style=style, label_visibility=label_visibility,
                                      **extra, **props)
 
