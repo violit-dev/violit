@@ -11,6 +11,7 @@ from ..context import fragment_ctx, session_ctx, view_ctx, layout_ctx
 from ..state import get_session_store
 from ..style_utils import merge_cls, merge_style
 from .input_widgets import UploadedFile
+from .text_widgets import _build_visual_stream_html
 
 
 def _reset_dynamic_chat_children(message_id: str):
@@ -1316,6 +1317,8 @@ class ChatWidgetsMixin:
         *,
         cursor: Optional[str] = "|",
         content_format: Optional[str] = None,
+        stream_key: Optional[str] = None,
+        visual_stream_smoothing: bool = True,
     ) -> bool:
         content = _chat_history_display_text(item)
         chunks = item.get("chunks") if isinstance(item, dict) else None
@@ -1327,15 +1330,27 @@ class ChatWidgetsMixin:
             if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
                 streamed_text = "".join(chunks)
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
-                if status == "streaming" and cursor:
-                    streamed_text += str(cursor)
-                if resolved_content_format == "text":
-                    self.text(streamed_text)
+                if status == "streaming" and visual_stream_smoothing:
+                    visual_key = stream_key or f"chat-stream:{id(item)}"
+                    visual_html = _build_visual_stream_html(streamed_text, stream_key=visual_key, cursor=cursor)
+                    if resolved_content_format == "text":
+                        self.html(visual_html)
+                    else:
+                        self.html(visual_html, cls="markdown")
                 else:
-                    self.markdown(streamed_text)
+                    if status == "streaming" and cursor:
+                        streamed_text += str(cursor)
+                    if resolved_content_format == "text":
+                        self.text(streamed_text)
+                    else:
+                        self.markdown(streamed_text)
             else:
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
-                self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
+                self.write_stream(
+                    chunks,
+                    cursor=cursor if status == "streaming" else None,
+                    visual_stream_smoothing=visual_stream_smoothing,
+                )
             rendered_text_from_chunks = True
             rendered = True
 
@@ -1359,6 +1374,8 @@ class ChatWidgetsMixin:
         *,
         cursor: Optional[str] = "|",
         content_format: Optional[str] = None,
+        stream_key: Optional[str] = None,
+        visual_stream_smoothing: bool = True,
     ) -> bool:
         """Render the shared chat transcript body inside a manual chat_message block.
 
@@ -1369,7 +1386,13 @@ class ChatWidgetsMixin:
         ``content_format`` accepts ``"markdown"`` or ``"text"``. When omitted,
         a dict item may supply ``item["content_format"]``; otherwise markdown is used.
         """
-        return self._render_chat_history_body(item, cursor=cursor, content_format=content_format)
+        return self._render_chat_history_body(
+            item,
+            cursor=cursor,
+            content_format=content_format,
+            stream_key=stream_key,
+            visual_stream_smoothing=visual_stream_smoothing,
+        )
 
     def _chat_history_plain_impl(
         self,
@@ -1378,6 +1401,7 @@ class ChatWidgetsMixin:
         height: Union[int, str] = "58vh",
         cursor: Optional[str] = "|",
         content_format: Optional[str] = None,
+        visual_stream_smoothing: bool = True,
         cls: str = "",
         style: str = "",
         border: bool = False,
@@ -1385,7 +1409,7 @@ class ChatWidgetsMixin:
         """Render plain chat history without agent-specific metadata."""
         items = messages.value if hasattr(messages, "value") else messages
         with self.chat_thread(height=height, cls=cls, style=style, border=border):
-            for item in items or []:
+            for index, item in enumerate(items or []):
                 role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
                 phase = _normalize_chat_phase(item)
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
@@ -1411,6 +1435,10 @@ class ChatWidgetsMixin:
                     has_attachment_output = False
                     has_visible_primitive_meta = False
 
+                item_stream_key = f"chat-history:{id(messages)}:{index}"
+                if isinstance(item, dict) and _coerce_chat_text(item.get("key")).strip():
+                    item_stream_key = f"chat-history:{_coerce_chat_text(item.get('key')).strip()}"
+
                 with self.chat_message(
                     role,
                     avatar=item.get("avatar") if isinstance(item, dict) else None,
@@ -1420,7 +1448,13 @@ class ChatWidgetsMixin:
                     status=status_text,
                     key=item.get("key") if isinstance(item, dict) else None,
                 ):
-                    if self._render_chat_history_body(item, cursor=cursor, content_format=content_format):
+                    if self._render_chat_history_body(
+                        item,
+                        cursor=cursor,
+                        content_format=content_format,
+                        stream_key=item_stream_key,
+                        visual_stream_smoothing=visual_stream_smoothing,
+                    ):
                         continue
                     if isinstance(item, dict) and has_visible_primitive_meta:
                         continue
@@ -1437,6 +1471,7 @@ class ChatWidgetsMixin:
         show_summary: bool = True,
         show_trace: bool = True,
         show_artifacts: bool = True,
+        visual_stream_smoothing: bool = True,
         cls: str = "",
         style: str = "",
         border: bool = False,
@@ -1448,7 +1483,7 @@ class ChatWidgetsMixin:
         """
         items = messages.value if hasattr(messages, "value") else messages
         with self.chat_thread(height=height, cls=cls, style=style, border=border):
-            for item in items or []:
+            for index, item in enumerate(items or []):
                 role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
                 phase = _normalize_chat_phase(item)
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
@@ -1502,6 +1537,10 @@ class ChatWidgetsMixin:
                 if not has_text_output and not has_attachment_output and not has_visible_agent_meta and role == "assistant":
                     continue
 
+                item_stream_key = f"agent-history:{id(messages)}:{index}"
+                if isinstance(item, dict) and _coerce_chat_text(item.get("key")).strip():
+                    item_stream_key = f"agent-history:{_coerce_chat_text(item.get('key')).strip()}"
+
                 with self.agent_turn(
                     role,
                     avatar=item.get("avatar") if isinstance(item, dict) else None,
@@ -1515,7 +1554,12 @@ class ChatWidgetsMixin:
                     error_text=error_value,
                     key=item.get("key") if isinstance(item, dict) else None,
                 ):
-                    if self._render_chat_history_body(item, cursor=cursor):
+                    if self._render_chat_history_body(
+                        item,
+                        cursor=cursor,
+                        stream_key=item_stream_key,
+                        visual_stream_smoothing=visual_stream_smoothing,
+                    ):
                         pass
                     elif isinstance(item, dict) and error_value:
                         pass
@@ -1535,6 +1579,7 @@ class ChatWidgetsMixin:
         show_summary: bool = True,
         show_trace: bool = True,
         show_artifacts: bool = True,
+        visual_stream_smoothing: bool = True,
         cls: str = "",
         style: str = "",
         border: bool = False,
@@ -1551,6 +1596,7 @@ class ChatWidgetsMixin:
             height=height,
             cursor=cursor,
             content_format=content_format,
+            visual_stream_smoothing=visual_stream_smoothing,
             cls=cls,
             style=style,
             border=border,
@@ -1566,6 +1612,7 @@ class ChatWidgetsMixin:
         show_summary: bool = True,
         show_trace: bool = True,
         show_artifacts: bool = True,
+        visual_stream_smoothing: bool = True,
         cls: str = "",
         style: str = "",
         border: bool = False,
@@ -1583,6 +1630,7 @@ class ChatWidgetsMixin:
             show_summary=show_summary,
             show_trace=show_trace,
             show_artifacts=show_artifacts,
+            visual_stream_smoothing=visual_stream_smoothing,
             cls=cls,
             style=style,
             border=border,
@@ -1875,11 +1923,6 @@ class ChatWidgetsMixin:
                     },
                 ])
 
-                stream_profile = _resolve_stream_profile(
-                    _resolve_stream_speed_value(stream_speed),
-                    flush_interval,
-                )
-
                 def run_reply():
                     task = _get_chat_submit_task(store, cid)
 
@@ -1923,8 +1966,6 @@ class ChatWidgetsMixin:
 
                     chunks = []
                     agent_stream_seen = False
-                    last_emit_at = time.perf_counter()
-                    pending_emit_chars = 0
                     for raw_chunk in cast(Any, candidate):
                         check_cancelled()
                         if _is_agent_event(raw_chunk):
@@ -1938,37 +1979,12 @@ class ChatWidgetsMixin:
                                 event_should_stream = bool(raw_chunk.get("stream"))
 
                             if event_type == "text" and event_text and event_should_stream:
-                                fragments = list(
-                                    _iter_stream_text_fragments(
-                                        event_text,
-                                        preferred_size=stream_profile["fragment_size"],
-                                        mode=stream_profile["fragment_mode"],
-                                    )
-                                )
-                                for fragment in fragments:
-                                    check_cancelled()
-                                    fragment_event = dict(raw_chunk)
-                                    fragment_event["text"] = fragment
-                                    _patch_last_chat_item_with_event(messages, fragment_event, cursor=stream_cursor)
-                                    pending_emit_chars += len(fragment)
-                                    if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
-                                        _push_stream_frame(self)
-                                        last_emit_at = time.perf_counter()
-                                        pending_emit_chars = 0
-                                    pause = _stream_fragment_pause(
-                                        fragment,
-                                        stream_profile["delay"],
-                                        stream_profile["punctuation_pause"],
-                                        stream_profile["space_pause"],
-                                    )
-                                    if pause > 0:
-                                        time.sleep(pause)
+                                _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
+                                _push_stream_frame(self)
                                 continue
 
                             _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
                             _push_stream_frame(self)
-                            last_emit_at = time.perf_counter()
-                            pending_emit_chars = 0
                             continue
 
                         chunk = self._extract_stream_chunk(raw_chunk)
@@ -1990,39 +2006,15 @@ class ChatWidgetsMixin:
                             _push_stream_frame(self)
                             continue
 
-                        fragments = list(
-                            _iter_stream_text_fragments(
-                                text,
-                                preferred_size=stream_profile["fragment_size"],
-                                mode=stream_profile["fragment_mode"],
-                            )
+                        chunks.append(text)
+                        _patch_last_chat_item(
+                            messages,
+                            chunks=list(chunks),
+                            status="streaming",
+                            phase="running",
+                            status_text="",
+                            cursor=stream_cursor,
                         )
-                        for fragment in fragments:
-                            check_cancelled()
-                            chunks.append(fragment)
-                            pending_emit_chars += len(fragment)
-                            _patch_last_chat_item(
-                                messages,
-                                chunks=list(chunks),
-                                status="streaming",
-                                phase="running",
-                                status_text="",
-                                cursor=stream_cursor,
-                            )
-                            if _should_emit_stream_frame(stream_profile, last_emit_at, pending_emit_chars, fragment):
-                                _push_stream_frame(self)
-                                last_emit_at = time.perf_counter()
-                                pending_emit_chars = 0
-                            pause = _stream_fragment_pause(
-                                fragment,
-                                stream_profile["delay"],
-                                stream_profile["punctuation_pause"],
-                                stream_profile["space_pause"],
-                            )
-                            if pause > 0:
-                                time.sleep(pause)
-
-                    if chunks and pending_emit_chars > 0:
                         _push_stream_frame(self)
 
                     reply = "".join(chunks).strip()

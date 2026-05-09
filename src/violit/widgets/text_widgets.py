@@ -1,5 +1,6 @@
 """Text widgets"""
 
+import base64
 import html as html_lib
 import re
 import time
@@ -286,6 +287,20 @@ def _render_markdown_html(text: str, *, allow_html: bool) -> str:
     return _sanitize_rendered_markdown_html(rendered_html)
 
 
+def _build_visual_stream_html(text: str, *, stream_key: str, cursor: Optional[str] = None) -> str:
+    encoded_target = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    safe_key = html_lib.escape(str(stream_key), quote=True)
+    safe_cursor = html_lib.escape(str(cursor or ""), quote=True)
+    return (
+        f'<div data-vl-stream-smooth="true" data-vl-stream-key="{safe_key}" '
+        f'data-vl-stream-target="{encoded_target}" data-vl-stream-cursor="{safe_cursor}" '
+        'style="display:block;min-width:0;">'
+        '<div data-vl-stream-live="true" '
+        'style="white-space:pre-wrap;word-break:break-word;line-height:1.7;"></div>'
+        '</div>'
+    )
+
+
 class TextWidgetsMixin:
     def write(self, *args, **kwargs):
         """Magic write: displays arguments based on their type
@@ -380,14 +395,19 @@ class TextWidgetsMixin:
         # Flush remaining text
         flush_buffer()
 
-    def _write_stream_to_placeholder(self, placeholder, items, cursor=None):
+    def _write_stream_to_placeholder(self, placeholder, items, cursor=None, visual_stream_smoothing: bool = True):
         with placeholder.container():
             for index, item in enumerate(items):
                 if isinstance(item, str):
                     text = item
-                    if cursor and index == len(items) - 1:
-                        text += str(cursor)
-                    self.markdown(text)
+                    is_streaming_tail = visual_stream_smoothing and bool(cursor) and index == len(items) - 1
+                    if is_streaming_tail:
+                        stream_key = f"{getattr(placeholder, 'container_id', 'stream')}:{index}"
+                        self.html(_build_visual_stream_html(text, stream_key=stream_key, cursor=cursor), cls="markdown")
+                    else:
+                        if cursor and index == len(items) - 1:
+                            text += str(cursor)
+                        self.markdown(text)
                 else:
                     self.write(item)
 
@@ -430,7 +450,7 @@ class TextWidgetsMixin:
 
         return chunk
 
-    def write_stream(self, stream, *, cursor=None):
+    def write_stream(self, stream, *, cursor=None, visual_stream_smoothing: bool = True):
         """Stream content into the app, compatible with Streamlit's st.write_stream."""
         placeholder = self.empty()
         iterator = self._normalize_stream_iterator(stream)
@@ -449,11 +469,19 @@ class TextWidgetsMixin:
                 all_text = False
                 rendered_items.append(chunk)
 
-            self._write_stream_to_placeholder(placeholder, rendered_items, cursor=cursor)
-            if cursor is not None:
-                time.sleep(0)
+            self._write_stream_to_placeholder(
+                placeholder,
+                rendered_items,
+                cursor=cursor,
+                visual_stream_smoothing=visual_stream_smoothing,
+            )
 
-        self._write_stream_to_placeholder(placeholder, rendered_items, cursor=None)
+        self._write_stream_to_placeholder(
+            placeholder,
+            rendered_items,
+            cursor=None,
+            visual_stream_smoothing=visual_stream_smoothing,
+        )
 
         if all_text:
             return "".join(item for item in rendered_items if isinstance(item, str))

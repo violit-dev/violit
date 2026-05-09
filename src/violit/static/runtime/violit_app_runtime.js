@@ -345,12 +345,139 @@
             if (typeof window._vlApplyPartBridge === 'function') {
                 window._vlApplyPartBridge(document);
             }
+            if (typeof window._vlApplyVisualStreamSmoothing === 'function') {
+                window._vlApplyVisualStreamSmoothing(document);
+            }
             if (typeof hljs !== 'undefined') {
                 document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
                     hljs.highlightElement(block);
                 });
             }
         }
+
+        function decodeBase64Utf8(value) {
+            if (typeof value !== 'string' || !value) {
+                return '';
+            }
+
+            try {
+                const binary = atob(value);
+                const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+                if (typeof TextDecoder !== 'undefined') {
+                    return new TextDecoder('utf-8').decode(bytes);
+                }
+                return decodeURIComponent(Array.from(bytes, (byte) => `%${byte.toString(16).padStart(2, '0')}`).join(''));
+            } catch (error) {
+                debugLog('[stream-smooth] Failed to decode payload', error);
+                return '';
+            }
+        }
+
+        function applyVisualStreamSmoothing(scope) {
+            const root = scope instanceof Element || scope instanceof Document ? scope : document;
+            const matches = [];
+            if (root instanceof Element && root.matches('[data-vl-stream-smooth="true"]')) {
+                matches.push(root);
+            }
+            if (root.querySelectorAll) {
+                root.querySelectorAll('[data-vl-stream-smooth="true"]').forEach((node) => matches.push(node));
+            }
+
+            window._vlVisualStreamState = window._vlVisualStreamState || {};
+            const activeKeys = new Set();
+
+            const renderState = (state) => {
+                if (!state || !state.live || !state.host || !state.host.isConnected) {
+                    return;
+                }
+                state.live.textContent = state.displayed + (state.cursor || '');
+            };
+
+            const scheduleState = (state) => {
+                if (!state || state.raf) {
+                    return;
+                }
+
+                const tick = () => {
+                    state.raf = 0;
+                    if (!state.host || !state.host.isConnected || !state.live) {
+                        return;
+                    }
+
+                    const desired = state.target || '';
+                    if (!desired.startsWith(state.displayed)) {
+                        let prefix = 0;
+                        const maxPrefix = Math.min(desired.length, state.displayed.length);
+                        while (prefix < maxPrefix && desired[prefix] === state.displayed[prefix]) {
+                            prefix += 1;
+                        }
+                        state.displayed = desired.slice(0, prefix);
+                    }
+
+                    const remaining = desired.length - state.displayed.length;
+                    if (remaining > 0) {
+                        const step = Math.min(remaining, Math.max(3, Math.ceil(remaining * 0.35)));
+                        state.displayed = desired.slice(0, state.displayed.length + step);
+                        renderState(state);
+                    } else {
+                        renderState(state);
+                        return;
+                    }
+
+                    if (state.displayed !== desired) {
+                        state.raf = requestAnimationFrame(tick);
+                    }
+                };
+
+                state.raf = requestAnimationFrame(tick);
+            };
+
+            matches.forEach((host, index) => {
+                const key = host.getAttribute('data-vl-stream-key') || `stream:${index}`;
+                activeKeys.add(key);
+
+                const live = host.querySelector('[data-vl-stream-live="true"]') || host;
+                const target = decodeBase64Utf8(host.getAttribute('data-vl-stream-target') || '');
+                const cursor = host.getAttribute('data-vl-stream-cursor') || '';
+                const existing = window._vlVisualStreamState[key] || {};
+                const state = {
+                    displayed: typeof existing.displayed === 'string' ? existing.displayed : '',
+                    target,
+                    cursor,
+                    host,
+                    live,
+                    raf: existing.raf || 0,
+                };
+
+                if (!target.startsWith(state.displayed)) {
+                    let prefix = 0;
+                    const maxPrefix = Math.min(target.length, state.displayed.length);
+                    while (prefix < maxPrefix && target[prefix] === state.displayed[prefix]) {
+                        prefix += 1;
+                    }
+                    state.displayed = target.slice(0, prefix);
+                }
+
+                window._vlVisualStreamState[key] = state;
+                renderState(state);
+                if (state.displayed !== state.target) {
+                    scheduleState(state);
+                }
+            });
+
+            Object.keys(window._vlVisualStreamState).forEach((key) => {
+                if (activeKeys.has(key)) {
+                    return;
+                }
+                const state = window._vlVisualStreamState[key];
+                if (state && state.raf) {
+                    cancelAnimationFrame(state.raf);
+                }
+                delete window._vlVisualStreamState[key];
+            });
+        }
+
+        window._vlApplyVisualStreamSmoothing = applyVisualStreamSmoothing;
 
         function connectLiteStream() {
             if (mode !== 'lite' || typeof window.EventSource === 'undefined') return null;
@@ -1223,6 +1350,7 @@
             setupSidebarResizer();
             window._vlLoadLib('Plotly', setupPlotlyResizer);
             window._vlApplyPartBridge(document);
+            window._vlApplyVisualStreamSmoothing(document);
         });
 
         if (mode === 'ws') {
@@ -2113,6 +2241,7 @@
                         // CSS fade-in on .page-container handles the smooth entrance.
                         applyUpdates(msg.payload);
                         window._vlApplyPartBridge(document);
+                        window._vlApplyVisualStreamSmoothing(document);
 
                         // Preserve the user's viewport position for same-page reactive updates.
                         if (!isNavigation && window._pendingScrollRestore) {
