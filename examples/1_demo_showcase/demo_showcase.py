@@ -290,8 +290,24 @@ def filtered_customers() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def normalized_rollout_rows(df: pd.DataFrame | None = None) -> pd.DataFrame:
+    current = (df if df is not None else rollout_rows.value).copy()
+    if current.empty:
+        return current
+
+    for column in ['cohort', 'status', 'owner', 'region']:
+        if column in current.columns:
+            current[column] = current[column].fillna('').astype(str)
+
+    for column in ['traffic_pct', 'latency_ms']:
+        if column in current.columns:
+            current[column] = pd.to_numeric(current[column], errors='coerce').fillna(0).astype(int)
+
+    return current
+
+
 def launch_latency_figure() -> go.Figure:
-    current = rollout_rows.value.copy()
+    current = normalized_rollout_rows()
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
@@ -614,7 +630,7 @@ def operations_page() -> None:
         app.button('Save cohorts', on_click=lambda: app.toast('Cohorts saved', icon='circle-check', variant='success'), variant='neutral', cls='w-full')
 
     app.status(lambda: f'Foundry release state = {launch_state.value}', state=launch_state, expanded=True)
-    app.progress(lambda: int(sum(rollout_rows.value['traffic_pct']) % 100))
+    app.progress(lambda: int(normalized_rollout_rows()['traffic_pct'].sum() % 100))
 
     tabs = app.tabs(['Cohorts', 'Telemetry', 'Launch log'])
     with tabs[0]:
@@ -624,7 +640,7 @@ def operations_page() -> None:
             height=320,
             hide_index=True,
             use_container_width=True,
-            on_change=lambda new_df: rollout_rows.set(new_df),
+            on_change=lambda new_df: rollout_rows.set(normalized_rollout_rows(new_df)),
         )
         app.text(lambda: f'Current cohorts: {len(rollout_rows.value)}', muted=True, size='small')
     with tabs[1]:
