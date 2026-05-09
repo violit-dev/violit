@@ -3,6 +3,8 @@
 import hashlib
 import re
 
+from functools import wraps
+
 from typing import Any, Union, Callable, Optional, List, Sequence
 from ..component import Component
 from ..context import rendering_ctx, fragment_ctx, layout_ctx, session_ctx
@@ -37,6 +39,16 @@ def _sanitize_layout_key(value: Any) -> str:
     if not normalized:
         return f"layout_{digest}"
     return f"{normalized[:48]}_{digest}"
+
+
+def _resolve_dynamic_layout_value(value: Any) -> Any:
+    from ..state import State, ComputedState
+
+    if isinstance(value, (State, ComputedState)):
+        return value.value
+    if callable(value):
+        return value()
+    return value
 
 
 def _resolve_columns_gap(gap: Any) -> str:
@@ -115,11 +127,6 @@ class LayoutWidgetsMixin:
             count = len(spec)
             weights = [f"{w}fr" for w in spec]
 
-        resolved_gap = _resolve_columns_gap(gap)
-        width_style = _resolve_group_width(width)
-        column_align = _resolve_flex_alignment(align, "align")
-        column_justify = _resolve_flex_alignment(justify, "justify")
-            
         columns_id = self._get_next_cid("columns_container")
         
         # Create individual column objects
@@ -133,21 +140,34 @@ class LayoutWidgetsMixin:
         def builder():
             from ..state import get_session_store
             store = get_session_store()
+
+            current_gap = _resolve_dynamic_layout_value(gap)
+            current_vertical_alignment = _resolve_dynamic_layout_value(vertical_alignment)
+            current_border = bool(_resolve_dynamic_layout_value(border))
+            current_width = _resolve_dynamic_layout_value(width)
+            current_equal_height = bool(_resolve_dynamic_layout_value(equal_height))
+            current_align = _resolve_dynamic_layout_value(align)
+            current_justify = _resolve_dynamic_layout_value(justify)
+
+            resolved_gap = _resolve_columns_gap(current_gap)
+            width_style = _resolve_group_width(current_width)
+            column_align = _resolve_flex_alignment(current_align, "align")
+            column_justify = _resolve_flex_alignment(current_justify, "justify")
             
             grid_tmpl = " ".join(weights)
             # Use CSS variable for grid-template-columns so it can be overridden by CSS
             # The --vl-cols variable and gap are set inline, but display:grid is handled by CSS class
             _va_map = {"top": "start", "center": "center", "bottom": "end"}
-            _va = _va_map.get(vertical_alignment, "start")
-            grid_align = "stretch" if (equal_height or column_align or column_justify) else _va
+            _va = _va_map.get(current_vertical_alignment, "start")
+            grid_align = "stretch" if (current_equal_height or column_align or column_justify) else _va
             container_cls = merge_cls(
                 "columns",
-                "columns--bordered" if border else "",
-                "columns--equal-height" if equal_height else "",
+                "columns--bordered" if current_border else "",
+                "columns--equal-height" if current_equal_height else "",
             )
             column_item_cls = merge_cls(
                 "column-item",
-                "column-item--bordered" if border else "",
+                "column-item--bordered" if current_border else "",
             )
             columns_html = []
             for i in range(count):
@@ -913,8 +933,23 @@ class ColumnObject:
         fragment_ctx.reset(self.token)
     
     def __getattr__(self, name):
-        """Proxy to app for method calls within column context"""
-        return getattr(self.app, name)
+        """Proxy app methods while preserving this column as the active fragment."""
+        attr = getattr(self.app, name)
+
+        if not callable(attr):
+            return attr
+
+        @wraps(attr)
+        def column_bound(*args, **kwargs):
+            from ..context import fragment_ctx
+
+            token = fragment_ctx.set(self.col_id)
+            try:
+                return attr(*args, **kwargs)
+            finally:
+                fragment_ctx.reset(token)
+
+        return column_bound
 
 
 class TabObject:

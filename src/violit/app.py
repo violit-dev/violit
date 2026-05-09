@@ -1164,6 +1164,7 @@ class App(
             for cid in cids:
                 builder = store['builders'].get(cid) or self.static_builders.get(cid)
                 if builder:
+                    token = rendering_ctx.set(cid)
                     try:
                         target_list.append(builder().render())
                     except Exception as e:
@@ -1178,6 +1179,8 @@ class App(
                             f'[Render error] <code>{cid}</code>: {e}'
                             f'</div>'
                         )
+                    finally:
+                        rendering_ctx.reset(token)
 
         # Static Components
         render_cids(self.static_order, main_html)
