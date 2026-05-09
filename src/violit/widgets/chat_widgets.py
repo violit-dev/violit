@@ -3,7 +3,7 @@ import asyncio
 import json
 import re
 import time
-from typing import Optional, Union, Callable, Any, Sequence
+from typing import Optional, Union, Callable, Any, Sequence, cast
 from ..background import CancelledError
 from ..component import Component
 from ..context import fragment_ctx, session_ctx, view_ctx, layout_ctx
@@ -642,45 +642,30 @@ class ChatWidgetsMixin:
             return "bottom"
         return "bottom" if auto_scroll else "preserve"
 
-    def message(
+    def chat_message(
         self,
-        body,
-        is_user: bool = False,
-        key: Optional[str] = None,
-        avatar_style: Optional[str] = None,
-        logo: Optional[str] = None,
-        allow_html: bool = False,
-        name: Optional[str] = None,
+        name: str,
         avatar: Optional[str] = None,
-        thinking: bool = False,
-        thinking_label: str = "Thinking...",
+        *,
+        width: Union[str, int] = "stretch",
         cls: str = "",
         style: str = "",
-        **props,
+        key: Optional[str] = None,
     ):
-        """Render one chat bubble with a streamlit-chat-like API surface."""
-        del avatar_style, props
+        """
+        Insert a primitive chat message container.
+        """
 
-        role_name = name or ("user" if is_user else "assistant")
-        resolved_avatar = avatar if avatar is not None else logo
-
-        with self.chat_message(
-            role_name,
-            avatar=resolved_avatar,
+        return self._chat_message_impl(
+            name,
+            avatar,
+            width=width,
             cls=cls,
             style=style,
-            thinking=thinking,
-            thinking_label=thinking_label,
             key=key,
-        ):
-            if body is None:
-                return
-            if allow_html:
-                self.html(str(body), unsafe_allow_html=True)
-            else:
-                self.markdown(str(body))
-    
-    def chat_message(
+        )
+
+    def agent_turn(
         self,
         name: str,
         avatar: Optional[str] = None,
@@ -701,10 +686,52 @@ class ChatWidgetsMixin:
         key: Optional[str] = None,
     ):
         """
-        Insert a chat message container.
-        
-        Streamlit-compatible chat message container.
+        Insert one advanced single-turn renderer with agent-oriented metadata.
+
+        Use this when a single message may need status, thinking state,
+        summary, trace, artifacts, or error rendering inside the bubble.
+        For whole histories, prefer ``chat_history(...)`` or
+        ``agent_history(...)``.
         """
+        return self._chat_message_impl(
+            name,
+            avatar,
+            width=width,
+            cls=cls,
+            style=style,
+            thinking=thinking,
+            thinking_label=thinking_label,
+            phase=phase,
+            status_text=status_text,
+            summary=summary,
+            trace=trace,
+            artifacts=artifacts,
+            error_text=error_text,
+            trace_collapsed=trace_collapsed,
+            artifacts_collapsed=artifacts_collapsed,
+            key=key,
+        )
+
+    def _chat_message_impl(
+        self,
+        name: str,
+        avatar: Optional[str] = None,
+        *,
+        width: Union[str, int] = "stretch",
+        cls: str = "",
+        style: str = "",
+        thinking: bool = False,
+        thinking_label: str = "Thinking...",
+        phase: Optional[str] = None,
+        status_text: str = "",
+        summary: str = "",
+        trace: Optional[list[Any]] = None,
+        artifacts: Optional[list[Any]] = None,
+        error_text: str = "",
+        trace_collapsed: bool = True,
+        artifacts_collapsed: bool = True,
+        key: Optional[str] = None,
+    ):
         cid = self._get_next_cid("chat_message")
         
         class ChatMessageContext:
@@ -871,6 +898,8 @@ class ChatWidgetsMixin:
     def chat_thread(
         self,
         height: Union[int, str] = "58vh",
+        auto_scroll: Union[bool, str] = True,
+        scroll_behavior: str = "smooth",
         cls: str = "",
         style: str = "",
         border: bool = False,
@@ -880,8 +909,13 @@ class ChatWidgetsMixin:
 
         This is the recommended container for rendering chat messages. It provides
         a scrollable thread surface with stable spacing and is designed to work
-        with chat_input(auto_scroll=...).
+        with managed_chat_input(auto_scroll=...). Primitive chat surfaces also
+        inherit the same auto-scroll behavior here, so `chat_message(...)`
+        stacks inside `chat_thread(...)` stay pinned to the latest message by
+        default.
         """
+        cid = self._get_next_cid("chat_thread")
+        scroll_mode = self._resolve_chat_scroll_mode(auto_scroll)
         surface_style = merge_style(
             """
             border-radius: var(--vl-chat-thread-radius, 24px) !important;
@@ -893,16 +927,160 @@ class ChatWidgetsMixin:
             style,
         )
         surface_cls = merge_cls("vl-chat-thread", cls)
-        return self.container(
+
+        container_ctx = self.container(
             border=border,
             height=height,
             cls=surface_cls,
             style=surface_style,
             data_chat_thread="true",
+            data_chat_thread_id=cid,
+            data_chat_scroll_mode=scroll_mode,
+            data_chat_scroll_behavior=scroll_behavior,
             **kwargs,
         )
 
-    def chat_messages(
+        class ChatThreadContext:
+            def __init__(self, app, thread_cid, wrapped_ctx, scroll_mode_value, scroll_behavior_value):
+                self.app = app
+                self.thread_cid = thread_cid
+                self.wrapped_ctx = wrapped_ctx
+                self.scroll_mode_value = scroll_mode_value
+                self.scroll_behavior_value = scroll_behavior_value
+                self._entered = None
+
+            def __enter__(self):
+                self._entered = self.wrapped_ctx.__enter__()
+                self.app.html(
+                    f"""
+                    <script>
+                    (function() {{
+                        const thread = document.querySelector('[data-chat-thread-id="{self.thread_cid}"]');
+                        if (!thread) return;
+                        const scrollMode = {json.dumps(self.scroll_mode_value)};
+                        const scrollBehavior = {json.dumps(self.scroll_behavior_value)};
+                        const observerKey = '__violitChatThreadObserver_{self.thread_cid}';
+                        const frameKey = '__violitChatThreadFrame_{self.thread_cid}';
+                        if (window[observerKey]) {{
+                            window[observerKey].disconnect();
+                        }}
+                        const syncBottom = (behavior) => {{
+                            const nextTop = Math.max(thread.scrollHeight - thread.clientHeight, 0);
+                            thread.scrollTop = nextTop;
+                            if (typeof thread.scrollTo === 'function') {{
+                                thread.scrollTo({{ top: nextTop, behavior }});
+                            }}
+                        }};
+                        const maybeScrollToLatest = () => {{
+                            if (scrollMode !== 'bottom') return;
+                            syncBottom('auto');
+                            requestAnimationFrame(() => syncBottom(scrollBehavior === 'instant' ? 'auto' : scrollBehavior));
+                            setTimeout(() => syncBottom('auto'), 80);
+                        }};
+                        const scheduleScrollToLatest = () => {{
+                            if (scrollMode !== 'bottom') return;
+                            if (window[frameKey]) {{
+                                cancelAnimationFrame(window[frameKey]);
+                            }}
+                            window[frameKey] = requestAnimationFrame(() => {{
+                                maybeScrollToLatest();
+                                requestAnimationFrame(maybeScrollToLatest);
+                            }});
+                        }};
+                        window[observerKey] = new MutationObserver((mutations) => {{
+                            for (const mutation of mutations) {{
+                                if (mutation.type === 'childList' || mutation.type === 'characterData') {{
+                                    scheduleScrollToLatest();
+                                    break;
+                                }}
+                            }}
+                        }});
+                        window[observerKey].observe(thread, {{
+                            childList: true,
+                            subtree: true,
+                            characterData: true,
+                        }});
+                        scheduleScrollToLatest();
+                        setTimeout(scheduleScrollToLatest, 120);
+                        setTimeout(scheduleScrollToLatest, 320);
+                    }})();
+                    </script>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                return self._entered
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return self.wrapped_ctx.__exit__(exc_type, exc_val, exc_tb)
+
+            def __getattr__(self, name):
+                return getattr(self._entered or self.wrapped_ctx, name)
+
+        return ChatThreadContext(self, cid, container_ctx, scroll_mode, scroll_behavior)
+
+    def _render_chat_history_body(
+        self,
+        item: Any,
+        *,
+        cursor: Optional[str] = "|",
+    ) -> bool:
+        content = item.get("content") if isinstance(item, dict) else str(item)
+        chunks = item.get("chunks") if isinstance(item, dict) else None
+
+        if chunks:
+            if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
+                streamed_text = "".join(chunks)
+                status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
+                if status == "streaming" and cursor:
+                    streamed_text += str(cursor)
+                self.markdown(streamed_text)
+            else:
+                status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
+                self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
+            return True
+
+        if content:
+            self.markdown(content)
+            return True
+
+        return False
+
+    def _chat_history_plain_impl(
+        self,
+        messages,
+        *,
+        height: Union[int, str] = "58vh",
+        cursor: Optional[str] = "|",
+        cls: str = "",
+        style: str = "",
+        border: bool = False,
+    ):
+        """Render plain chat history without agent-specific metadata."""
+        items = messages.value if hasattr(messages, "value") else messages
+        with self.chat_thread(height=height, cls=cls, style=style, border=border):
+            for item in items or []:
+                role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
+                if isinstance(item, dict):
+                    has_text_output = False
+                    chunks = item.get("chunks")
+                    if isinstance(chunks, (list, tuple)):
+                        has_text_output = any(_coerce_chat_text(chunk).strip() for chunk in chunks)
+                    if not has_text_output:
+                        has_text_output = bool(_coerce_chat_text(item.get("content")).strip())
+                    if not has_text_output and role == "assistant":
+                        continue
+
+                with self.chat_message(
+                    role,
+                    avatar=item.get("avatar") if isinstance(item, dict) else None,
+                    key=item.get("key") if isinstance(item, dict) else None,
+                ):
+                    if self._render_chat_history_body(item, cursor=cursor):
+                        continue
+                    if isinstance(item, dict) and _coerce_chat_text(item.get("error")).strip():
+                        self.markdown(_coerce_chat_text(item.get("error")))
+
+    def _chat_history_agent_impl(
         self,
         messages,
         *,
@@ -976,7 +1154,7 @@ class ChatWidgetsMixin:
                 if not has_text_output and not has_visible_agent_meta and role == "assistant":
                     continue
 
-                with self.chat_message(
+                with self.agent_turn(
                     role,
                     avatar=item.get("avatar") if isinstance(item, dict) else None,
                     thinking=thinking,
@@ -989,16 +1167,8 @@ class ChatWidgetsMixin:
                     error_text=error_value,
                     key=item.get("key") if isinstance(item, dict) else None,
                 ):
-                    if chunks:
-                        if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
-                            streamed_text = "".join(chunks)
-                            if status == "streaming" and cursor:
-                                streamed_text += str(cursor)
-                            self.markdown(streamed_text)
-                        else:
-                            self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
-                    elif content:
-                        self.markdown(content)
+                    if self._render_chat_history_body(item, cursor=cursor):
+                        pass
                     elif isinstance(item, dict) and error_value:
                         pass
                     elif isinstance(item, dict) and has_visible_agent_meta:
@@ -1006,7 +1176,7 @@ class ChatWidgetsMixin:
                     else:
                         self.caption(thinking_label)
 
-    def agent_messages(
+    def chat_history(
         self,
         messages,
         *,
@@ -1020,8 +1190,42 @@ class ChatWidgetsMixin:
         style: str = "",
         border: bool = False,
     ):
-        """Alias for chat_messages for discoverability in agent-focused apps."""
-        return self.chat_messages(
+        """Preferred high-level renderer for chat history state.
+
+        This is the canonical high-level partner for
+        ``managed_chat_input(...)`` when you want a general chat transcript.
+        It renders the shared chat message schema inside ``chat_thread(...)``
+        with plain chat bubbles and ignores agent-only rich metadata.
+        """
+        return self._chat_history_plain_impl(
+            messages,
+            height=height,
+            cursor=cursor,
+            cls=cls,
+            style=style,
+            border=border,
+        )
+
+    def agent_history(
+        self,
+        messages,
+        *,
+        height: Union[int, str] = "58vh",
+        cursor: Optional[str] = "|",
+        show_status: bool = True,
+        show_summary: bool = True,
+        show_trace: bool = True,
+        show_artifacts: bool = True,
+        cls: str = "",
+        style: str = "",
+        border: bool = False,
+    ):
+        """Primary high-level renderer for agent-oriented chat history.
+
+        Use this name when the transcript schema is primarily agent-generated
+        and rich fields like trace, artifacts, and summary are expected.
+        """
+        return self._chat_history_agent_impl(
             messages,
             height=height,
             cursor=cursor,
@@ -1035,6 +1239,66 @@ class ChatWidgetsMixin:
         )
 
     def chat_input(
+        self,
+        placeholder: str = "Your message",
+        *,
+        key: Optional[Union[str, int]] = None,
+        max_chars: Optional[int] = None,
+        accept_file: Union[bool, str] = False,
+        file_type: Optional[Union[str, Sequence[str]]] = None,
+        accept_audio: bool = False,
+        audio_sample_rate: Optional[int] = 16000,
+        disabled: bool = False,
+        on_submit: Optional[Callable[..., Any]] = None,
+        args: Optional[Sequence[Any]] = None,
+        kwargs: Optional[dict[str, Any]] = None,
+        width: Union[str, int] = "stretch",
+        height: Union[str, int] = "content",
+        cls: str = "",
+        style: str = "",
+    ):
+        """
+        Display a primitive chat input widget.
+
+        This returns the just-submitted value or ``None``.
+
+        For automatic transcript management and assistant reply orchestration,
+        use ``managed_chat_input(...)``.
+        """
+
+        return self._chat_input_impl(
+            placeholder,
+            key=key,
+            max_chars=max_chars,
+            accept_file=accept_file,
+            file_type=file_type,
+            accept_audio=accept_audio,
+            audio_sample_rate=audio_sample_rate,
+            disabled=disabled,
+            on_submit=on_submit,
+            messages=None,
+            user_name="user",
+            assistant_name="assistant",
+            stream_cursor="|",
+            stream_speed=None,
+            flush_interval=0.01,
+            args=args,
+            kwargs=kwargs,
+            width=width,
+            height=height,
+            auto_scroll=True,
+            cls=cls,
+            style=style,
+            multiline=True,
+            submit_on_enter=True,
+            submit_policy="drop",
+            auto_disable_while_pending=True,
+            show_stop_button=False,
+            pinned=None,
+            scroll_behavior="smooth",
+        )
+
+    def managed_chat_input(
         self,
         placeholder: str = "Your message",
         *,
@@ -1068,7 +1332,81 @@ class ChatWidgetsMixin:
         scroll_behavior: str = "smooth",
     ):
         """
-        Violit chat input widget with a Streamlit-like surface.
+        Display a high-level managed chat input.
+
+        This layer can append user messages, create assistant placeholders,
+        stream text or typed agent events, and manage submit/cancel policy.
+
+        Pair this with ``chat_history(...)`` for the default high-level chat
+        surface, or with ``agent_history(...)`` in agent-first apps.
+        """
+        return self._chat_input_impl(
+            placeholder,
+            key=key,
+            max_chars=max_chars,
+            accept_file=accept_file,
+            file_type=file_type,
+            accept_audio=accept_audio,
+            audio_sample_rate=audio_sample_rate,
+            disabled=disabled,
+            on_submit=on_submit,
+            messages=messages,
+            user_name=user_name,
+            assistant_name=assistant_name,
+            stream_cursor=stream_cursor,
+            stream_speed=stream_speed,
+            flush_interval=flush_interval,
+            args=args,
+            kwargs=kwargs,
+            width=width,
+            height=height,
+            auto_scroll=auto_scroll,
+            cls=cls,
+            style=style,
+            multiline=multiline,
+            submit_on_enter=submit_on_enter,
+            submit_policy=submit_policy,
+            auto_disable_while_pending=auto_disable_while_pending,
+            show_stop_button=show_stop_button,
+            pinned=pinned,
+            scroll_behavior=scroll_behavior,
+        )
+
+    def _chat_input_impl(
+        self,
+        placeholder: str = "Your message",
+        *,
+        key: Optional[Union[str, int]] = None,
+        max_chars: Optional[int] = None,
+        accept_file: Union[bool, str] = False,
+        file_type: Optional[Union[str, Sequence[str]]] = None,
+        accept_audio: bool = False,
+        audio_sample_rate: Optional[int] = 16000,
+        disabled: bool = False,
+        on_submit: Optional[Callable[..., Any]] = None,
+        messages: Optional[Any] = None,
+        user_name: str = "user",
+        assistant_name: str = "assistant",
+        stream_cursor: Optional[str] = "|",
+        stream_speed: Any = None,
+        flush_interval: float = 0.01,
+        args: Optional[Sequence[Any]] = None,
+        kwargs: Optional[dict[str, Any]] = None,
+        width: Union[str, int] = "stretch",
+        height: Union[str, int] = "content",
+        auto_scroll: Union[bool, str] = True,
+        cls: str = "",
+        style: str = "",
+        multiline: bool = True,
+        submit_on_enter: bool = True,
+        submit_policy: str = "drop",
+        auto_disable_while_pending: bool = True,
+        show_stop_button: bool = False,
+        pinned: Optional[bool] = None,
+        scroll_behavior: str = "smooth",
+    ):
+        """
+        Internal implementation for primitive and high-level chat input layers.
 
         If `messages` is provided and `on_submit` returns a string, the string
         becomes the assistant reply. If it returns an iterable, the iterable is
@@ -1120,6 +1458,7 @@ class ChatWidgetsMixin:
         def handler(val):
             if not on_submit:
                 return
+            submit_callback = on_submit
             if isinstance(val, str):
                 val = val.strip()
             if not val:
@@ -1143,7 +1482,7 @@ class ChatWidgetsMixin:
             if messages is None:
                 _set_chat_submit_inflight(store, cid, True)
                 try:
-                    on_submit(*callback_args, val, **callback_kwargs)
+                    submit_callback(*callback_args, val, **callback_kwargs)
                 finally:
                     clear_submit_lock_and_continue()
                 return
@@ -1176,7 +1515,7 @@ class ChatWidgetsMixin:
                         if task is not None:
                             task.check_cancelled()
 
-                    result = on_submit(*callback_args, val, **callback_kwargs)
+                    result = submit_callback(*callback_args, val, **callback_kwargs)
                     check_cancelled()
 
                     if isinstance(result, str):
@@ -1214,7 +1553,7 @@ class ChatWidgetsMixin:
                     agent_stream_seen = False
                     last_emit_at = time.perf_counter()
                     pending_emit_chars = 0
-                    for raw_chunk in candidate:
+                    for raw_chunk in cast(Any, candidate):
                         check_cancelled()
                         if _is_agent_event(raw_chunk):
                             agent_stream_seen = True
@@ -1488,6 +1827,7 @@ class ChatWidgetsMixin:
                             rows="1"
                             {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
                             {"disabled" if effective_disabled else ""}
+                            oninput="window.syncChatInput_{cid} && window.syncChatInput_{cid}()"
                             style="
                                 width: 100%;
                                 border: none;
@@ -1590,7 +1930,7 @@ class ChatWidgetsMixin:
                         }}
                     }};
                     setPendingPhase(getPendingPhase());
-                    const isClientPending = () => getPendingPhase() !== 'idle';
+                    const isClientPending = () => tracksAssistantMessages && getPendingPhase() !== 'idle';
                     const isPending = () => isServerPending() || isClientPending();
                     const isStopping = () => getPendingPhase() === 'stopping';
                     const isInputHardDisabled = () => {'true' if disabled else 'false'};
@@ -1640,6 +1980,19 @@ class ChatWidgetsMixin:
 
                     const syncDraftState = () => {{
                         window[draftKey] = el.value || '';
+                    }};
+
+                    window.syncChatInput_{cid} = () => {{
+                        if (
+                            getPendingPhase() === 'submitted' &&
+                            !isServerPending() &&
+                            !hasRunningAssistantMessage()
+                        ) {{
+                            setPendingPhase('idle');
+                        }}
+                        syncDraftState();
+                        autoResize();
+                        syncSendButtonState();
                     }};
 
                     const restoreDraftState = () => {{
@@ -1727,6 +2080,13 @@ class ChatWidgetsMixin:
                     const syncSendButtonState = () => {{
                         if (!sendButton) return;
                         syncPendingPhase();
+                        if (
+                            getPendingPhase() === 'submitted' &&
+                            !isServerPending() &&
+                            !hasRunningAssistantMessage()
+                        ) {{
+                            setPendingPhase('idle');
+                        }}
                         syncTextareaDisabledState();
                         renderSendButtonMode();
                         if (isStopping()) {{
@@ -1794,9 +2154,7 @@ class ChatWidgetsMixin:
                     if (!el.dataset.chatReady) {{
                         el.dataset.chatReady = 'true';
                         el.addEventListener('input', () => {{
-                            syncDraftState();
-                            autoResize();
-                            syncSendButtonState();
+                            window.syncChatInput_{cid}();
                         }});
                         el.addEventListener('keydown', function(event) {{
                             if ({submit_on_enter_js} && event.key === 'Enter' && !event.shiftKey) {{
@@ -1846,8 +2204,7 @@ class ChatWidgetsMixin:
                     }});
 
                     restoreDraftState();
-                    autoResize();
-                    syncSendButtonState();
+                    window.syncChatInput_{cid}();
 
                     setTimeout(scheduleScrollToLatest, 100);
                     setTimeout(scheduleScrollToLatest, 320);

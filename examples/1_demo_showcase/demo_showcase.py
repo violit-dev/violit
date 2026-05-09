@@ -1,5 +1,6 @@
 import random
 import sys
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -133,7 +134,6 @@ def _iter_markdown_chunks(text: str):
 
 
 def _pseudo_chat_reply(prompt: str):
-    chat_busy.set(True)
     cleaned = prompt.strip()
     lower = cleaned.lower()
     rng = random.Random(sum(ord(ch) for ch in lower) + len(chat_style.value))
@@ -144,7 +144,7 @@ def _pseudo_chat_reply(prompt: str):
         ("lite", "Lite mode uses HTMX and is often a strong choice when you want simpler HTTP transport or higher concurrency."),
         ("theme", "Theme switching stays in Python with app.set_theme(...), and this showcase starts from the bright violit_light_jewel preset."),
         ("tailwind", "Use cls first for utility styling, then add style only when you need precise gradients or shadows."),
-        ("chat", "This page shows the recommended built-in chat flow: app.chat_messages(...) plus app.chat_input(messages=..., on_submit=...)."),
+        ("chat", "This page shows the primitive Violit chat flow: app.chat_thread(...) plus app.chat_message(...) and app.chat_input(...)."),
         ("reactive", "The reactive sweet spot is direct State passing, lambda bindings, and small @app.reactivity blocks when control flow matters."),
     ]
     matched = [text for keyword, text in keyword_notes if keyword in lower]
@@ -170,17 +170,44 @@ def _pseudo_chat_reply(prompt: str):
     )
 
     if chat_mode.value == "streaming":
-        def busy_stream():
-            try:
-                for chunk in _iter_markdown_chunks(reply):
-                    yield chunk
-            finally:
-                chat_busy.set(False)
+        return _iter_markdown_chunks(reply)
 
-        return busy_stream()
-
-    chat_busy.set(False)
     return reply
+
+
+def _submit_chat_prompt(prompt: str):
+    cleaned = (prompt or "").strip()
+    if not cleaned or chat_busy.value:
+        return
+
+    chat_history.set(chat_history.value + [
+        {"role": "user", "content": cleaned},
+        {"role": "assistant", "content": ""},
+    ])
+    chat_busy.set(True)
+
+    def run():
+        result = _pseudo_chat_reply(cleaned)
+        if isinstance(result, str):
+            items = list(chat_history.value)
+            items[-1] = {"role": "assistant", "content": result}
+            chat_history.set(items)
+            return
+
+        chunks: list[str] = []
+        for chunk in result:
+            chunks.append(str(chunk))
+            items = list(chat_history.value)
+            items[-1] = {"role": "assistant", "content": "".join(chunks)}
+            chat_history.set(items)
+
+    def fail(exc):
+        items = list(chat_history.value)
+        items[-1] = {"role": "assistant", "content": f"Error:\n\n```text\n{exc}\n```"}
+        chat_history.set(items)
+        chat_busy.set(False)
+
+    app.background(run, on_complete=lambda: chat_busy.set(False), on_error=fail).start()
 
 
 def _reset_chat():
@@ -198,7 +225,7 @@ def _reset_chat():
 def whats_new_dialog():
     app.subheader("This refresh focuses on visible, current patterns")
     app.callout_success(
-        "The Chat page now uses Violit's built-in chat_messages and chat_input widgets with pseudo replies."
+        "The Chat page now uses Violit's primitive chat_thread, chat_message, and chat_input widgets with pseudo replies."
     )
     app.callout_info(
         "The Widgets page now shows a full gallery of input widgets, status feedback, and layout components — all styled with Tailwind cls."
@@ -547,24 +574,23 @@ def chat_page():
         app.button("Reset chat", on_click=_reset_chat, variant="neutral")
 
     app.callout_info(
-        "This page demonstrates the real Violit chat surface: chat_messages for the transcript and chat_input for the composer."
+        "This page demonstrates the primitive Violit chat surface: chat_thread for the transcript area plus chat_message and chat_input for interaction."
     )
 
     @app.reactivity
     def render_chat():
-        app.chat_messages(chat_history, height="62vh", border=True)
+        with app.chat_thread(height="62vh", border=True):
+            for message in chat_history.value:
+                with app.chat_message(message.get("role", "assistant")):
+                    if message.get("content"):
+                        app.markdown(str(message["content"]))
 
-    render_chat()
+    cast(Any, render_chat)()
 
     app.chat_input(
         "Ask about themes, auth, ORM, Lite mode, or styling...",
-        messages=chat_history,
-        on_submit=_pseudo_chat_reply,
+        on_submit=_submit_chat_prompt,
         disabled=bool(chat_busy.value),
-        pinned=False,
-        auto_scroll="bottom",
-        stream_speed="smooth",
-        submit_policy="drop",
     )
 
 

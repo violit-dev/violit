@@ -1,10 +1,12 @@
 # 4. Very Simple LLM Chat Application
 
-This folder contains three small chat examples:
+This folder contains small chat examples:
 
 - `demo_app_gemini.py`
 - `demo_app_openai.py`
 - `demo_app_gemini_agent.py`
+- `demo_app_compare_violit_agent.py`
+- `demo_app_compare_streamlit_agent.py`
 
 They intentionally share the same overall shape, so once you understand one file, the others should feel familiar.
 
@@ -13,6 +15,8 @@ They intentionally share the same overall shape, so once you understand one file
 - `demo_app_gemini.py`: Gemini chat example
 - `demo_app_openai.py`: OpenAI chat example
 - `demo_app_gemini_agent.py`: Gemini-powered agent example with visible trace and local workspace tools
+- `demo_app_compare_violit_agent.py`: small Violit agent-chat example for 1:1 comparison with Streamlit
+- `demo_app_compare_streamlit_agent.py`: functionally similar Streamlit version of the same fake-agent flow
 
 ## Run
 
@@ -37,6 +41,20 @@ cd examples/4_llm_chat_application
 python demo_app_gemini_agent.py
 ```
 
+### Compare: Violit
+
+```bash
+cd examples/4_llm_chat_application
+python demo_app_compare_violit_agent.py
+```
+
+### Compare: Streamlit
+
+```bash
+cd examples/4_llm_chat_application
+streamlit run demo_app_compare_streamlit_agent.py
+```
+
 ## Configure
 
 These examples do not rely on a local `.env` file.
@@ -57,15 +75,32 @@ Each app also has a simple `Mode` selectbox:
 
 This lets you compare the two response styles in the same UI.
 
+## Violit vs Streamlit Comparison Pair
+
+The two `demo_app_compare_*` files intentionally implement nearly the same agent-chat behavior:
+
+- a shared `fake_agent_stream(...)`
+- a user message followed by an assistant placeholder
+- visible running / done / failed status
+- incremental text streaming
+- reset button
+
+The difference is the framework model:
+
+- Violit uses `app.state(...)`, a small `@reactivity` block for the transcript, and `app.chat_input(..., on_submit=...)` outside the reactive block
+- Streamlit uses reruns plus `st.session_state`, and handles the chat turn inline with `if prompt := st.chat_input(...)`
+
+This pair is useful when you want to compare framework shape rather than model/provider integration.
+
 ## What The App Shows
 
-All three examples follow the same pattern:
+The three provider-backed Violit examples follow the same pattern:
 
 - create `app`, `messages`, `api_key`, and `mode`
 - show a password input for the API key
 - show a mode selectbox
 - render chat messages in a reactive block
-- keep `app.chat_input(...)` outside the reactive block
+- keep `app.managed_chat_input(...)` outside the reactive block
 
 This keeps the message list reactive while the input widget stays simple and stable.
 
@@ -115,11 +150,11 @@ def reply(_prompt: str):
 ```python
 @reactivity
 def render_chat():
-    app.chat_messages(messages, height="60vh")
+    app.chat_history(messages, height="60vh")
 
 
 render_chat()
-app.chat_input(..., messages=messages, on_submit=reply)
+app.managed_chat_input(..., messages=messages, on_submit=reply)
 ```
 
 The reactive part only renders the messages.
@@ -146,8 +181,8 @@ def reply(prompt):
         return stream_text_from_api(messages.value)
     return get_text_from_api(messages.value)
 
-app.chat_messages(messages)
-app.chat_input(messages=messages, on_submit=reply)
+app.chat_history(messages)
+app.managed_chat_input(messages=messages, on_submit=reply)
 ```
 
 That is the whole idea.

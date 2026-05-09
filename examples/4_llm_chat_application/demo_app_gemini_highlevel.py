@@ -12,13 +12,12 @@ import violit as vl
 
 MODEL = "gemini-2.5-flash"
 
-app = vl.App(title="Simple Gemini Chat", theme="violit_light_jewel", container_width="760px")
+app = vl.App(title="Simple Gemini Chat (High-level)", theme="violit_light_jewel", container_width="760px")
 messages = app.state([
     {"role": "assistant", "content": "Hello. Ask Gemini anything."}
-], key="demo_gemini_messages")
-api_key = app.state("", key="demo_gemini_api_key")
-mode = app.state("streaming", key="demo_gemini_mode")
-busy = app.state(False, key="demo_gemini_busy")
+], key="demo_gemini_highlevel_messages")
+api_key = app.state("", key="demo_gemini_highlevel_api_key")
+mode = app.state("streaming", key="demo_gemini_highlevel_mode")
 
 
 def _post_json(url: str, payload: dict, *, accept_sse: bool = False):
@@ -107,82 +106,28 @@ def reply(_prompt: str):
     return _reply_non_streaming(payload, model, api_key_value)
 
 
-def append_message(message: dict[str, Any]) -> None:
-    messages.set([*messages.value, dict(message)])
-
-
-def replace_last_message(message: dict[str, Any]) -> None:
-    items = [dict(item) for item in messages.value]
-    if not items:
-        messages.set([dict(message)])
-        return
-    items[-1] = dict(message)
-    messages.set(items)
-
-
-def run_reply(prompt: str) -> None:
-    result = reply(prompt)
-    if isinstance(result, str):
-        replace_last_message({"role": "assistant", "content": result})
-        return
-
-    chunks: list[str] = []
-    for chunk in cast(Any, result):
-        text = chunk if isinstance(chunk, str) else str(chunk)
-        if not text:
-            continue
-        chunks.append(text)
-        replace_last_message({"role": "assistant", "content": "".join(chunks)})
-
-    final_text = "".join(chunks).strip()
-    if not final_text:
-        raise RuntimeError("Gemini returned an empty response.")
-    replace_last_message({"role": "assistant", "content": final_text})
-
-
-def fail_reply(exc: Exception) -> None:
-    replace_last_message({
-        "role": "assistant",
-        "content": f"Error:\n\n```text\n{exc}\n```",
-    })
-    busy.set(False)
-
-
-def submit_prompt(prompt: str) -> None:
-    cleaned = (prompt or "").strip()
-    if not cleaned or busy.value:
-        return
-
-    append_message({"role": "user", "content": cleaned})
-    append_message({"role": "assistant", "content": ""})
-    busy.set(True)
-
-    app.background(
-        lambda prompt=cleaned: run_reply(prompt),
-        on_complete=lambda: busy.set(False),
-        on_error=fail_reply,
-    ).start()
-
-
 reactivity = cast(Any, app.reactivity)
 
-app.title("Simple Gemini Chat")
-app.caption("A very small Violit chat example.")
-app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_api_key", type="password")
-app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_mode")
+app.title("Simple Gemini Chat (High-level)")
+app.caption("High-level Violit chat example using chat_history and managed_chat_input.")
+app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_highlevel_api_key", type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_highlevel_mode")
 
 
 @reactivity
 def render_chat():
-    with app.chat_thread(height="60vh"):
-        for message in messages.value:
-            with app.chat_message(message.get("role", "assistant")):
-                if message.get("content"):
-                    app.markdown(str(message["content"]))
+    app.chat_history(messages, height="60vh")
 
 
 render_chat()
-app.chat_input("Ask Gemini", on_submit=submit_prompt, disabled=bool(busy.value))
+app.managed_chat_input(
+    "Ask Gemini",
+    messages=messages,
+    on_submit=reply,
+    pinned=False,
+    auto_scroll="bottom",
+    stream_speed="smooth",
+)
 
 
 app.run()

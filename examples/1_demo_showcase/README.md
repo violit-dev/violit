@@ -34,7 +34,7 @@ This app includes several pages in one sidebar navigation:
 - `Dashboard`: metrics, chart tabs, a dataframe, and a small `@app.reactivity` block
 - `Reactive Logic`: `State`, `app.If(...)`, `app.For(...)`, live sliders, and partial updates
 - `Widgets`: a live preview panel, `download_button`, `link_button`, dialogs, and a broader widget gallery
-- `Chat`: Violit's built-in `chat_messages(...)` and `chat_input(...)` with safe pseudo replies instead of a real AI API
+- `Chat`: Violit's built-in `chat_history(...)` and `chat_input(...)` with safe pseudo replies instead of a real AI API
 - `Settings`: curated theme presets plus runtime controls for primary color, animation mode, and selection mode
 
 There is no database setup and no API key needed.
@@ -91,7 +91,7 @@ The `Chat` page now demonstrates the recommended Violit chat pattern:
 ```python
 @app.reactivity
 def render_chat():
-    app.chat_messages(chat_history, height="62vh", border=True)
+    app.chat_history(chat_history, height="62vh", border=True)
 
 render_chat()
 

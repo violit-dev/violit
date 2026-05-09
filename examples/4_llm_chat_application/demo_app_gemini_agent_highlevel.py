@@ -47,17 +47,16 @@ TEXT_FILE_SUFFIXES = {
 }
 
 
-app = vl.App(title="Gemini Agent Chat", theme="violit_light_jewel", container_width="820px")
+app = vl.App(title="Gemini Agent Chat (High-level)", theme="violit_light_jewel", container_width="820px")
 messages = app.state([
     {
         "role": "assistant",
         "content": "Hello. Ask about the Violit workspace, request a summary, or ask for a small investigation. This example uses Gemini as a planner and answerer and shows a public reasoning trace.",
         "summary": "Gemini-backed agent demo with local tools and visible trace.",
     }
-], key="demo_gemini_agent_messages")
-api_key = app.state("", key="demo_gemini_agent_api_key")
-mode = app.state("streaming", key="demo_gemini_agent_mode")
-busy = app.state(False, key="demo_gemini_agent_busy")
+], key="demo_gemini_agent_highlevel_messages")
+api_key = app.state("", key="demo_gemini_agent_highlevel_api_key")
+mode = app.state("streaming", key="demo_gemini_agent_highlevel_mode")
 
 
 def _post_json(url: str, payload: dict, *, accept_sse: bool = False):
@@ -550,190 +549,28 @@ def reply(prompt: str):
     return stream()
 
 
-def append_message(message: dict[str, Any]) -> None:
-    messages.set([*messages.value, dict(message)])
-
-
-def patch_last_message(**updates: Any) -> None:
-    items = [dict(item) for item in messages.value]
-    if not items:
-        messages.set([dict(updates)])
-        return
-    items[-1] = {**items[-1], **updates}
-    messages.set(items)
-
-
-def _status_state(message: dict[str, Any]) -> str:
-    phase = str(message.get("phase", "")).strip().lower()
-    if phase == "error":
-        return "error"
-    if phase in {"thinking", "running"}:
-        return "running"
-    return "complete"
-
-
-def _render_trace_steps(trace: list[dict[str, Any]]) -> None:
-    for step in trace:
-        title = str(step.get("title") or step.get("kind") or "Step").strip()
-        text = str(step.get("text") or "").strip()
-        app.markdown(f"**{title}**")
-        if text:
-            app.markdown(text)
-
-
-def _render_artifacts(artifacts: list[dict[str, Any]]) -> None:
-    for artifact in artifacts:
-        title = str(artifact.get("title") or artifact.get("kind") or "Artifact").strip()
-        text = str(artifact.get("text") or "").strip()
-        app.markdown(f"**{title}**")
-        if text:
-            app.markdown(text)
-
-
-def run_reply(prompt: str) -> None:
-    text_parts: list[str] = []
-    trace: list[dict[str, Any]] = []
-    artifacts: list[dict[str, Any]] = []
-    saw_done = False
-
-    for event in cast(Any, reply(prompt)):
-        event_type = str(event.get("type", "")).strip().lower() if isinstance(event, dict) else ""
-
-        if event_type == "status":
-            patch_last_message(
-                status_text=str(event.get("text") or "Working...").strip(),
-                phase="running" if text_parts or trace or artifacts else "thinking",
-            )
-            continue
-
-        if event_type == "step":
-            trace.append({
-                "kind": event.get("kind"),
-                "title": event.get("title"),
-                "text": event.get("text"),
-            })
-            patch_last_message(
-                trace=list(trace),
-                status_text=str(event.get("text") or event.get("title") or "Running...").strip(),
-                phase="running",
-            )
-            continue
-
-        if event_type == "summary":
-            patch_last_message(summary=str(event.get("text") or "").strip())
-            continue
-
-        if event_type == "artifact":
-            artifact = event.get("artifact")
-            if isinstance(artifact, dict):
-                artifacts.append(dict(artifact))
-                patch_last_message(artifacts=list(artifacts))
-            continue
-
-        if event_type == "text":
-            text = event.get("text") if isinstance(event.get("text"), str) else str(event.get("text") or "")
-            if text:
-                text_parts.append(text)
-                patch_last_message(content="".join(text_parts), phase="running")
-            continue
-
-        if event_type == "done":
-            saw_done = True
-            patch_last_message(phase="done", status_text="")
-            continue
-
-        if event_type == "error":
-            error_text = str(event.get("text") or "Unknown error.").strip()
-            patch_last_message(
-                content=f"Error:\n\n```text\n{error_text}\n```",
-                error=error_text,
-                phase="error",
-                status_text="",
-            )
-            return
-
-    if not saw_done:
-        patch_last_message(phase="done", status_text="")
-
-
-def fail_reply(exc: Exception) -> None:
-    patch_last_message(
-        content=f"Error:\n\n```text\n{exc}\n```",
-        error=str(exc),
-        phase="error",
-        status_text="",
-    )
-    busy.set(False)
-
-
-def submit_prompt(prompt: str) -> None:
-    cleaned = (prompt or "").strip()
-    if not cleaned or busy.value:
-        return
-
-    append_message({"role": "user", "content": cleaned})
-    append_message({
-        "role": "assistant",
-        "content": "",
-        "status_text": f"Planning with Gemini {MODEL}",
-        "summary": "",
-        "trace": [],
-        "artifacts": [],
-        "error": "",
-        "phase": "thinking",
-    })
-    busy.set(True)
-
-    app.background(
-        lambda prompt=cleaned: run_reply(prompt),
-        on_complete=lambda: busy.set(False),
-        on_error=fail_reply,
-    ).start()
-
-
 reactivity = cast(Any, app.reactivity)
 
-app.title("Gemini Agent Chat")
-app.caption("A real Gemini-powered agent example rendered only with Violit primitive chat APIs.")
-app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_agent_api_key", type="password")
-app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_agent_mode")
+app.title("Gemini Agent Chat (High-level)")
+app.caption("High-level Violit agent chat example using agent_history and managed_chat_input.")
+app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_agent_highlevel_api_key", type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_agent_highlevel_mode")
 
 
 @reactivity
 def render_chat():
-    with app.chat_thread(height="64vh", border=True):
-        for message in messages.value:
-            with app.chat_message(message.get("role", "assistant")):
-                if message.get("role") == "assistant":
-                    status_label = str(message.get("status_text") or "").strip()
-                    phase = str(message.get("phase") or "done").strip().lower()
-                    if status_label or phase in {"thinking", "running", "error"}:
-                        with app.status(status_label or ("Failed" if phase == "error" else "Done"), state=_status_state(message), expanded=False):
-                            pass
-
-                if message.get("content"):
-                    app.markdown(str(message["content"]))
-
-                summary = str(message.get("summary") or "").strip()
-                if summary:
-                    app.markdown(f"**Summary**\n\n{summary}")
-
-                trace = message.get("trace") if isinstance(message.get("trace"), list) else []
-                if trace:
-                    with app.expander("Trace", expanded=False):
-                        _render_trace_steps(cast(list[dict[str, Any]], trace))
-
-                artifacts = message.get("artifacts") if isinstance(message.get("artifacts"), list) else []
-                if artifacts:
-                    with app.expander("Artifacts", expanded=False):
-                        _render_artifacts(cast(list[dict[str, Any]], artifacts))
-
-                if not message.get("content") and not summary and not trace and not artifacts and str(message.get("phase") or "").strip().lower() in {"thinking", "running"}:
-                    app.caption(str(message.get("status_text") or "Gemini is working..."))
+    app.agent_history(messages, height="64vh", border=True)
 
 
 render_chat()
-app.chat_input("Ask Gemini Agent", on_submit=submit_prompt, disabled=bool(busy.value))
+app.managed_chat_input(
+    "Ask Gemini Agent",
+    messages=messages,
+    on_submit=reply,
+    pinned=False,
+    auto_scroll="bottom",
+    stream_speed="smooth",
+)
 
 
 app.run()
