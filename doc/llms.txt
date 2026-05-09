@@ -23,6 +23,7 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 - Remember that `app.state()` is view-local by default. Use `session_state`, `app_state`, and `shared_state` when wider sharing is intentional.
 - Pass `State` objects directly to widgets when you want reactivity.
 - Input `on_change` callbacks receive the new decoded value directly, not a `State` object.
+- `selectbox(...)` uses index-based initial selection semantics. Prefer `index=` for the initial choice; do not invent `value=` for it.
 - Use `lambda:` when formatting `state.value` inside strings.
 - For complex reactive blocks, prefer `@app.reactivity`.
 - For reactive list or conditional rendering driven by changing state, prefer `app.For(...)` and `app.If(...)` before writing manual Python loops around `state.value`.
@@ -35,6 +36,7 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 - For navigation from callbacks, prefer `app.switch_page(...)`.
 - For downloads and links, prefer `app.download_button(...)`, `app.link_button(...)`, and `app.page_link(...)` over hand-written HTML.
 - For public examples that need API keys, never hardcode secrets. Prefer `app.text_input(..., type="password")` or environment loading only if the user explicitly asks for it.
+- Sidebar content is reactive like main content. Use `State` and `lambda:` normally inside `with app.sidebar:`.
 - For plain LLM chat apps, prefer `app.chat_history(...)` + `app.managed_chat_input(messages=..., on_submit=...)` over inventing a custom chat stack.
 - For agent-oriented apps, prefer `app.agent_history(...)` + `app.managed_chat_input(messages=..., on_submit=...)`.
 - For custom chat transcript layout, prefer `app.chat_thread(...)` + `with app.chat_message(...):` over raw HTML string assembly.
@@ -54,10 +56,12 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 - Do not generate `@app.fragment` or `app.fragment(...)`; it is deprecated.
 - Do not define `@app.reactivity` blocks and forget to call them.
 - Do not use `@app.reactivity` when a direct `State` pass, `lambda:`, `app.If()`, or `app.For()` already solves the problem more simply.
+- Do not initialize `app.selectbox(...)` with `value=`; use `index=` for the initial option.
 - Do not treat styling as UnoCSS-first or invent framework-specific CSS DSLs.
 - Do not assume ORM and auth require external integration first; Violit already has built-in paths.
 - Do not generate `app.password_input(...)`; use `app.text_input(..., type="password")`.
 - Do not assume `on_change` receives a `State`; it receives the current decoded value.
+- Do not assume sidebar content is static or outside the reactive system.
 - Do not hand-roll `<a download>` or custom JS download snippets when `app.download_button(...)` already solves it.
 - Do not hand-roll modal HTML when `@app.dialog(...)` fits the task.
 - Do not hardcode API keys or other secrets into examples intended for GitHub or docs.
@@ -345,6 +349,7 @@ files = app.file_uploader("Upload files", multiple=True, accept=".csv,.txt")
 ```
 
 - `on_change` callbacks receive the new value directly.
+- `selectbox(...)` should be initialized with `index=...`, not `value=...`.
 - `text_input(...)` supports `on_submit`, `type="password"`, `label_visibility`, and `help`.
 - When `on_submit` is provided, `text_input(...)` submits on Enter by default.
 - `slider(..., live_update=True)` updates continuously while dragging.
@@ -431,10 +436,15 @@ with app.expander(lambda: f"Details ({count.value})", expanded=True):
 
 # Sidebar
 app.configure_sidebar(width=320, min_width=240, max_width=520, resizable=True)
+theme_name = app.state("ocean")
 
 with app.sidebar:
     app.text("Sidebar content")
+    app.badge(lambda: f"{theme_name.value.title()} Theme")
 ```
+
+- Sidebar content participates in normal reactive updates.
+- Nested widgets inside sidebar `container(...)`, `columns(...)`, and `expander(...)` are supported and should be written like main-area widgets.
 
 ### Widget placement guidance
 
@@ -513,6 +523,17 @@ app.table(df)                                # Static HTML table
 app.metric("Revenue", "$54,230", "+12%")     # Metric card
 app.json({"key": "value"})                   # JSON viewer
 
+# Filtered master-detail UIs should keep detail selection aligned with visible rows
+visible_rows = df[df["y"] >= 20].reset_index(drop=True)
+selected_row = app.state({}, key="selected_row")
+
+if visible_rows.empty:
+    selected_row.set({})
+else:
+    visible_records = visible_rows.to_dict("records")
+    matching_row = next((row for row in visible_records if row.get("x") == selected_row.value.get("x")), None)
+    selected_row.set(matching_row or visible_records[0])
+
 # Charts
 fig = px.line(df, x="x", y="y")
 app.plotly_chart(fig)                        # Plotly chart
@@ -578,7 +599,12 @@ def reply(_prompt: str):
     return _reply_non_streaming()
 
 app.text_input("API_KEY", value=api_key.value, key="chat_api_key", type="password")
-app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="chat_mode")
+app.selectbox(
+    "Mode",
+    ["streaming", "non-streaming"],
+    index=0 if mode.value == "streaming" else 1,
+    key="chat_mode",
+)
 
 @reactivity
 def render_chat():
