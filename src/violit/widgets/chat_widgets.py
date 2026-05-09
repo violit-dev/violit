@@ -9,6 +9,7 @@ from ..component import Component
 from ..context import fragment_ctx, session_ctx, view_ctx, layout_ctx
 from ..state import get_session_store
 from ..style_utils import merge_cls, merge_style
+from .input_widgets import UploadedFile
 
 
 def _reset_dynamic_chat_children(message_id: str):
@@ -37,6 +38,143 @@ def _clone_chat_item(item: Any):
 
 def _clone_chat_items(messages_state):
     return [_clone_chat_item(item) for item in messages_state.value]
+
+
+def _build_chat_uploaded_file(payload: Any) -> Optional[UploadedFile]:
+    if isinstance(payload, UploadedFile):
+        return payload
+    if not isinstance(payload, dict):
+        return None
+
+    content = payload.get("content")
+    if not content:
+        return None
+
+    uploaded = UploadedFile(
+        payload.get("name") or "attachment",
+        payload.get("type") or "application/octet-stream",
+        int(payload.get("size") or 0),
+        content,
+    )
+    relative_path = _coerce_chat_text(payload.get("relative_path")).strip()
+    if relative_path:
+        setattr(uploaded, "relative_path", relative_path)
+    sample_rate = payload.get("sample_rate") or payload.get("audio_sample_rate")
+    if sample_rate is not None:
+        try:
+            setattr(uploaded, "sample_rate", int(sample_rate))
+        except Exception:
+            pass
+    return uploaded
+
+
+def _parse_chat_submit_value(value: Any) -> Any:
+    data = value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("{"):
+            try:
+                data = json.loads(stripped)
+            except Exception:
+                return stripped
+        else:
+            return stripped
+
+    if not isinstance(data, dict):
+        return data
+
+    files: list[UploadedFile] = []
+    raw_files = data.get("files")
+    if isinstance(raw_files, list):
+        for entry in raw_files:
+            uploaded = _build_chat_uploaded_file(entry)
+            if uploaded is not None:
+                files.append(uploaded)
+    elif isinstance(raw_files, dict):
+        uploaded = _build_chat_uploaded_file(raw_files)
+        if uploaded is not None:
+            files.append(uploaded)
+
+    audio_file = _build_chat_uploaded_file(data.get("audio"))
+    payload: dict[str, Any] = {
+        "text": _coerce_chat_text(data.get("text") if "text" in data else data.get("value")).strip(),
+        "files": files,
+        "audio": audio_file,
+    }
+    if data.get("audio_sample_rate") is not None:
+        raw_audio_sample_rate = data.get("audio_sample_rate")
+        try:
+            payload["audio_sample_rate"] = int(cast(Any, raw_audio_sample_rate))
+        except Exception:
+            payload["audio_sample_rate"] = raw_audio_sample_rate
+    return payload
+
+
+def _chat_submit_has_value(value: Any) -> bool:
+    if isinstance(value, dict):
+        return bool(
+            _coerce_chat_text(value.get("text")).strip()
+            or list(value.get("files") or [])
+            or value.get("audio")
+        )
+    if isinstance(value, str):
+        return bool(value.strip())
+    return bool(value)
+
+
+def _chat_submit_display_text(value: Any) -> str:
+    if isinstance(value, dict):
+        parts: list[str] = []
+        text = _coerce_chat_text(value.get("text")).strip()
+        if text:
+            parts.append(text)
+
+        files = [entry for entry in list(value.get("files") or []) if isinstance(entry, UploadedFile)]
+        if files:
+            names = ", ".join(file.name or "attachment" for file in files[:3])
+            extra = f" (+{len(files) - 3} more)" if len(files) > 3 else ""
+            parts.append(f"Attachments: {names}{extra}")
+
+        audio_file = value.get("audio")
+        if isinstance(audio_file, UploadedFile):
+            parts.append(f"Audio: {audio_file.name or 'voice-note'}")
+
+        return "\n\n".join(part for part in parts if part).strip()
+
+    return _coerce_chat_text(value).strip()
+
+
+def _resolve_chat_file_accept_mode(accept_file: Union[bool, str]) -> tuple[bool, bool, bool]:
+    if accept_file is True:
+        return True, False, False
+    if isinstance(accept_file, str):
+        normalized = accept_file.strip().lower()
+        if normalized in {"", "false", "off", "none"}:
+            return False, False, False
+        if normalized == "multiple":
+            return True, True, False
+        if normalized == "directory":
+            return True, True, True
+        return True, False, False
+    return False, False, False
+
+
+def _resolve_chat_file_accept_attr(file_type: Optional[Union[str, Sequence[str]]]) -> str:
+    if file_type is None:
+        return "*"
+
+    if isinstance(file_type, str):
+        tokens = [token.strip() for token in file_type.split(",") if token.strip()]
+    else:
+        tokens = [str(token).strip() for token in file_type if str(token).strip()]
+
+    normalized: list[str] = []
+    for token in tokens:
+        if token == "*" or "/" in token or token.startswith("."):
+            normalized.append(token)
+        else:
+            normalized.append(f".{token.lstrip('.')}")
+    return ",".join(normalized) or "*"
 
 
 def _patch_last_chat_item(messages_state, **updates):
@@ -1262,6 +1400,9 @@ class ChatWidgetsMixin:
 
         This returns the just-submitted value or ``None``.
 
+        When ``accept_file`` or ``accept_audio`` is enabled, the submitted
+        value becomes a dict with ``text``, ``files``, and ``audio`` keys.
+
         For automatic transcript management and assistant reply orchestration,
         use ``managed_chat_input(...)``.
         """
@@ -1336,6 +1477,9 @@ class ChatWidgetsMixin:
 
         This layer can append user messages, create assistant placeholders,
         stream text or typed agent events, and manage submit/cancel policy.
+
+        When ``accept_file`` or ``accept_audio`` is enabled, ``on_submit``
+        receives a dict with ``text``, ``files``, and ``audio`` keys.
 
         Pair this with ``chat_history(...)`` for the default high-level chat
         surface, or with ``agent_history(...)`` in agent-first apps.
@@ -1432,12 +1576,13 @@ class ChatWidgetsMixin:
         while a reply is in flight. Clicking stop temporarily locks the input
         until cancellation finishes, then the send button returns so the user
         can continue the conversation. Pressing Enter never acts as stop.
+
+        When file or audio capture is enabled, submitted values are normalized
+        into a dict payload with ``text``, ``files``, and ``audio`` entries.
         """
-        if accept_file:
-            raise NotImplementedError("accept_file is not supported yet by violit.chat_input.")
-        if accept_audio:
-            raise NotImplementedError("accept_audio is not supported yet by violit.chat_input.")
-        del file_type, audio_sample_rate
+        file_upload_enabled, file_upload_multiple, file_upload_directory = _resolve_chat_file_accept_mode(accept_file)
+        file_accept_attr = _resolve_chat_file_accept_attr(file_type)
+        audio_capture_enabled = bool(accept_audio)
 
         cid = f"chat_input_{_sanitize_chat_key(key)}" if key is not None else self._get_next_cid("chat_input")
         stop_cid = f"{cid}__stop"
@@ -1459,9 +1604,10 @@ class ChatWidgetsMixin:
             if not on_submit:
                 return
             submit_callback = on_submit
+            val = _parse_chat_submit_value(val)
             if isinstance(val, str):
                 val = val.strip()
-            if not val:
+            if not _chat_submit_has_value(val):
                 return
 
             if _is_chat_submit_inflight(store, cid):
@@ -1490,8 +1636,20 @@ class ChatWidgetsMixin:
             _set_chat_submit_inflight(store, cid, True)
 
             try:
+                user_message: dict[str, Any] = {
+                    "role": user_name,
+                    "content": _chat_submit_display_text(val),
+                    "status": "done",
+                }
+                if isinstance(val, dict):
+                    user_message["text"] = _coerce_chat_text(val.get("text")).strip()
+                    if val.get("files"):
+                        user_message["files"] = list(val.get("files") or [])
+                    if val.get("audio") is not None:
+                        user_message["audio"] = val.get("audio")
+
                 messages.set(_clone_chat_items(messages) + [
-                    {"role": user_name, "content": val, "status": "done"},
+                    user_message,
                     {
                         "role": assistant_name,
                         "content": "",
@@ -1762,6 +1920,9 @@ class ChatWidgetsMixin:
             scroll_mode_js = json.dumps(scroll_mode)
             scroll_behavior_js = json.dumps(scroll_behavior)
             stop_button_js = "true" if stop_button_active else "false"
+            file_upload_enabled_js = "true" if file_upload_enabled else "false"
+            audio_capture_enabled_js = "true" if audio_capture_enabled else "false"
+            audio_sample_rate_js = json.dumps(audio_sample_rate)
             width_style = "width: 100%;"
             if isinstance(width, int):
                 width_style = f"width: min(100%, {int(width)}px);"
@@ -1801,6 +1962,30 @@ class ChatWidgetsMixin:
                 pointer-events: none;
                 '''
                 spacer_html = ""
+
+            attachment_controls_html = ""
+            if file_upload_enabled:
+                attachment_controls_html += f'''
+                        <wa-button id="attach_{cid}" type="button" size="small" variant="text" appearance="plain" style="flex:0 0 auto; --wa-button-padding-inline: 0.55rem;" title="Attach file">
+                            <span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;line-height:0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:1rem;height:1rem;display:block;fill:currentColor;"><path d="M208 64c-61.9 0-112 50.1-112 112v184c0 79.5 64.5 144 144 144s144-64.5 144-144V184c0-35.3-28.7-64-64-64s-64 28.7-64 64v168c0 8.8-7.2 16-16 16s-16-7.2-16-16V192h-48v160c0 35.3 28.7 64 64 64s64-28.7 64-64V184c0-61.9-50.1-112-112-112s-112 50.1-112 112v176h48V184c0-35.3 28.7-64 64-64z"/></svg>
+                            </span>
+                        </wa-button>
+                        <input type="file" id="file_{cid}" accept="{html_lib.escape(file_accept_attr, quote=True)}" {'multiple' if file_upload_multiple else ''} {'webkitdirectory directory' if file_upload_directory else ''} style="display:none;" />
+                '''
+            if audio_capture_enabled:
+                attachment_controls_html += f'''
+                        <wa-button id="audio_{cid}" type="button" size="small" variant="text" appearance="plain" style="flex:0 0 auto; --wa-button-padding-inline: 0.55rem;" title="Record audio">
+                            <span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;line-height:0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" style="width:0.95rem;height:0.95rem;display:block;fill:currentColor;"><path d="M192 0c-53 0-96 43-96 96v128c0 53 43 96 96 96s96-43 96-96V96c0-53-43-96-96-96zm-128 224H32c0 88.4 63.1 162 148 174.4V480H120c-13.3 0-24 10.7-24 24s10.7 24 24 24h144c13.3 0 24-10.7 24-24s-10.7-24-24-24h-60v-81.6C288.9 386 352 312.4 352 224h-32c0 70.7-57.3 128-128 128S64 294.7 64 224z"/></svg>
+                            </span>
+                        </wa-button>
+                '''
+            attachment_meta_html = ""
+            if file_upload_enabled or audio_capture_enabled:
+                attachment_meta_html = f'''
+                        <div id="meta_{cid}" data-chat-part="input-meta" style="display:none;font-size:0.78rem;color:var(--vl-text-muted);padding:0 12px 8px;line-height:1.35;"></div>
+                '''
             
             html = f'''
             <div class="chat-input-container vl-chat-input-container{(' ' + html_lib.escape(cls, quote=True)) if cls else ''}" data-chat-pinned="{'true' if effective_pinned else 'false'}" data-chat-part="input-container" style="
@@ -1823,6 +2008,7 @@ class ChatWidgetsMixin:
                         padding: var(--vl-chat-input-surface-padding, 10px);
                         box-shadow: 0 20px 40px color-mix(in srgb, var(--vl-border) 10%, transparent);
                     ">
+                        {('<div class="vl-chat-input-toolbar" data-chat-part="input-toolbar" style="display:flex;align-items:center;gap:6px;padding:2px 6px 6px;">' + attachment_controls_html + '<div style="flex:1 1 auto;"></div></div>') if attachment_controls_html else ''}
                         <textarea id="input_{cid}" class="chat-input-box vl-chat-input-box" data-chat-part="input-textarea" placeholder={placeholder_js}
                             rows="1"
                             {"maxlength=" + '"' + str(max_chars) + '"' if max_chars else ""}
@@ -1844,6 +2030,7 @@ class ChatWidgetsMixin:
                                 box-sizing: border-box;
                             "
                         ></textarea>
+                        {attachment_meta_html}
                     </div>
                     <wa-button id="send_{cid}" type="button" size="small" variant="brand" appearance="accent" {"" if stop_button_active else ("disabled" if disabled else "")} style="flex: 0 0 var(--vl-chat-input-button-size, 48px); min-width: var(--vl-chat-input-button-size, 48px); width: var(--vl-chat-input-button-size, 48px); height: var(--vl-chat-input-button-size, 48px); margin-bottom: 2px; --wa-button-padding-inline: 0;" onclick="
                         {f'window.stopChatInput_{cid}();' if stop_button_active else f'window.submitChatInput_{cid}();'}
@@ -1859,22 +2046,43 @@ class ChatWidgetsMixin:
                 (function() {{
                     const el = document.getElementById('input_{cid}');
                     const sendButton = document.getElementById('send_{cid}');
+                    const attachButton = document.getElementById('attach_{cid}');
+                    const fileInput = document.getElementById('file_{cid}');
+                    const audioButton = document.getElementById('audio_{cid}');
+                    const attachmentMeta = document.getElementById('meta_{cid}');
                     const root = document.querySelector('[data-chat-input-root="{cid}"]');
                     if (!el) return;
                     const clientPendingKey = '__violitChatClientPending_{cid}';
                     const pendingPhaseKey = '__violitChatPendingPhase_{cid}';
                     const pendingSeenChatKey = '__violitChatPendingSeenChat_{cid}';
                     const draftKey = '__violitChatDraft_{cid}';
+                    const fileStateKey = '__violitChatFiles_{cid}';
+                    const audioStateKey = '__violitChatAudio_{cid}';
+                    const audioErrorKey = '__violitChatAudioError_{cid}';
+                    const audioRecorderKey = '__violitChatAudioRecorder_{cid}';
+                    const audioStreamKey = '__violitChatAudioStream_{cid}';
                     const initialDisabled = {'true' if effective_disabled else 'false'};
                     const autoDisableWhilePending = {'true' if auto_disable_while_pending else 'false'};
                     const tracksAssistantMessages = {'true' if messages is not None else 'false'};
                     const submitPolicy = {json.dumps(normalized_submit_policy)};
+                    const fileUploadEnabled = {file_upload_enabled_js};
+                    const audioCaptureEnabled = {audio_capture_enabled_js};
+                    const preferredAudioSampleRate = {audio_sample_rate_js};
                     const isServerPending = () => root?.dataset.chatSubmitPending === 'true';
                     if (typeof window[pendingPhaseKey] !== 'string') {{
                         window[pendingPhaseKey] = 'idle';
                     }}
                     if (typeof window[pendingSeenChatKey] !== 'boolean') {{
                         window[pendingSeenChatKey] = false;
+                    }}
+                    if (!Array.isArray(window[fileStateKey])) {{
+                        window[fileStateKey] = [];
+                    }}
+                    if (typeof window[audioStateKey] === 'undefined') {{
+                        window[audioStateKey] = null;
+                    }}
+                    if (typeof window[audioErrorKey] !== 'string') {{
+                        window[audioErrorKey] = '';
                     }}
                     const getPendingPhase = () => {{
                         const phase = window[pendingPhaseKey];
@@ -1934,6 +2142,71 @@ class ChatWidgetsMixin:
                     const isPending = () => isServerPending() || isClientPending();
                     const isStopping = () => getPendingPhase() === 'stopping';
                     const isInputHardDisabled = () => {'true' if disabled else 'false'};
+                    const getSelectedFiles = () => Array.isArray(window[fileStateKey]) ? window[fileStateKey] : [];
+                    const setSelectedFiles = (files) => {{
+                        window[fileStateKey] = Array.isArray(files) ? files : [];
+                    }};
+                    const getRecordedAudio = () => window[audioStateKey] && typeof window[audioStateKey] === 'object' ? window[audioStateKey] : null;
+                    const setRecordedAudio = (audio) => {{
+                        window[audioStateKey] = audio || null;
+                    }};
+                    const getAudioError = () => typeof window[audioErrorKey] === 'string' ? window[audioErrorKey] : '';
+                    const setAudioError = (message) => {{
+                        window[audioErrorKey] = typeof message === 'string' ? message : '';
+                    }};
+                    const isRecordingAudio = () => root?.dataset.chatAudioRecording === 'true';
+                    const setRecordingAudio = (active) => {{
+                        if (root) {{
+                            root.dataset.chatAudioRecording = active ? 'true' : 'false';
+                        }}
+                    }};
+                    const stopAudioStream = () => {{
+                        const stream = window[audioStreamKey];
+                        if (stream && typeof stream.getTracks === 'function') {{
+                            stream.getTracks().forEach((track) => track.stop());
+                        }}
+                        window[audioStreamKey] = null;
+                    }};
+                    const extensionFromMime = (mime) => {{
+                        const normalized = String(mime || '').toLowerCase();
+                        if (normalized.includes('ogg')) return 'ogg';
+                        if (normalized.includes('mp4') || normalized.includes('mpeg')) return 'm4a';
+                        if (normalized.includes('wav')) return 'wav';
+                        return 'webm';
+                    }};
+                    const renderAttachmentMeta = () => {{
+                        if (!attachmentMeta) return;
+                        const parts = [];
+                        const files = getSelectedFiles();
+                        const audio = getRecordedAudio();
+                        const audioError = getAudioError();
+                        if (isRecordingAudio()) {{
+                            parts.push('Recording audio...');
+                        }}
+                        if (files.length) {{
+                            const names = files.slice(0, 3).map((file) => file.name || 'attachment').join(', ');
+                            const extra = files.length > 3 ? ` (+${{files.length - 3}} more)` : '';
+                            parts.push(`Files: ${{names}}${{extra}}`);
+                        }}
+                        if (audio) {{
+                            parts.push(`Audio: ${{audio.name || 'voice-note'}}`);
+                        }}
+                        if (audioError) {{
+                            parts.push(audioError);
+                        }}
+                        attachmentMeta.textContent = parts.join(' • ');
+                        attachmentMeta.style.display = parts.length ? 'block' : 'none';
+                    }};
+                    const clearAttachmentState = () => {{
+                        setSelectedFiles([]);
+                        setRecordedAudio(null);
+                        setAudioError('');
+                        if (fileInput) {{
+                            fileInput.value = '';
+                        }}
+                        renderAttachmentMeta();
+                    }};
+                    const hasAttachmentValue = () => getSelectedFiles().length > 0 || !!getRecordedAudio();
                     const renderSendButtonMode = () => {{
                         if (!sendButton) return;
                         const stopActive = {'true' if show_stop_button else 'false'} && isPending();
@@ -1944,8 +2217,28 @@ class ChatWidgetsMixin:
                             ? () => window.stopChatInput_{cid}()
                             : () => window.submitChatInput_{cid}();
                     }};
+                    const renderAudioButtonMode = () => {{
+                        if (!audioButton) return;
+                        if (isRecordingAudio()) {{
+                            audioButton.innerHTML = '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;line-height:0;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width:0.95rem;height:0.95rem;display:block;fill:currentColor;"><rect x="128" y="128" width="256" height="256" rx="32" ry="32"/></svg></span>';
+                            audioButton.title = 'Stop recording';
+                            return;
+                        }}
+                        audioButton.innerHTML = '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;line-height:0;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" style="width:0.95rem;height:0.95rem;display:block;fill:currentColor;"><path d="M192 0c-53 0-96 43-96 96v128c0 53 43 96 96 96s96-43 96-96V96c0-53-43-96-96-96zm-128 224H32c0 88.4 63.1 162 148 174.4V480H120c-13.3 0-24 10.7-24 24s10.7 24 24 24h144c13.3 0 24-10.7 24-24s-10.7-24-24-24h-60v-81.6C288.9 386 352 312.4 352 224h-32c0 70.7-57.3 128-128 128S64 294.7 64 224z"/></svg></span>';
+                        audioButton.title = getRecordedAudio() ? 'Replace audio recording' : 'Record audio';
+                    }};
                     const syncTextareaDisabledState = () => {{
                         el.disabled = isInputHardDisabled() || isStopping();
+                    }};
+                    const syncAuxButtonState = () => {{
+                        const disableAttach = isInputHardDisabled() || isPending() || isStopping() || isRecordingAudio();
+                        if (attachButton) {{
+                            attachButton.disabled = disableAttach;
+                        }}
+                        if (audioButton) {{
+                            audioButton.disabled = isInputHardDisabled() || isPending();
+                        }}
+                        renderAudioButtonMode();
                     }};
                     if (!initialDisabled && !isPending()) {{
                         setPendingPhase('idle');
@@ -2088,8 +2381,9 @@ class ChatWidgetsMixin:
                             setPendingPhase('idle');
                         }}
                         syncTextareaDisabledState();
+                        syncAuxButtonState();
                         renderSendButtonMode();
-                        if (isStopping()) {{
+                        if (isStopping() || isRecordingAudio()) {{
                             sendButton.disabled = true;
                             sendButton.setAttribute('aria-disabled', 'true');
                             return;
@@ -2104,18 +2398,129 @@ class ChatWidgetsMixin:
                             sendButton.setAttribute('aria-disabled', 'true');
                             return;
                         }}
-                        const hasValue = !!((el.value || '').trim());
+                        const hasValue = !!((el.value || '').trim()) || hasAttachmentValue();
                         sendButton.disabled = !hasValue;
                         sendButton.setAttribute('aria-disabled', hasValue ? 'false' : 'true');
                     }};
 
+                    const readSelectedFiles = (files) => Promise.all(files.map((file) => new Promise((resolve, reject) => {{
+                        const reader = new FileReader();
+                        reader.onload = (event) => resolve({{
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            content: event.target?.result || '',
+                            relative_path: file.webkitRelativePath || '',
+                        }});
+                        reader.onerror = (error) => reject(error);
+                        reader.readAsDataURL(file);
+                    }})));
+
+                    const stopAudioRecording = () => {{
+                        const recorder = window[audioRecorderKey];
+                        if (recorder && recorder.state !== 'inactive') {{
+                            recorder.stop();
+                        }}
+                    }};
+
+                    const startAudioRecording = async () => {{
+                        if (!audioCaptureEnabled) return;
+                        if (isRecordingAudio()) {{
+                            stopAudioRecording();
+                            return;
+                        }}
+                        if (isInputHardDisabled() || isPending()) return;
+                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {{
+                            setAudioError('Audio recording is not supported in this browser.');
+                            renderAttachmentMeta();
+                            syncSendButtonState();
+                            return;
+                        }}
+
+                        try {{
+                            const constraints = preferredAudioSampleRate
+                                ? {{ audio: {{ sampleRate: {{ ideal: preferredAudioSampleRate }} }} }}
+                                : {{ audio: true }};
+                            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                            const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mp4'];
+                            let mimeType = '';
+                            for (const candidate of mimeCandidates) {{
+                                if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidate)) {{
+                                    mimeType = candidate;
+                                    break;
+                                }}
+                            }}
+                            const recorder = mimeType ? new MediaRecorder(stream, {{ mimeType }}) : new MediaRecorder(stream);
+                            const chunks = [];
+                            window[audioRecorderKey] = recorder;
+                            window[audioStreamKey] = stream;
+                            setAudioError('');
+                            setRecordedAudio(null);
+                            recorder.ondataavailable = (event) => {{
+                                if (event.data && event.data.size > 0) {{
+                                    chunks.push(event.data);
+                                }}
+                            }};
+                            recorder.onerror = () => {{
+                                setAudioError('Failed to capture audio.');
+                                setRecordingAudio(false);
+                                stopAudioStream();
+                                renderAttachmentMeta();
+                                syncSendButtonState();
+                            }};
+                            recorder.onstop = () => {{
+                                const blobType = (chunks[0] && chunks[0].type) || recorder.mimeType || mimeType || 'audio/webm';
+                                const blob = new Blob(chunks, {{ type: blobType }});
+                                setRecordingAudio(false);
+                                stopAudioStream();
+                                window[audioRecorderKey] = null;
+                                if (!blob.size) {{
+                                    renderAttachmentMeta();
+                                    syncSendButtonState();
+                                    return;
+                                }}
+                                const reader = new FileReader();
+                                reader.onload = (event) => {{
+                                    setRecordedAudio({{
+                                        name: `voice-note.${{extensionFromMime(blobType)}}`,
+                                        type: blobType,
+                                        size: blob.size,
+                                        content: event.target?.result || '',
+                                        sample_rate: preferredAudioSampleRate || null,
+                                    }});
+                                    renderAttachmentMeta();
+                                    syncSendButtonState();
+                                }};
+                                reader.onerror = () => {{
+                                    setAudioError('Failed to read the recorded audio.');
+                                    renderAttachmentMeta();
+                                    syncSendButtonState();
+                                }};
+                                reader.readAsDataURL(blob);
+                            }};
+                            setRecordingAudio(true);
+                            renderAttachmentMeta();
+                            syncSendButtonState();
+                            recorder.start();
+                        }} catch (_error) {{
+                            setAudioError('Microphone permission was denied or unavailable.');
+                            setRecordingAudio(false);
+                            stopAudioStream();
+                            renderAttachmentMeta();
+                            syncSendButtonState();
+                        }}
+                    }};
+
                     window.submitChatInput_{cid} = function() {{
                         syncPendingPhase();
-                        if (isInputHardDisabled() || isStopping()) return;
+                        if (isInputHardDisabled() || isStopping() || isRecordingAudio()) return;
                         const viewport = {{ x: window.scrollX, y: window.scrollY }};
                         const rawValue = el.value || '';
                         const trimmed = rawValue.trim();
-                        if (!trimmed) {{
+                        const files = fileUploadEnabled ? getSelectedFiles() : [];
+                        const audio = audioCaptureEnabled ? getRecordedAudio() : null;
+                        const hasAttachments = files.length > 0 || !!audio;
+                        if (!trimmed && !hasAttachments) {{
                             if (document.activeElement && typeof document.activeElement.blur === 'function') {{
                                 document.activeElement.blur();
                             }}
@@ -2127,6 +2532,7 @@ class ChatWidgetsMixin:
                         if (pending && submitPolicy === 'drop') {{
                             window[draftKey] = '';
                             el.value = '';
+                            clearAttachmentState();
                             autoResize();
                             syncSendButtonState();
                             return;
@@ -2136,9 +2542,13 @@ class ChatWidgetsMixin:
                             setPendingPhase('submitted');
                             window[pendingSeenChatKey] = false;
                         }}
-                        {f"window.sendAction('{cid}', trimmed);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: trimmed, _csrf_token: window._csrf_token || '', _vl_lite_stream_dirty: 'true'}}, swap: 'none'}});"}
+                        const payload = (fileUploadEnabled || audioCaptureEnabled)
+                            ? {{ text: trimmed, files: files, audio: audio, audio_sample_rate: preferredAudioSampleRate }}
+                            : trimmed;
+                        {f"window.sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload), _csrf_token: window._csrf_token || '', _vl_lite_stream_dirty: 'true'}}, swap: 'none'}});"}
                         window[draftKey] = '';
                         el.value = '';
+                        clearAttachmentState();
                         autoResize();
                         syncSendButtonState();
                         scheduleScrollToLatest();
@@ -2161,6 +2571,41 @@ class ChatWidgetsMixin:
                                 event.preventDefault();
                                 window.submitChatInput_{cid}();
                             }}
+                        }});
+                    }}
+
+                    if (attachButton && fileInput && !attachButton.dataset.chatReady) {{
+                        attachButton.dataset.chatReady = 'true';
+                        attachButton.addEventListener('click', () => {{
+                            if (attachButton.disabled) return;
+                            fileInput.click();
+                        }});
+                        fileInput.addEventListener('change', async (event) => {{
+                            const selected = Array.from(event.target.files || []);
+                            if (!selected.length) {{
+                                setSelectedFiles([]);
+                                renderAttachmentMeta();
+                                syncSendButtonState();
+                                return;
+                            }}
+                            setAudioError('');
+                            attachmentMeta && (attachmentMeta.textContent = 'Reading attachments...');
+                            if (attachmentMeta) attachmentMeta.style.display = 'block';
+                            try {{
+                                const payloads = await readSelectedFiles(selected);
+                                setSelectedFiles({"payloads" if file_upload_multiple else "payloads.slice(0, 1)"});
+                            }} catch (_error) {{
+                                setAudioError('Failed to read the selected file.');
+                            }}
+                            renderAttachmentMeta();
+                            syncSendButtonState();
+                        }});
+                    }}
+
+                    if (audioButton && !audioButton.dataset.chatReady) {{
+                        audioButton.dataset.chatReady = 'true';
+                        audioButton.addEventListener('click', () => {{
+                            startAudioRecording();
                         }});
                     }}
 
@@ -2204,6 +2649,7 @@ class ChatWidgetsMixin:
                     }});
 
                     restoreDraftState();
+                    renderAttachmentMeta();
                     window.syncChatInput_{cid}();
 
                     setTimeout(scheduleScrollToLatest, 100);
@@ -2243,6 +2689,7 @@ class ChatWidgetsMixin:
         # Usually it's read once per run.
         
         val = store.get('submitted_values', {}).pop(cid, None)
+        val = _parse_chat_submit_value(val)
         
         # To prevent stale values on subsequent non-related runs (e.g. other buttons),
         # we ideally need to know 'who' triggered the run.
