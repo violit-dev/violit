@@ -35,8 +35,10 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 - For navigation from callbacks, prefer `app.switch_page(...)`.
 - For downloads and links, prefer `app.download_button(...)`, `app.link_button(...)`, and `app.page_link(...)` over hand-written HTML.
 - For public examples that need API keys, never hardcode secrets. Prefer `app.text_input(..., type="password")` or environment loading only if the user explicitly asks for it.
-- For LLM chat apps, prefer `app.chat_messages(...)` + `app.chat_input(messages=..., on_submit=...)` over inventing a custom chat stack.
+- For plain LLM chat apps, prefer `app.chat_history(...)` + `app.managed_chat_input(messages=..., on_submit=...)` over inventing a custom chat stack.
+- For agent-oriented apps, prefer `app.agent_history(...)` + `app.managed_chat_input(messages=..., on_submit=...)`.
 - For custom chat transcript layout, prefer `app.chat_thread(...)` + `with app.chat_message(...):` over raw HTML string assembly.
+- For primitive custom chat transcripts, prefer `app.render_chat_message_body(...)`; for primitive agent transcripts, use `app.agent_turn(...)` and the shared agent message schema.
 - For database apps, prefer `vl.App(db="./app.db")` and `app.db` CRUD.
 - For auth, prefer `app.setup_auth(User)` instead of inventing a custom login stack.
 - For styling, start with `cls`. Use `style`, `configure_widget()`, `add_css()`, and `part_cls` only as needed.
@@ -59,8 +61,14 @@ Full script rerun on change → Only affected widgets update (Zero Rerun)
 - Do not hand-roll `<a download>` or custom JS download snippets when `app.download_button(...)` already solves it.
 - Do not hand-roll modal HTML when `@app.dialog(...)` fits the task.
 - Do not hardcode API keys or other secrets into examples intended for GitHub or docs.
+- Do not generate `app.chat_messages(...)`; the high-level transcript renderers are `app.chat_history(...)` and `app.agent_history(...)`.
+- Do not pass `messages=...` to primitive `app.chat_input(...)`; `messages=` belongs to `app.managed_chat_input(...)`.
 - Do not put `app.chat_input(...)` inside a reactive block when its props are static.
-- Do not manually append both user and assistant messages when using the built-in `chat_input(messages=..., on_submit=...)` flow; return the assistant reply instead.
+- Do not manually append both user and assistant messages when using `app.managed_chat_input(messages=..., on_submit=...)`; return the assistant reply or stream instead.
+- Do not mix manual `append_message(...)` / `replace_last_message(...)` transcript mutation with `managed_chat_input(...)` for the same turn.
+- Do not invent alternate agent fields such as `steps`, `tool_calls`, or `reasoning_text` when Violit already understands `phase`, `status_text`, `summary`, `trace`, `artifacts`, and `error`.
+- Do not forget that primitive attachment/audio submissions arrive as a dict with `text`, `files`, and `audio` keys when enabled.
+- Do not manually reimplement streamed chunk rendering inside chat bubbles when `app.render_chat_message_body(...)` already handles text, chunks, and default attachment previews.
 
 ---
 
@@ -574,10 +582,10 @@ app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="cha
 
 @reactivity
 def render_chat():
-    app.chat_messages(messages, height="60vh")
+    app.chat_history(messages, height="60vh")
 
 render_chat()
-app.chat_input(
+app.managed_chat_input(
     "Type a message...",
     messages=messages,
     on_submit=reply,
@@ -588,16 +596,125 @@ app.chat_input(
 ```
 
 **Preferred chat rules:**
-- Use `messages = app.state([...])` and pass it to both `app.chat_messages(...)` and `app.chat_input(...)`.
-- Let `app.chat_input(messages=..., on_submit=...)` manage the conversation flow.
-- `on_submit` can return either a `str` (non-streaming) or a generator yielding `str` chunks (streaming).
-- Keep `app.chat_messages(...)` inside `@app.reactivity` when you want only the message list to rerender.
-- Keep `app.chat_input(...)` outside the reactive block when its props are static.
+- Use `messages = app.state([...])` and pass it to `app.chat_history(...)` or `app.agent_history(...)` plus `app.managed_chat_input(...)`.
+- Let `app.managed_chat_input(messages=..., on_submit=...)` own the normal turn lifecycle: append the user turn, create the assistant placeholder, and apply returned text/events.
+- `on_submit` may return a `str`, an iterable yielding `str` chunks, or agent event dicts when building an agent-oriented transcript.
+- Keep `app.chat_history(...)` or `app.agent_history(...)` inside `@app.reactivity` when you want only the transcript to rerender.
+- Keep `app.managed_chat_input(...)` outside the reactive block when its props are static.
 - For provider-specific demos, splitting `Gemini` and `OpenAI` into separate files is often clearer than one large branching file.
 
+**Choose the right chat surface:**
+- Plain high-level chat: `app.chat_history(...)` + `app.managed_chat_input(...)`
+- Agent high-level chat: `app.agent_history(...)` + `app.managed_chat_input(...)`
+- Plain primitive chat: `app.chat_thread(...)` + `app.chat_message(...)` + `app.render_chat_message_body(...)` + `app.chat_input(...)`
+- Agent primitive chat: `app.chat_thread(...)` + `app.agent_turn(...)` + `app.render_chat_message_body(...)` + `app.chat_input(...)`
+
+**Primitive chat example:**
+
+```python
+from typing import Any, cast
+
+messages = app.state([
+    {"role": "assistant", "content": "Hello. Ask anything.", "content_format": "markdown"}
+], key="primitive_chat_messages")
+busy = app.state(False, key="primitive_chat_busy")
+reactivity = cast(Any, app.reactivity)
+
+def append_message(message: dict[str, Any]) -> None:
+    messages.set([*messages.value, dict(message)])
+
+def replace_last_message(message: dict[str, Any]) -> None:
+    items = [dict(item) for item in messages.value]
+    items[-1] = dict(message)
+    messages.set(items)
+
+def run_reply(prompt: str) -> None:
+    chunks = ["Assistant ", "reply"]
+    streamed: list[str] = []
+    for chunk in chunks:
+        streamed.append(chunk)
+        replace_last_message({
+            "role": "assistant",
+            "content": "".join(streamed),
+            "phase": "running",
+            "content_format": "markdown",
+        })
+    replace_last_message({
+        "role": "assistant",
+        "content": "".join(streamed),
+        "phase": "done",
+        "content_format": "markdown",
+    })
+
+def submit_prompt(prompt: str) -> None:
+    cleaned = str(prompt or "").strip()
+    if not cleaned or busy.value:
+        return
+
+    append_message({"role": "user", "content": cleaned, "content_format": "text"})
+    append_message({
+        "role": "assistant",
+        "content": "",
+        "phase": "thinking",
+        "thinking_label": "Thinking...",
+        "content_format": "markdown",
+    })
+    busy.set(True)
+    app.background(
+        lambda prompt=cleaned: run_reply(prompt),
+        on_complete=lambda: busy.set(False),
+        on_error=lambda exc: busy.set(False),
+    ).start()
+
+@reactivity
+def render_chat():
+    with app.chat_thread(height="60vh"):
+        for index, message in enumerate(messages.value):
+            with app.chat_message(
+                message.get("role", "assistant"),
+                phase=message.get("phase") or None,
+                thinking=(
+                    message.get("role") == "assistant"
+                    and not str(message.get("content", "") or "").strip()
+                    and str(message.get("phase", "") or "") in {"thinking", "running"}
+                ),
+                thinking_label=message.get("thinking_label", "Thinking..."),
+                status=message.get("status_text", ""),
+                key=message.get("key") or f"msg_{index}",
+            ):
+                app.render_chat_message_body(message)
+
+render_chat()
+app.chat_input("Ask...", on_submit=submit_prompt, disabled=bool(busy.value), pinned=False)
+```
+
+**Agent message schema that Violit already understands:**
+
+```python
+{
+    "role": "assistant",
+    "content": "Final answer",
+    "content_format": "markdown",   # optional: "markdown" or "text"
+    "phase": "thinking",            # optional: thinking | running | done | error
+    "status_text": "Searching docs",# optional short live status
+    "summary": "Checked 3 files.",  # optional agent summary
+    "trace": [                        # optional step list
+        {"kind": "tool", "title": "search_workspace", "text": "Found 2 matches."}
+    ],
+    "artifacts": [                    # optional output cards
+        {"kind": "file", "title": "doc/llms.txt", "text": "Updated prompt guidance."}
+    ],
+    "error": "",                     # optional agent error text
+    "files": [],                      # optional uploaded file list
+    "audio": None,                    # optional uploaded audio
+}
+```
+
+`app.agent_history(...)` and primitive `app.agent_turn(...)` are designed around that schema. Reuse these field names instead of inventing a parallel protocol.
+
 **When to use manual chat rendering instead:**
-- Only build a custom `app.write(...)` / `app.container(...)` chat UI when the user explicitly wants a fully custom transcript layout.
-- Otherwise, prefer the built-in chat widgets.
+- Use manual rendering when you need per-turn control, custom placeholders, explicit background orchestration, or you want to surface attachments/audio before reply generation.
+- Otherwise, prefer the built-in high-level chat widgets.
 
 **Custom transcript widgets:**
 
@@ -610,7 +727,7 @@ with app.chat_thread(height="60vh"):
         app.markdown("Show me the latest report.")
 ```
 
-Use `chat_thread()` and `chat_message()` when you want custom message composition but still want Violit's built-in chat styling.
+Use `chat_thread()` and `chat_message()` when you want custom message composition but still want Violit's built-in chat styling. When rendering message dicts from state, prefer `app.render_chat_message_body(...)` so streamed chunks, attachments, and content format are handled consistently.
 
 ---
 
