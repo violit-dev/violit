@@ -36,7 +36,7 @@ def _sanitize_markdown_href(raw_href: str) -> str | None:
     return _sanitize_markdown_url(
         raw_href,
         allowed_schemes={"http", "https", "mailto", "tel"},
-        allow_relative=False,
+        allow_relative=True,
     )
 
 
@@ -137,8 +137,8 @@ def _sanitize_rendered_markdown_html(rendered_html: str) -> str:
     def replace_anchor(match: re.Match[str]) -> str:
         attrs_before = match.group(1) or ""
         raw_href = match.group(3)
-        attrs_after = match.group(4) or ""
-        label = match.group(5)
+        attrs_after = match.group(5) or ""
+        label = match.group(6)
         safe_href = _sanitize_markdown_href(raw_href)
         if safe_href is None:
             return f'{label} ({html_lib.escape(html_lib.unescape(raw_href))})'
