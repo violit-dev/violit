@@ -1281,6 +1281,7 @@ class ChatWidgetsMixin:
         content = _chat_history_display_text(item)
         chunks = item.get("chunks") if isinstance(item, dict) else None
         rendered = False
+        rendered_text_from_chunks = False
 
         if chunks:
             if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
@@ -1292,9 +1293,10 @@ class ChatWidgetsMixin:
             else:
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
                 self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
+            rendered_text_from_chunks = True
             rendered = True
 
-        if content:
+        if content and not rendered_text_from_chunks:
             self.markdown(content)
             rendered = True
 
