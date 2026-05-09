@@ -1,3 +1,4 @@
+import base64
 import html as html_lib
 import asyncio
 import json
@@ -142,6 +143,121 @@ def _chat_submit_display_text(value: Any) -> str:
         return "\n\n".join(part for part in parts if part).strip()
 
     return _coerce_chat_text(value).strip()
+
+
+def _guess_chat_attachment_mime_type(file_name: str) -> str:
+    suffix = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+    return {
+        "gif": "image/gif",
+        "jpeg": "image/jpeg",
+        "jpg": "image/jpeg",
+        "png": "image/png",
+        "svg": "image/svg+xml",
+        "webp": "image/webp",
+    }.get(suffix, "application/octet-stream")
+
+
+def _chat_attachment_mime_type(entry: UploadedFile) -> str:
+    return _coerce_chat_text(getattr(entry, "type", "")).strip() or _guess_chat_attachment_mime_type(getattr(entry, "name", ""))
+
+
+def _is_chat_image_attachment(entry: UploadedFile) -> bool:
+    return _chat_attachment_mime_type(entry).startswith("image/")
+
+
+def _chat_attachment_data_url(entry: UploadedFile) -> str:
+    file_bytes = entry.getvalue() or b""
+    if not file_bytes:
+        return ""
+    header = _coerce_chat_text(getattr(entry, "header", "")).strip()
+    encoded = base64.b64encode(file_bytes).decode("utf-8")
+    if header.startswith("data:"):
+        return f"{header},{encoded}"
+    return f"data:{_chat_attachment_mime_type(entry)};base64,{encoded}"
+
+
+def _chat_message_files(item: Any) -> list[UploadedFile]:
+    if not isinstance(item, dict):
+        return []
+    return [entry for entry in list(item.get("files") or []) if isinstance(entry, UploadedFile)]
+
+
+def _chat_message_audio(item: Any) -> Optional[UploadedFile]:
+    if not isinstance(item, dict):
+        return None
+    audio_file = item.get("audio")
+    return audio_file if isinstance(audio_file, UploadedFile) else None
+
+
+def _chat_message_has_attachments(item: Any) -> bool:
+    return bool(_chat_message_files(item) or _chat_message_audio(item))
+
+
+def _chat_history_display_text(item: Any) -> str:
+    if not isinstance(item, dict):
+        return _coerce_chat_text(item)
+    if _chat_message_has_attachments(item):
+        text = _coerce_chat_text(item.get("text")).strip()
+        if text:
+            return text
+    return _coerce_chat_text(item.get("content"))
+
+
+def _render_chat_attachment_html(item: Any) -> str:
+    files = _chat_message_files(item)
+    audio_file = _chat_message_audio(item)
+    if not files and audio_file is None:
+        return ""
+
+    image_files = [entry for entry in files if _is_chat_image_attachment(entry)]
+    other_files = [entry for entry in files if not _is_chat_image_attachment(entry)]
+    sections: list[str] = []
+
+    if image_files:
+        image_cards: list[str] = []
+        for entry in image_files[:4]:
+            data_url = _chat_attachment_data_url(entry)
+            if not data_url:
+                continue
+            safe_name = html_lib.escape(_coerce_chat_text(entry.name) or "image")
+            image_cards.append(
+                f'''<figure data-chat-part="attachment-image" style="margin:0;display:flex;flex-direction:column;gap:0.35rem;min-width:0;flex:0 1 220px;">
+<img src="{html_lib.escape(data_url, quote=True)}" alt="{html_lib.escape(safe_name, quote=True)}" style="display:block;width:100%;max-width:220px;max-height:180px;object-fit:cover;border-radius:16px;border:1px solid color-mix(in srgb, var(--vl-border) 72%, transparent);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent);background:var(--vl-bg-card);" />
+<figcaption style="font-size:0.74rem;color:var(--vl-text-muted);line-height:1.3;word-break:break-word;">{safe_name}</figcaption>
+</figure>'''
+            )
+        if image_cards:
+            sections.append(
+                "<div data-chat-part=\"attachment-images\" style=\"display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:0.8rem;\">"
+                + "".join(image_cards)
+                + "</div>"
+            )
+
+    badges: list[str] = []
+    for entry in other_files[:6]:
+        safe_name = html_lib.escape(_coerce_chat_text(entry.name) or "attachment")
+        badges.append(
+            f'''<span data-chat-part="attachment-badge" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.42rem 0.72rem;border-radius:999px;background:color-mix(in srgb, var(--vl-bg-card) 88%, white 12%);border:1px solid color-mix(in srgb, var(--vl-border) 78%, transparent);font-size:0.78rem;color:var(--vl-text);max-width:100%;">
+<span style="display:inline-flex;align-items:center;justify-content:center;padding:0.18rem 0.38rem;border-radius:999px;background:color-mix(in srgb, var(--vl-text-muted) 14%, transparent);font-size:0.62rem;font-weight:700;letter-spacing:0.04em;">FILE</span>
+<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{safe_name}</span>
+</span>'''
+        )
+    if audio_file is not None:
+        safe_audio_name = html_lib.escape(_coerce_chat_text(audio_file.name) or "voice-note")
+        badges.append(
+            f'''<span data-chat-part="attachment-badge" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.42rem 0.72rem;border-radius:999px;background:color-mix(in srgb, var(--vl-bg-card) 88%, white 12%);border:1px solid color-mix(in srgb, var(--vl-border) 78%, transparent);font-size:0.78rem;color:var(--vl-text);max-width:100%;">
+<span style="display:inline-flex;align-items:center;justify-content:center;padding:0.18rem 0.38rem;border-radius:999px;background:color-mix(in srgb, var(--vl-primary) 12%, transparent);font-size:0.62rem;font-weight:700;letter-spacing:0.04em;">AUDIO</span>
+<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{safe_audio_name}</span>
+</span>'''
+        )
+    if badges:
+        sections.append(
+            "<div data-chat-part=\"attachment-badges\" style=\"display:flex;flex-wrap:wrap;gap:0.55rem;margin-top:0.8rem;\">"
+            + "".join(badges)
+            + "</div>"
+        )
+
+    return "".join(sections)
 
 
 def _resolve_chat_file_accept_mode(accept_file: Union[bool, str]) -> tuple[bool, bool, bool]:
@@ -1162,8 +1278,9 @@ class ChatWidgetsMixin:
         *,
         cursor: Optional[str] = "|",
     ) -> bool:
-        content = item.get("content") if isinstance(item, dict) else str(item)
+        content = _chat_history_display_text(item)
         chunks = item.get("chunks") if isinstance(item, dict) else None
+        rendered = False
 
         if chunks:
             if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
@@ -1175,13 +1292,32 @@ class ChatWidgetsMixin:
             else:
                 status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
                 self.write_stream(chunks, cursor=cursor if status == "streaming" else None)
-            return True
+            rendered = True
 
         if content:
             self.markdown(content)
-            return True
+            rendered = True
 
-        return False
+        attachment_html = _render_chat_attachment_html(item)
+        if attachment_html:
+            self.html(attachment_html)
+            rendered = True
+
+        return rendered
+
+    def render_chat_message_body(
+        self,
+        item: Any,
+        *,
+        cursor: Optional[str] = "|",
+    ) -> bool:
+        """Render the shared chat transcript body inside a manual chat_message block.
+
+        Use this helper when building primitive chat UIs with ``chat_thread(...)`` and
+        ``chat_message(...)`` directly. It renders plain text, streamed chunks, and the
+        default attachment previews used by ``chat_history(...)`` and ``agent_history(...)``.
+        """
+        return self._render_chat_history_body(item, cursor=cursor)
 
     def _chat_history_plain_impl(
         self,
@@ -1204,8 +1340,9 @@ class ChatWidgetsMixin:
                     if isinstance(chunks, (list, tuple)):
                         has_text_output = any(_coerce_chat_text(chunk).strip() for chunk in chunks)
                     if not has_text_output:
-                        has_text_output = bool(_coerce_chat_text(item.get("content")).strip())
-                    if not has_text_output and role == "assistant":
+                        has_text_output = bool(_chat_history_display_text(item).strip())
+                    has_attachment_output = _chat_message_has_attachments(item)
+                    if not has_text_output and not has_attachment_output and role == "assistant":
                         continue
 
                 with self.chat_message(
@@ -1254,7 +1391,8 @@ class ChatWidgetsMixin:
                 if isinstance(chunks, (list, tuple)):
                     has_text_output = any(_coerce_chat_text(chunk).strip() for chunk in chunks)
                 if not has_text_output:
-                    has_text_output = bool(_coerce_chat_text(content).strip())
+                    has_text_output = bool(_chat_history_display_text(item).strip())
+                has_attachment_output = _chat_message_has_attachments(item)
 
                 is_agent_item = False
                 if isinstance(item, dict):
@@ -1289,7 +1427,7 @@ class ChatWidgetsMixin:
                     )
                 )
 
-                if not has_text_output and not has_visible_agent_meta and role == "assistant":
+                if not has_text_output and not has_attachment_output and not has_visible_agent_meta and role == "assistant":
                     continue
 
                 with self.agent_turn(
@@ -2052,6 +2190,7 @@ class ChatWidgetsMixin:
                     const attachmentMeta = document.getElementById('meta_{cid}');
                     const root = document.querySelector('[data-chat-input-root="{cid}"]');
                     if (!el) return;
+                    const surface = root?.querySelector('[data-chat-part="input-surface"]');
                     const clientPendingKey = '__violitChatClientPending_{cid}';
                     const pendingPhaseKey = '__violitChatPendingPhase_{cid}';
                     const pendingSeenChatKey = '__violitChatPendingSeenChat_{cid}';
@@ -2061,6 +2200,7 @@ class ChatWidgetsMixin:
                     const audioErrorKey = '__violitChatAudioError_{cid}';
                     const audioRecorderKey = '__violitChatAudioRecorder_{cid}';
                     const audioStreamKey = '__violitChatAudioStream_{cid}';
+                    const dropDepthKey = '__violitChatDropDepth_{cid}';
                     const initialDisabled = {'true' if effective_disabled else 'false'};
                     const autoDisableWhilePending = {'true' if auto_disable_while_pending else 'false'};
                     const tracksAssistantMessages = {'true' if messages is not None else 'false'};
@@ -2083,6 +2223,9 @@ class ChatWidgetsMixin:
                     }}
                     if (typeof window[audioErrorKey] !== 'string') {{
                         window[audioErrorKey] = '';
+                    }}
+                    if (typeof window[dropDepthKey] !== 'number') {{
+                        window[dropDepthKey] = 0;
                     }}
                     const getPendingPhase = () => {{
                         const phase = window[pendingPhaseKey];
@@ -2207,6 +2350,23 @@ class ChatWidgetsMixin:
                         renderAttachmentMeta();
                     }};
                     const hasAttachmentValue = () => getSelectedFiles().length > 0 || !!getRecordedAudio();
+                    const isFileDragEvent = (event) => {{
+                        const types = Array.from(event?.dataTransfer?.types || []);
+                        return types.includes('Files');
+                    }};
+                    const setDropActive = (active) => {{
+                        if (!surface) return;
+                        surface.dataset.chatDropActive = active ? 'true' : 'false';
+                        surface.style.borderColor = active
+                            ? 'color-mix(in srgb, var(--vl-primary, #7c3aed) 72%, white 28%)'
+                            : 'color-mix(in srgb, var(--vl-border) 80%, transparent)';
+                        surface.style.background = active
+                            ? 'color-mix(in srgb, var(--vl-bg-card) 84%, var(--vl-primary, #7c3aed) 16%)'
+                            : 'color-mix(in srgb, var(--vl-bg-card) 92%, var(--vl-bg) 8%)';
+                        surface.style.boxShadow = active
+                            ? '0 0 0 3px color-mix(in srgb, var(--vl-primary, #7c3aed) 18%, transparent), 0 20px 40px color-mix(in srgb, var(--vl-border) 10%, transparent)'
+                            : '0 20px 40px color-mix(in srgb, var(--vl-border) 10%, transparent)';
+                    }};
                     const renderSendButtonMode = () => {{
                         if (!sendButton) return;
                         const stopActive = {'true' if show_stop_button else 'false'} && isPending();
@@ -2415,6 +2575,27 @@ class ChatWidgetsMixin:
                         reader.onerror = (error) => reject(error);
                         reader.readAsDataURL(file);
                     }})));
+                    const processSelectedFiles = async (selected) => {{
+                        if (!selected.length) {{
+                            setSelectedFiles([]);
+                            renderAttachmentMeta();
+                            syncSendButtonState();
+                            return;
+                        }}
+                        setAudioError('');
+                        if (attachmentMeta) {{
+                            attachmentMeta.textContent = 'Reading attachments...';
+                            attachmentMeta.style.display = 'block';
+                        }}
+                        try {{
+                            const payloads = await readSelectedFiles(selected);
+                            setSelectedFiles({"payloads" if file_upload_multiple else "payloads.slice(0, 1)"});
+                        }} catch (_error) {{
+                            setAudioError('Failed to read the selected file.');
+                        }}
+                        renderAttachmentMeta();
+                        syncSendButtonState();
+                    }};
 
                     const stopAudioRecording = () => {{
                         const recorder = window[audioRecorderKey];
@@ -2582,23 +2763,47 @@ class ChatWidgetsMixin:
                         }});
                         fileInput.addEventListener('change', async (event) => {{
                             const selected = Array.from(event.target.files || []);
-                            if (!selected.length) {{
-                                setSelectedFiles([]);
-                                renderAttachmentMeta();
-                                syncSendButtonState();
-                                return;
+                            await processSelectedFiles(selected);
+                        }});
+                    }}
+
+                    if (surface && fileUploadEnabled && !surface.dataset.chatDropReady) {{
+                        surface.dataset.chatDropReady = 'true';
+                        surface.addEventListener('dragenter', (event) => {{
+                            if (!isFileDragEvent(event)) return;
+                            event.preventDefault();
+                            window[dropDepthKey] = Number(window[dropDepthKey] || 0) + 1;
+                            if (!isInputHardDisabled() && !isPending() && !isStopping() && !isRecordingAudio()) {{
+                                setDropActive(true);
                             }}
-                            setAudioError('');
-                            attachmentMeta && (attachmentMeta.textContent = 'Reading attachments...');
-                            if (attachmentMeta) attachmentMeta.style.display = 'block';
-                            try {{
-                                const payloads = await readSelectedFiles(selected);
-                                setSelectedFiles({"payloads" if file_upload_multiple else "payloads.slice(0, 1)"});
-                            }} catch (_error) {{
-                                setAudioError('Failed to read the selected file.');
+                        }});
+                        surface.addEventListener('dragover', (event) => {{
+                            if (!isFileDragEvent(event)) return;
+                            event.preventDefault();
+                            if (event.dataTransfer) {{
+                                event.dataTransfer.dropEffect = 'copy';
                             }}
-                            renderAttachmentMeta();
-                            syncSendButtonState();
+                            if (!isInputHardDisabled() && !isPending() && !isStopping() && !isRecordingAudio()) {{
+                                setDropActive(true);
+                            }}
+                        }});
+                        surface.addEventListener('dragleave', (event) => {{
+                            if (!isFileDragEvent(event)) return;
+                            event.preventDefault();
+                            window[dropDepthKey] = Math.max(Number(window[dropDepthKey] || 1) - 1, 0);
+                            if (window[dropDepthKey] === 0) {{
+                                setDropActive(false);
+                            }}
+                        }});
+                        surface.addEventListener('drop', async (event) => {{
+                            if (!isFileDragEvent(event)) return;
+                            event.preventDefault();
+                            window[dropDepthKey] = 0;
+                            setDropActive(false);
+                            if (isInputHardDisabled() || isPending() || isStopping() || isRecordingAudio()) return;
+                            const selected = Array.from(event.dataTransfer?.files || []);
+                            if (!selected.length) return;
+                            await processSelectedFiles(selected);
                         }});
                     }}
 
@@ -2649,6 +2854,7 @@ class ChatWidgetsMixin:
                     }});
 
                     restoreDraftState();
+                    setDropActive(false);
                     renderAttachmentMeta();
                     window.syncChatInput_{cid}();
 
