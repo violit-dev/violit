@@ -702,33 +702,24 @@ class App(
 
         if curr_frag:
             # Inside a fragment
-            # IMPORTANT: Still respect sidebar context even inside fragments!
-            if l_ctx == "sidebar":
-                # Register to sidebar, not fragment
-                if sid is None:
-                    self.static_builders[cid] = builder
-                    if action: self.static_actions[cid] = action
-                    if cid not in self.static_sidebar_order:
-                        self.static_sidebar_order.append(cid)
-                else:
-                    if action: store['actions'][cid] = action
-                    store['sidebar_order'].append(cid)
+            # Fragment nesting must win even inside the sidebar.
+            # The parent fragment/container is already placed in sidebar_order
+            # when it is registered at the root. Hoisting fragment children to
+            # sidebar_order breaks DOM nesting and prevents correct updates.
+            if sid is None:
+                # Static nesting (e.g. inside columns/expander/container at top level)
+                if curr_frag not in self.static_fragment_components:
+                    self.static_fragment_components[curr_frag] = []
+                self.static_fragment_components[curr_frag].append((cid, builder))
+                # Store action and builder for components inside fragments
+                if action:
+                    self.static_actions[cid] = action
+                self.static_builders[cid] = builder
             else:
-                # Normal fragment component registration
-                if sid is None:
-                    # Static nesting (e.g. inside columns/expander at top level)
-                    if curr_frag not in self.static_fragment_components:
-                        self.static_fragment_components[curr_frag] = []
-                    self.static_fragment_components[curr_frag].append((cid, builder))
-                    # Store action and builder for components inside fragments
-                    if action:
-                        self.static_actions[cid] = action
-                    self.static_builders[cid] = builder
-                else:
-                    # Dynamic Nesting (Runtime)
-                    if curr_frag not in store['fragment_components']:
-                        store['fragment_components'][curr_frag] = []
-                    store['fragment_components'][curr_frag].append((cid, builder))
+                # Dynamic Nesting (Runtime)
+                if curr_frag not in store['fragment_components']:
+                    store['fragment_components'][curr_frag] = []
+                store['fragment_components'][curr_frag].append((cid, builder))
         else:
             if sid is None:
                 # Static Root Registration
