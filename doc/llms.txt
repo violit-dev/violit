@@ -414,12 +414,80 @@ with tab2:
 # Expander
 with app.expander("Details", expanded=False):
     app.text("Hidden content")
+    app.button("Default button in expander")  # full width by default
+
+# Reactive expander title
+count = app.state(3)
+with app.expander(lambda: f"Details ({count.value})", expanded=True):
+    app.text(lambda: f"Current count: {count.value}")
 
 # Sidebar
 app.configure_sidebar(width=320, min_width=240, max_width=520, resizable=True)
 
 with app.sidebar:
     app.text("Sidebar content")
+```
+
+### Widget placement guidance
+
+For simple layout, start with `columns(...)`, `container(...)`, and widget label options before reaching for custom CSS.
+
+```python
+# Vertical placement inside each column
+left, right = app.columns([1, 2], gap="medium", equal_height=True, justify="center")
+
+# Horizontal placement inside each column
+left, right = app.columns([1, 2], gap="medium", align="center")
+
+# Local override for one side only
+left, right = app.columns([1, 2], gap="medium", equal_height=True)
+with left:
+    with app.container(fill_height=True, justify="bottom"):
+        app.text("Bottom only on the left")
+
+# Selectbox label placement without extra columns
+app.selectbox("Language", ["Python", "JS"], label_position="left")
+app.selectbox("Mode", ["A", "B"], label_visibility="collapsed")
+
+# Button width: default full-width, explicit override when needed
+app.button("Default button")  # full width by default
+app.button("Fixed width button", style="width: 280px;")
+app.button("Relative width button", style="width: 60%;")
+
+with app.expander("Actions", expanded=True):
+    app.button("Default button in expander")  # also full width by default
+    app.button("Fixed width in expander", style="width: 280px;")
+    app.button("Relative width in expander", style="width: 60%;")
+```
+
+**Placement rules of thumb:**
+- Use `columns(..., justify=...)` for top/center/bottom placement of each column's child box.
+- Use `columns(..., align=...)` for start/center/end placement across the horizontal axis inside each column.
+- Use `equal_height=True` when vertical placement needs real extra height to be visible.
+- Use `container(fill_height=True, justify=...)` when only one side of a row needs local vertical adjustment.
+- Re-entering the same column or tab object multiple times in one render is a valid pattern. This is supported for layouts like `for item in items: with left: ...; with right: ...`.
+- Use widget-native options like `label_position` and `label_visibility` before adding extra layout wrappers around forms.
+- Default button placement should assume full-width behavior in normal vertical layout containers, including inside `app.expander(...)`.
+- If a widget should be narrower than the container, prefer an explicit `style="width: ...;"` override instead of assuming special-case layout behavior inside expander or container blocks.
+- When a widget label, title, or summary depends on state, pass the `State` object directly or use `lambda:`. Do not eagerly freeze it with `f"...{state.value}..."` unless a static snapshot is intentional.
+- For reactive placement/content, prefer `app.text(state)` or `app.text(lambda: ...)` over `app.text(state.value)` or eager f-strings.
+- For reactive expander headers, use `with app.expander(lambda: f"...{state.value}..."):`. The summary/title updates live while preserving the expander body content.
+- `justify` aligns the outer child box, not the exact visual baseline of every widget. Different widgets can still look slightly off because their internal control heights, padding, or label areas differ.
+- If exact visual alignment matters, add a shared inner frame with the same width/min-height on both sides, or apply small `cls` / `style` adjustments intentionally.
+
+```python
+items = app.session_state([{"text": "text"}, {"text": "another text"}], key="items")
+
+@app.reactivity
+def render_rows():
+    left, right = app.columns(2)
+    for item in items.value:
+        with left:
+            app.text(item["text"])
+        with right:
+            app.selectbox("value", ["test"])
+
+render_rows()
 ```
 
 ---
@@ -636,6 +704,17 @@ app.button(
 - `configure_widget()`: defaults for a widget family
 - `add_css()`: global reusable classes and `::part()` selectors
 - `part_cls`: advanced Shadow DOM part overrides
+
+For micro-adjustments after the main layout is already correct, `cls` is the preferred final step.
+
+```python
+app.selectbox("Mode", ["A", "B"], cls="mt-4")
+app.selectbox("Mode", ["A", "B"], cls="translate-y-[10px]")
+app.selectbox("Mode", ["A", "B"], cls="relative top-[8px]")
+app.selectbox("Mode", ["A", "B"], cls="ml-[8%] w-[82%]")
+```
+
+Use these as intentional fine-tuning, not as a substitute for fixing the parent `columns(...)` / `container(...)` structure first.
 
 ## Background Tasks & Interval Timers
 
