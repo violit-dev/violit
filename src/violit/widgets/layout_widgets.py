@@ -92,7 +92,8 @@ class LayoutWidgetsMixin:
     """Layout widgets (columns, container, expander, tabs, empty, dialog)"""
     
     def columns(self, spec: Union[int, Sequence[Union[int, float]]] = 2, gap="small", vertical_alignment="top", cls: str = "", style: str = "",
-                border: bool = False, width: Union[str, int] = "stretch", equal_height: bool = False):
+                border: bool = False, width: Union[str, int] = "stretch", equal_height: bool = False,
+                align: Optional[str] = None, justify: Optional[str] = None):
         """Create column layout - spec can be an int (equal width) or list of weights
         
         Args:
@@ -104,6 +105,8 @@ class LayoutWidgetsMixin:
             border: Whether to add a border/card surface to each column
             width: Width of the column group - "stretch" or a fixed width
             equal_height: Whether sibling columns should stretch to a matching height
+            align: Cross-axis alignment for children inside each column
+            justify: Main-axis alignment for children inside each column
         """
         if isinstance(spec, int):
             count = spec
@@ -114,6 +117,8 @@ class LayoutWidgetsMixin:
 
         resolved_gap = _resolve_columns_gap(gap)
         width_style = _resolve_group_width(width)
+        column_align = _resolve_flex_alignment(align, "align")
+        column_justify = _resolve_flex_alignment(justify, "justify")
             
         columns_id = self._get_next_cid("columns_container")
         
@@ -134,6 +139,7 @@ class LayoutWidgetsMixin:
             # The --vl-cols variable and gap are set inline, but display:grid is handled by CSS class
             _va_map = {"top": "start", "center": "center", "bottom": "end"}
             _va = _va_map.get(vertical_alignment, "start")
+            grid_align = "stretch" if (equal_height or column_align or column_justify) else _va
             container_cls = merge_cls(
                 "columns",
                 "columns--bordered" if border else "",
@@ -156,7 +162,13 @@ class LayoutWidgetsMixin:
                     f'{"".join(col_content)}</div>'
                 )
             joined_cols = "".join(columns_html)
-            container_style = f"--vl-cols: {grid_tmpl}; --vl-gap: {resolved_gap}; align-items: {_va};"
+            container_style = f"--vl-cols: {grid_tmpl}; --vl-gap: {resolved_gap}; align-items: {grid_align};"
+            if column_align:
+                container_style += f" --vl-column-align: {column_align};"
+            if column_justify:
+                container_style += f" --vl-column-justify: {column_justify};"
+            if column_align or column_justify:
+                container_style += " --vl-column-single-child-height: auto;"
             if width_style:
                 container_style = f"{container_style} {width_style}"
             container_html = f'<div id="{columns_id}" class="{container_cls}" style="{container_style}">{joined_cols}</div>'

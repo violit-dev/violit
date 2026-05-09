@@ -63,6 +63,29 @@ class InputWidgetsMixin:
             return 'style="display:none;"', ''
         return '', ''  # "visible"
 
+    @staticmethod
+    def _select_label_visibility_attrs(label, label_visibility):
+        """Return the rendered label and host attrs for select-like controls."""
+        rendered_label = label
+        host_attrs = {}
+
+        if label_visibility == "hidden":
+            host_attrs["data-vl-label-visibility"] = "hidden"
+        elif label_visibility == "collapsed":
+            rendered_label = ""
+            host_attrs["data-vl-label-visibility"] = "collapsed"
+            if label:
+                host_attrs["aria-label"] = label
+
+        return rendered_label, host_attrs
+
+    @staticmethod
+    def _normalize_label_position(label_position):
+        value = str(label_position or "top").strip().lower()
+        if value in {"top", "left", "right", "bottom"}:
+            return value
+        return "top"
+
     def text_input(self, label, value="", key=None, on_change=None,
                    on_submit=None,
                    type="default", max_chars=None, placeholder="",
@@ -400,7 +423,7 @@ class InputWidgetsMixin:
 
     def selectbox(self, label, options, index=0, key=None, on_change=None,
                    placeholder=None, disabled=False,
-                   label_visibility="visible", help=None,
+                   label_visibility="visible", label_position="top", help=None,
                    cls: str = "", style: str = "", **props):
         """Single select dropdown
 
@@ -408,10 +431,12 @@ class InputWidgetsMixin:
             placeholder: Placeholder text when nothing is selected
             disabled: If True, widget is grayed out
             label_visibility: "visible", "hidden", or "collapsed"
+            label_position: "top", "left", "right", or "bottom"
             help: Tooltip / help text
         """
         cid = self._get_next_cid("select")
         user_part_cls = props.pop("part_cls", None)
+        label_position = self._normalize_label_position(label_position)
         
         state_key = key or f"select:{label}"
         default_val = options[index] if options else None
@@ -437,7 +462,11 @@ class InputWidgetsMixin:
             
             encoded_cv = InputWidgetsMixin._select_encode(cv) if cv is not None else ''
             escaped_cv = html_lib.escape(encoded_cv, quote=True)
-            escaped_label = html_lib.escape(str(label), quote=True)
+            internal_label_visibility = label_visibility if label_position == "top" else "collapsed"
+            rendered_label, label_attrs = self._select_label_visibility_attrs(label, internal_label_visibility)
+            if label_position != "top" and label:
+                label_attrs["aria-label"] = label
+            escaped_label = html_lib.escape(str(rendered_label), quote=True)
             
             if self.mode == 'lite':
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "change", "hx-swap": "none", "name": "value"}
@@ -483,11 +512,12 @@ class InputWidgetsMixin:
             if placeholder: extra_attrs['placeholder'] = placeholder
             if disabled: extra_attrs['disabled'] = True
             if help: extra_attrs['hint'] = help
-            for k, v in {**attrs, **extra_attrs, **props}.items():
+            for k, v in {**attrs, **label_attrs, **extra_attrs, **props}.items():
                 if v is True:
                     select_html += f' {k}'
                 elif v is not False and v is not None:
-                    select_html += f' {k}="{v}"'
+                    escaped_attr = html_lib.escape(str(v), quote=True)
+                    select_html += f' {k}="{escaped_attr}"'
             select_html += f'>{opts_html}</wa-select>{listener_script}'
             
             _wd = self._get_widget_defaults("selectbox")
@@ -513,7 +543,23 @@ class InputWidgetsMixin:
                     }};
                     run();
                 }})();</script>'''
-            return Component(None, id=cid, content=wrap_html(select_html + part_bridge_script, _fc, _fs))
+            content_html = select_html + part_bridge_script
+            if label_position != "top":
+                label_html = ""
+                if label_visibility != "collapsed" and label:
+                    escaped_external_label = html_lib.escape(str(label))
+                    label_cls = "vl-selectbox-external-label"
+                    if label_visibility == "hidden":
+                        label_cls += " vl-selectbox-external-label--hidden"
+                    label_html = f'<div class="{label_cls}">{escaped_external_label}</div>'
+                control_html = f'<div class="vl-selectbox-control">{content_html}</div>'
+                if label_position == "right":
+                    content_html = f'<div class="vl-selectbox-layout vl-selectbox-layout--right">{control_html}{label_html}</div>'
+                elif label_position == "bottom":
+                    content_html = f'<div class="vl-selectbox-layout vl-selectbox-layout--bottom">{control_html}{label_html}</div>'
+                else:
+                    content_html = f'<div class="vl-selectbox-layout vl-selectbox-layout--left">{label_html}{control_html}</div>'
+            return Component(None, id=cid, content=wrap_html(content_html, _fc, _fs))
             
         self._register_component(cid, builder, action=action)
         return s
@@ -606,6 +652,7 @@ class InputWidgetsMixin:
             _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            rendered_label, label_attrs = self._select_label_visibility_attrs(label, label_visibility)
             # wa-select: cls/style applied via wrapper since this is a Web Awesome component
             # label escaping handled by Component.render(); opts_html is raw so manually escaped above
             _ms_extra = {}
@@ -613,9 +660,10 @@ class InputWidgetsMixin:
             if disabled: _ms_extra['disabled'] = True
             if help: _ms_extra['hint'] = help
             if max_selections: _ms_extra['max-options-visible'] = max_selections
+            _ms_extra.update(label_attrs)
             if _part_cls:
                 _ms_extra["data_vl_part_cls"] = serialize_part_cls(_part_cls)
-            inner = Component("wa-select", id=cid, label=label, content=opts_html, multiple=True, with_clear=True, appearance="outlined", **_ms_extra)
+            inner = Component("wa-select", id=cid, label=rendered_label, content=opts_html, multiple=True, with_clear=True, appearance="outlined", **_ms_extra)
             inner_html = inner.render() + listener_script
             if _part_cls:
                 inner_html += self._part_bridge_script(f'wa-select#{cid}[data-vl-part-cls]')

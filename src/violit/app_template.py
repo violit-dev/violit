@@ -157,6 +157,41 @@ HTML_TEMPLATE = r"""
             display: block;
             margin-bottom: 1rem;
         }
+        wa-select[data-vl-label-visibility="hidden"]::part(form-control-label) {
+            visibility: hidden;
+        }
+        wa-select[data-vl-label-visibility="collapsed"]::part(form-control-label) {
+            display: none;
+        }
+        .vl-selectbox-layout {
+            display: flex;
+            width: 100%;
+            gap: 0.85rem;
+        }
+        .vl-selectbox-layout--left,
+        .vl-selectbox-layout--right {
+            align-items: center;
+        }
+        .vl-selectbox-layout--bottom {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .vl-selectbox-control {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .vl-selectbox-control > wa-select {
+            margin-bottom: 0;
+        }
+        .vl-selectbox-external-label {
+            flex: 0 0 auto;
+            font-weight: 600;
+            color: var(--vl-text);
+            white-space: nowrap;
+        }
+        .vl-selectbox-external-label--hidden {
+            visibility: hidden;
+        }
         wa-textarea::part(form-control-input) {
             min-height: 6.25rem;
         }
@@ -281,7 +316,8 @@ HTML_TEMPLATE = r"""
         .column-item {
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
+            justify-content: var(--vl-column-justify, flex-start);
+            align-items: var(--vl-column-align, stretch);
             min-width: 0;
         }
         .columns.columns--bordered > .column-item {
@@ -294,7 +330,7 @@ HTML_TEMPLATE = r"""
             height: 100%;
         }
         .columns.columns--equal-height > .column-item > :first-child:last-child {
-            height: 100%;
+            height: var(--vl-column-single-child-height, 100%);
         }
         .vl-metric-card {
             box-sizing: border-box;
