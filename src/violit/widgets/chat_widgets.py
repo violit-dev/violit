@@ -2652,6 +2652,13 @@ class ChatWidgetsMixin:
                         sendButton.setAttribute('aria-disabled', hasValue ? 'false' : 'true');
                     }};
 
+                    const isInteractiveChatTarget = (target) => {{
+                        if (!(target instanceof Element)) return false;
+                        return !!target.closest(
+                            'textarea, input, button, a, label, select, option, summary, [contenteditable="true"], [data-chat-interactive="true"], wa-button, wa-icon-button, wa-select, wa-input, wa-textarea, wa-dropdown'
+                        );
+                    }};
+
                     const readSelectedFiles = (files) => Promise.all(files.map((file) => new Promise((resolve, reject) => {{
                         const reader = new FileReader();
                         reader.onload = (event) => resolve({{
@@ -2852,6 +2859,7 @@ class ChatWidgetsMixin:
 
                     if (attachButton && fileInput && !attachButton.dataset.chatReady) {{
                         attachButton.dataset.chatReady = 'true';
+                        attachButton.dataset.chatInteractive = 'true';
                         attachButton.addEventListener('click', () => {{
                             if (attachButton.disabled) return;
                             fileInput.click();
@@ -2904,8 +2912,18 @@ class ChatWidgetsMixin:
 
                     if (audioButton && !audioButton.dataset.chatReady) {{
                         audioButton.dataset.chatReady = 'true';
+                        audioButton.dataset.chatInteractive = 'true';
                         audioButton.addEventListener('click', () => {{
                             startAudioRecording();
+                        }});
+                    }}
+
+                    if (surface && !surface.dataset.chatFocusReady) {{
+                        surface.dataset.chatFocusReady = 'true';
+                        surface.addEventListener('click', (event) => {{
+                            if (isInputHardDisabled() || isStopping()) return;
+                            if (isInteractiveChatTarget(event.target)) return;
+                            focusInput();
                         }});
                     }}
 
