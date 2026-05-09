@@ -1,771 +1,833 @@
-import random
-import sys
-from typing import Any, cast
+from __future__ import annotations
 
-import numpy as np
+import json
+import sys
+from typing import Any
+
 import pandas as pd
+import plotly.graph_objects as go
 
 import violit as vl
+from violit.state import get_session_store
+from violit.theme import Theme
 
 
-mode = "lite" if "--lite" in sys.argv else "ws"
+mode = 'lite' if '--lite' in sys.argv else 'ws'
 
+SHOWCASE_THEME_OPTIONS = list(Theme.PRESETS.keys())
 
 app = vl.App(
-    title="Violit Showcase",
+    title='Northstar Foundry',
     mode=mode,
-    theme="violit_light_jewel",
-    container_width="1200px",
+    theme='violit_cloud_foundry',
+    container_width='1240px',
+    widget_gap='1rem',
 )
+app.configure_sidebar(width=312, min_width=272, max_width=384, resizable=True)
+app.configure_widget('button', part_cls={'base': 'font-medium'})
 
 
-chat_history = app.state(
+def badge_chip(text: str, *, variant: str = 'neutral') -> None:
+    app.badge(text, variant=variant, pill=True)
+
+
+def money(value: int) -> str:
+    return f'${value:,}'
+
+
+def compact_label(text: str) -> None:
+    app.caption(text)
+
+
+def theme_badge_label(theme_name: str) -> str:
+    return f"{theme_name.removeprefix('violit_').replace('_', ' ').title()} Theme"
+
+
+months = pd.date_range('2025-01-01', periods=12, freq='ME').strftime('%b')
+
+pipeline_df = pd.DataFrame(
+    {
+        'month': months,
+        'net_new_arr': [188, 194, 201, 209, 218, 226, 223, 234, 243, 252, 264, 278],
+        'expansion_arr': [92, 95, 98, 102, 107, 111, 114, 118, 123, 129, 136, 144],
+        'inbound_tickets': [126, 131, 137, 143, 149, 154, 158, 163, 167, 171, 175, 179],
+        'tickets_closed': [118, 123, 128, 134, 139, 145, 149, 154, 159, 164, 169, 174],
+        'sla_hit_rate': [93, 93, 92, 92, 91, 90, 91, 92, 92, 93, 94, 95],
+        'nps': [54, 55, 56, 57, 58, 59, 60, 62, 63, 64, 66, 68],
+    }
+)
+pipeline_df['total_arr'] = pipeline_df['net_new_arr'] + pipeline_df['expansion_arr']
+
+customer_df = pd.DataFrame(
     [
-        {
-            "role": "assistant",
-            "content": (
-                "Welcome to the Violit Showcase. This chat demo uses Violit's built-in "
-                "chat widgets and only returns pseudo replies, so it is safe to publish "
-                "without any real API keys."
-            ),
-        }
-    ],
-    key="showcase_chat_history",
-)
-chat_mode = app.state("streaming", key="showcase_chat_mode")
-chat_style = app.state("Builder", key="showcase_chat_style")
-chat_busy = app.state(False, key="showcase_chat_busy")
-dashboard_seed = app.state(0, key="showcase_dashboard_seed")
-
-
-def _preview_card_html(title: str, mood: str, accent: str, note: str, glow: int) -> str:
-    glow_size = 30 + int(glow * 0.55)
-    mood_copy = {
-        "Soft": "Gentle spacing, softer accents, and a calmer hero feel.",
-        "Playful": "Friendly surfaces, lively contrast, and rounded calls to action.",
-        "Bold": "Higher contrast, a punchier top border, and a stronger launch card.",
-    }
-    safe_title = title.strip() or "Violit Studio"
-    safe_note = note.strip() or "Reactive widgets, calmer state management, and polished UI surfaces."
-    return f"""
-    <div style="padding:1.5rem; border-radius:1.8rem; background:linear-gradient(180deg,#FFFFFF 0%, #FAF5FF 100%); border:1px solid #E9D5FF; border-top:8px solid {accent}; box-shadow:0 24px {glow_size}px rgba(109,40,217,0.16);">
-      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1rem;">
-        <div>
-          <div style="font-size:0.74rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:{accent};">Tailwind-friendly preview</div>
-          <h3 style="margin:0.35rem 0 0; font-size:1.45rem; line-height:1.2; color:var(--vl-text);">{safe_title}</h3>
-        </div>
-        <div style="padding:0.45rem 0.8rem; border-radius:999px; background:{accent}; color:white; font-size:0.78rem; font-weight:700; white-space:nowrap;">{mood}</div>
-      </div>
-      <p style="margin:0; line-height:1.75; color:var(--vl-text-muted);">{safe_note}</p>
-      <div style="margin-top:1rem; padding:1rem; border-radius:1rem; background:white; border:1px dashed #DDD6FE;">
-        <div style="font-weight:700; color:var(--vl-text);">Style note</div>
-        <div style="margin-top:0.3rem; color:var(--vl-text-muted);">{mood_copy[mood]}</div>
-      </div>
-    </div>
-    """
-
-
-_HOME_COLORS = {
-    "violet":  ("#7C3AED", "#F5F3FF", "#E9D5FF", "Violet"),
-    "blue":    ("#2563EB", "#EFF6FF", "#DBEAFE", "Blue"),
-    "emerald": ("#059669", "#ECFDF5", "#A7F3D0", "Emerald"),
-    "rose":    ("#E11D48", "#FFF1F2", "#FECDD3", "Rose"),
-}
-
-_HOME_BUTTON_CLS = {
-    "violet": "bg-violet-600 hover:bg-violet-700 shadow-violet-500/30",
-    "blue": "bg-blue-600 hover:bg-blue-700 shadow-blue-500/30",
-    "emerald": "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30",
-    "rose": "bg-rose-600 hover:bg-rose-700 shadow-rose-500/30",
-}
-
-
-def _home_demo_html(count: int, color_key: str, runtime: str) -> str:
-    c_hex, c_bg, c_border, c_name = _HOME_COLORS[color_key]
-    dots = "".join(
-        f'<div style="width:0.65rem;height:0.65rem;border-radius:999px;background:{_HOME_COLORS[k][0]};'
-        + (f'transform:scale(1.35);box-shadow:0 0 0 2px white,0 0 0 3.5px {_HOME_COLORS[k][0]};"' if k == color_key else 'opacity:0.28;"')
-        + '></div>'
-        for k in _HOME_COLORS
-    )
-    return f"""
-    <div style="padding:0.2rem 0;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.1rem;">
-        <div style="font-size:0.68rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:{c_hex};">Live Demo</div>
-        <div style="display:flex;gap:0.5rem;align-items:center;">{dots}</div>
-      </div>
-      <div style="text-align:center;padding:1rem 0 0.5rem;">
-        <div style="font-size:5rem;font-weight:900;color:{c_hex};line-height:1;letter-spacing:-0.03em;">{count}</div>
-        <div style="color:var(--vl-text-muted);font-size:0.8rem;margin-top:0.45rem;letter-spacing:0.02em;">clicks counted</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-top:0.9rem;">
-        <div style="padding:0.7rem;border-radius:0.75rem;background:{c_bg};border:1px solid {c_border};text-align:center;">
-          <div style="font-size:0.62rem;font-weight:800;color:{c_hex};text-transform:uppercase;letter-spacing:0.08em;">Color</div>
-          <div style="font-weight:700;color:var(--vl-text);margin-top:0.15rem;">{c_name}</div>
-        </div>
-        <div style="padding:0.7rem;border-radius:0.75rem;background:{c_bg};border:1px solid {c_border};text-align:center;">
-          <div style="font-size:0.62rem;font-weight:800;color:{c_hex};text-transform:uppercase;letter-spacing:0.08em;">Runtime</div>
-          <div style="font-weight:700;color:var(--vl-text);margin-top:0.15rem;">{"Lite" if runtime == "lite" else "WebSocket"}</div>
-        </div>
-      </div>
-    </div>
-    """
-
-
-def _build_chart_frame(seed: int, points: int) -> pd.DataFrame:
-    rng = np.random.default_rng(seed + 17)
-    raw = np.cumsum(
-        rng.normal(loc=(1.5, 1.0, 0.45), scale=(0.75, 0.5, 0.25), size=(points, 3)),
-        axis=0,
-    )
-    data = np.round(np.clip(raw + np.array([30, 18, 8]), a_min=0.5, a_max=None), 2)
-    return pd.DataFrame(data, columns=["App Launches", "Teams Active", "Engagement Score"])
-
-
-def _iter_markdown_chunks(text: str):
-    paragraphs = text.split("\n\n")
-    for paragraph_index, paragraph in enumerate(paragraphs):
-        words = paragraph.split()
-        for word_index, word in enumerate(words):
-            suffix = " " if word_index < len(words) - 1 else ""
-            yield word + suffix
-        if paragraph_index < len(paragraphs) - 1:
-            yield "\n\n"
-
-
-def _pseudo_chat_reply(prompt: str):
-    cleaned = prompt.strip()
-    lower = cleaned.lower()
-    rng = random.Random(sum(ord(ch) for ch in lower) + len(chat_style.value))
-    keyword_notes = [
-        ("auth", "Violit already includes built-in auth flows, so you can keep login, sessions, and role checks inside one app."),
-        ("orm", "The ORM story starts with vl.App(db='./app.db') and app.db CRUD, which keeps demos short and readable."),
-        ("database", "Violit's database helpers let you build simple CRUD screens without adding a second framework."),
-        ("lite", "Lite mode uses HTMX and is often a strong choice when you want simpler HTTP transport or higher concurrency."),
-        ("theme", "Theme switching stays in Python with app.set_theme(...), and this showcase starts from the bright violit_light_jewel preset."),
-        ("tailwind", "Use cls first for utility styling, then add style only when you need precise gradients or shadows."),
-        ("chat", "This page shows the primitive Violit chat flow: app.chat_thread(...) plus app.chat_message(...) and app.chat_input(...)."),
-        ("reactive", "The reactive sweet spot is direct State passing, lambda bindings, and small @app.reactivity blocks when control flow matters."),
+        {'company': 'Helio Bank', 'segment': 'Enterprise', 'plan': 'Scale', 'health': 'Strong', 'mrr': 84000, 'seats': 124, 'region': 'US', 'last_seen': '2h ago', 'owner': 'Ari'},
+        {'company': 'Baseline AI', 'segment': 'Growth', 'plan': 'Growth', 'health': 'Watch', 'mrr': 18200, 'seats': 34, 'region': 'EU', 'last_seen': '5h ago', 'owner': 'Noa'},
+        {'company': 'Aster Retail', 'segment': 'SMB', 'plan': 'Starter', 'health': 'Strong', 'mrr': 6400, 'seats': 12, 'region': 'APAC', 'last_seen': '18m ago', 'owner': 'June'},
+        {'company': 'Northwind Ops', 'segment': 'Enterprise', 'plan': 'Scale', 'health': 'At Risk', 'mrr': 67300, 'seats': 97, 'region': 'US', 'last_seen': '1d ago', 'owner': 'Ira'},
+        {'company': 'Tidal Labs', 'segment': 'Growth', 'plan': 'Growth', 'health': 'Strong', 'mrr': 24100, 'seats': 42, 'region': 'US', 'last_seen': '3h ago', 'owner': 'Mina'},
+        {'company': 'Signal Forge', 'segment': 'Enterprise', 'plan': 'Enterprise', 'health': 'Watch', 'mrr': 91300, 'seats': 156, 'region': 'EU', 'last_seen': '8h ago', 'owner': 'Ari'},
+        {'company': 'Cinder Health', 'segment': 'Growth', 'plan': 'Growth', 'health': 'At Risk', 'mrr': 28600, 'seats': 38, 'region': 'US', 'last_seen': '2d ago', 'owner': 'June'},
+        {'company': 'Mapline Fleet', 'segment': 'SMB', 'plan': 'Starter', 'health': 'Strong', 'mrr': 5100, 'seats': 9, 'region': 'LATAM', 'last_seen': '44m ago', 'owner': 'Noa'},
     ]
-    matched = [text for keyword, text in keyword_notes if keyword in lower]
-    if len(matched) < 3:
-        remaining = [text for _, text in keyword_notes if text not in matched]
-        matched.extend(rng.sample(remaining, k=3 - len(matched)))
+)
 
-    tone = {
-        "Builder": "I will keep this concrete and implementation-focused.",
-        "Playful": "I will keep this light, friendly, and demo-oriented.",
-        "Bold": "I will keep this punchy and product-focused.",
-    }[chat_style.value]
+rollout_seed = pd.DataFrame(
+    [
+        {'cohort': 'Design partners', 'traffic_pct': 5, 'status': 'ready', 'owner': 'Mina', 'region': 'US-East', 'latency_ms': 128},
+        {'cohort': 'Self-serve teams', 'traffic_pct': 15, 'status': 'warming', 'owner': 'Ira', 'region': 'US-West', 'latency_ms': 142},
+        {'cohort': 'Enterprise accounts', 'traffic_pct': 35, 'status': 'staged', 'owner': 'Ari', 'region': 'EU', 'latency_ms': 167},
+        {'cohort': 'Support inbox', 'traffic_pct': 20, 'status': 'ready', 'owner': 'June', 'region': 'APAC', 'latency_ms': 151},
+    ]
+)
 
-    reply = (
-        "This is a pseudo showcase reply. No external API call is made.\n\n"
-        f"**Assistant vibe:** {chat_style.value}\n"
-        f"{tone}\n\n"
-        "Here are the most relevant Violit ideas for that prompt:\n"
-        f"- {matched[0]}\n"
-        f"- {matched[1]}\n"
-        f"- {matched[2]}\n\n"
-        "Try the Dashboard, Components, and Settings pages next if you want to see the same ideas as real UI instead of just text."
-    )
+launch_events_df = pd.DataFrame(
+    [
+        {'time': '08:45', 'event': 'Canary checks passed', 'owner': 'Ops'},
+        {'time': '09:10', 'event': 'Billing connector stabilized', 'owner': 'Platform'},
+        {'time': '09:36', 'event': 'Support macros synced', 'owner': 'CX'},
+        {'time': '10:05', 'event': 'Customer-facing banner scheduled', 'owner': 'PMM'},
+    ]
+)
 
-    if chat_mode.value == "streaming":
-        return _iter_markdown_chunks(reply)
+workflow_templates = [
+    'Expansion playbook',
+    'Renewal rescue workflow',
+    'Escalation routing',
+    'VIP onboarding sequence',
+]
 
-    return reply
+selected_customer = app.state({}, key='u0_new_demo_selected_customer')
+customer_query = app.state('', key='u0_new_demo_customer_query')
+customer_segment = app.state('All', key='u0_new_demo_customer_segment')
+customer_priority_only = app.state(False, key='u0_new_demo_customer_priority_only')
+rollout_rows = app.state(rollout_seed.copy(), key='u0_new_demo_rollout_rows')
+workflow_spec = app.state(
+    {
+        'name': 'Executive expansion signal',
+        'trigger': 'MRR drops 10% week-over-week',
+        'channel': 'Slack + inbox',
+        'priority': 'High',
+        'notes': 'Create an owner task, attach usage context, and ping the CSM lead.',
+        'notify_exec': True,
+    },
+    key='u0_new_demo_workflow_spec',
+)
+support_messages = app.state([], key='u0_new_demo_support_messages')
+pulse_tick = app.state(0, key='u0_new_demo_pulse_tick')
+pulse_running = app.state(False, key='u0_new_demo_pulse_running')
+pulse_handle = app.state(None, key='u0_new_demo_pulse_handle')
+active_theme_name = app.state('violit_cloud_foundry', key='u0_new_demo_active_theme_name')
+
+session_theme_name = get_session_store()['theme'].preset_name
+if active_theme_name.value != session_theme_name:
+    active_theme_name.set(session_theme_name)
 
 
-def _submit_chat_prompt(prompt: str):
-    if isinstance(prompt, dict):
-        prompt_payload = {
-            "text": str(prompt.get("text") or "").strip(),
-            "files": [entry for entry in list(prompt.get("files") or []) if entry is not None],
-            "audio": prompt.get("audio"),
+def support_boot_messages() -> list[dict[str, Any]]:
+    return [
+        {
+            'role': 'assistant',
+            'content': 'Northstar Copilot is ready. Ask about customers, rollout plans, workflow automation, or the current launch surface.',
+            'summary': 'This is a local pseudo-agent that uses agent_history and managed_chat_input.',
+            'trace': [
+                {'kind': 'status', 'title': 'Boot', 'text': 'Workspace context loaded.'},
+                {'kind': 'observation', 'title': 'Coverage', 'text': 'Overview, customers, operations, workflow studio, and settings are mapped.'},
+            ],
+            'artifacts': [
+                {'kind': 'guide', 'title': 'Suggested prompts', 'text': 'Try: summarize at-risk customers / explain the rollout cohorts / draft a workflow rule'},
+            ],
+            'status_text': 'Waiting for a prompt.',
         }
-        parts: list[str] = []
-        if prompt_payload["text"]:
-            parts.append(prompt_payload["text"])
-        if prompt_payload["files"]:
-            names = ", ".join(str(getattr(entry, "name", "attachment")) for entry in prompt_payload["files"][:3])
-            extra = f" (+{len(prompt_payload['files']) - 3} more)" if len(prompt_payload["files"]) > 3 else ""
-            parts.append(f"Attached files: {names}{extra}.")
-        if prompt_payload["audio"] is not None:
-            parts.append(f"Attached audio: {getattr(prompt_payload['audio'], 'name', 'voice-note') }.")
-        cleaned = "\n\n".join(part for part in parts if part).strip()
-    else:
-        prompt_payload = {"text": (prompt or "").strip(), "files": [], "audio": None}
-        cleaned = prompt_payload["text"]
-    if not cleaned or chat_busy.value:
-        return
+    ]
 
-    user_message: dict[str, Any] = {
-        "role": "user",
-        "content": cleaned,
-        "text": prompt_payload["text"],
+
+support_messages.set(support_boot_messages())
+
+
+def prompt_text(prompt: Any) -> str:
+    if isinstance(prompt, dict):
+        return str(prompt.get('text') or '').strip()
+    return str(prompt or '').strip()
+
+
+def prompt_files(prompt: Any) -> list[str]:
+    if not isinstance(prompt, dict):
+        return []
+    results = []
+    for item in prompt.get('files') or []:
+        name = getattr(item, 'name', None)
+        if not name and isinstance(item, dict):
+            name = item.get('name')
+        if name:
+            results.append(str(name))
+    return results
+
+
+def prompt_has_audio(prompt: Any) -> bool:
+    return isinstance(prompt, dict) and bool(prompt.get('audio'))
+
+
+def reply_chunks(text: str):
+    parts = [part.strip() for part in text.split('\n\n') if part.strip()]
+    for index, part in enumerate(parts):
+        yield part + ('\n\n' if index < len(parts) - 1 else '')
+
+
+def support_plan(text: str) -> dict[str, Any]:
+    normalized = (text or '').lower()
+    if any(token in normalized for token in ['customer', 'account', 'health', 'mrr']):
+        return {
+            'intent': 'Customer intelligence',
+            'summary': 'The request maps to customer filtering, risk review, and account detail flows.',
+            'trace': [
+                {'kind': 'tool_call', 'title': 'scan-customers', 'text': 'Reviewed the Customer Radar page and the selected-customer detail panel.'},
+                {'kind': 'observation', 'title': 'filters', 'text': 'The page supports live search, segment filters, and a risk-only toggle.'},
+                {'kind': 'observation', 'title': 'detail flow', 'text': 'Clicking a dataframe cell fills a right-side account detail summary and metadata panel.'},
+            ],
+            'artifacts': [
+                {'kind': 'pattern', 'title': 'Review flow', 'text': 'filter -> click table cell -> inspect account detail -> trigger playbook'},
+            ],
+            'answer': 'Open Customer Radar for the most realistic account-review flow. Search and segment filters narrow the list, and any clicked row opens a compact detail view with ownership and risk context.',
+        }
+    if any(token in normalized for token in ['rollout', 'launch', 'latency', 'deploy', 'cohort']):
+        return {
+            'intent': 'Rollout operations',
+            'summary': 'The request maps to phased launch operations and editable rollout cohorts.',
+            'trace': [
+                {'kind': 'tool_call', 'title': 'scan-operations', 'text': 'Reviewed launch status, confirm dialog, data editor cohorts, and launch timeline.'},
+                {'kind': 'observation', 'title': 'cohorts', 'text': 'Rollout cohorts are editable in-place and update the preview summary immediately.'},
+                {'kind': 'observation', 'title': 'status surface', 'text': 'The page combines progress, status, toast actions, and plotly launch telemetry.'},
+            ],
+            'artifacts': [
+                {'kind': 'checklist', 'title': 'Ops surface', 'text': 'status, progress, dialog, data_editor, plotly_chart, launch event table'},
+            ],
+            'answer': 'Operations is the launch control page. It is where you can validate cohort weights, review latency trends, and kick off a launch via a dialog-confirmed action rather than a static marketing card.',
+        }
+    if any(token in normalized for token in ['workflow', 'studio', 'form', 'automation']):
+        return {
+            'intent': 'Workflow studio',
+            'summary': 'The request maps to form-driven automation setup and JSON export.',
+            'trace': [
+                {'kind': 'tool_call', 'title': 'scan-studio', 'text': 'Reviewed the playbook form, template popover, and JSON export card.'},
+                {'kind': 'observation', 'title': 'form flow', 'text': 'The studio uses a real form submit action and keeps a current workflow spec preview.'},
+                {'kind': 'observation', 'title': 'handoff', 'text': 'The resulting configuration can be downloaded as a JSON payload.'},
+            ],
+            'artifacts': [
+                {'kind': 'guide', 'title': 'Studio flow', 'text': 'choose trigger -> capture owner notes -> submit -> inspect preview -> export JSON'},
+            ],
+            'answer': 'Workflow Studio is built like an internal operations tool rather than a showcase toy. The form composes a realistic automation spec and the preview panel lets users verify what would actually be shipped.',
+        }
+    return {
+        'intent': 'Workspace tour',
+        'summary': 'The request maps to a cross-page tour of the whole product-style demo.',
+        'trace': [
+            {'kind': 'tool_call', 'title': 'scan-workspace', 'text': 'Reviewed the overview, customers, operations, copilot, studio, and settings pages.'},
+            {'kind': 'observation', 'title': 'curation', 'text': 'The sidebar is intentionally limited to six pages so the app feels like a real product, not a wall of unrelated widgets.'},
+            {'kind': 'observation', 'title': 'design', 'text': 'The theme mixes atmospheric hero treatment with restrained card borders and product-style panels.'},
+        ],
+        'artifacts': [
+            {'kind': 'guide', 'title': 'Recommended path', 'text': 'Overview -> Customer Radar -> Operations -> Copilot -> Workflow Studio -> Settings'},
+        ],
+        'answer': 'Start on Overview for the narrative, move to Customer Radar and Operations for hands-on testing, then finish in Copilot and Workflow Studio to see the newest high-level chat and form-driven workflows in a realistic app shell.',
     }
-    if prompt_payload["files"]:
-        user_message["files"] = list(prompt_payload["files"])
-    if prompt_payload["audio"] is not None:
-        user_message["audio"] = prompt_payload["audio"]
-
-    chat_history.set(chat_history.value + [
-        user_message,
-        {"role": "assistant", "content": ""},
-    ])
-    chat_busy.set(True)
-
-    def run():
-        result = _pseudo_chat_reply(cleaned)
-        if isinstance(result, str):
-            items = list(chat_history.value)
-            items[-1] = {"role": "assistant", "content": result}
-            chat_history.set(items)
-            return
-
-        chunks: list[str] = []
-        for chunk in result:
-            chunks.append(str(chunk))
-            items = list(chat_history.value)
-            items[-1] = {"role": "assistant", "content": "".join(chunks)}
-            chat_history.set(items)
-
-    def fail(exc):
-        items = list(chat_history.value)
-        items[-1] = {"role": "assistant", "content": f"Error:\n\n```text\n{exc}\n```"}
-        chat_history.set(items)
-        chat_busy.set(False)
-
-    app.background(run, on_complete=lambda: chat_busy.set(False), on_error=fail).start()
 
 
-def _reset_chat():
-    chat_history.set(
-        [
-            {
-                "role": "assistant",
-                "content": "Chat reset complete. Ask about themes, auth, ORM, Lite mode, or styling.",
-            }
-        ]
-    )
+def build_support_reply(prompt: Any, *, persona: str, reply_mode: str):
+    message = prompt_text(prompt)
+    files = prompt_files(prompt)
+    has_audio = prompt_has_audio(prompt)
+    if not message and not files and not has_audio:
+        raise RuntimeError('Please send a message, file, or audio input.')
+
+    plan = support_plan(message)
+    persona_line = {
+        'Guide': 'Guide mode keeps the answer practical and page-oriented.',
+        'Architect': 'Architect mode emphasizes surface composition and API choices.',
+        'Debugger': 'Debugger mode emphasizes edge cases, state transitions, and testable flows.',
+    }.get(persona, f'{persona} mode is active.')
+
+    answer = f"{persona_line}\n\n{plan['answer']}"
+    context_lines = []
+    if message:
+        context_lines.append(f'Prompt: {message}')
+    if files:
+        context_lines.append('Files: ' + ', '.join(files))
+    if has_audio:
+        context_lines.append('Audio was attached.')
+    if context_lines:
+        answer += '\n\nInput context\n- ' + '\n- '.join(context_lines)
+
+    def stream():
+        yield {'type': 'status', 'text': f'{persona} copilot is classifying the request.'}
+        yield {'type': 'step', 'kind': 'status', 'title': 'Intent', 'text': plan['intent']}
+        for item in plan['trace']:
+            yield {'type': 'step', **item}
+        yield {'type': 'summary', 'text': plan['summary']}
+        if str(reply_mode).lower().strip() == 'streaming':
+            yield {'type': 'status', 'text': 'Streaming the response.'}
+            for chunk in reply_chunks(answer):
+                yield {'type': 'text', 'text': chunk}
+        else:
+            yield {'type': 'text', 'text': answer, 'stream': False}
+        for artifact in plan['artifacts']:
+            yield {'type': 'artifact', 'artifact': artifact}
+        yield {'type': 'done'}
+
+    return stream()
 
 
-@app.dialog("What's Fresh in This Showcase", width="large")
-def whats_new_dialog():
-    app.subheader("This refresh focuses on visible, current patterns")
-    app.callout_success(
-        "The Chat page now uses Violit's primitive chat_thread, chat_message, and chat_input widgets with pseudo replies."
-    )
-    app.callout_info(
-        "The Widgets page now shows a full gallery of input widgets, status feedback, and layout components — all styled with Tailwind cls."
-    )
-    app.callout_warning(
-        "The showcase stays safe to publish because no real AI provider keys or network calls are required for the chat demo."
-    )
+def filtered_customers() -> pd.DataFrame:
+    df = customer_df.copy()
+    query = customer_query.value.strip().lower()
+    segment = customer_segment.value
+    if query:
+        mask = df.apply(lambda row: query in row['company'].lower() or query in row['owner'].lower() or query in row['region'].lower(), axis=1)
+        df = df[mask]
+    if segment != 'All':
+        df = df[df['segment'] == segment]
+    if customer_priority_only.value:
+        df = df[df['health'].isin(['At Risk', 'Watch'])]
+    return df.reset_index(drop=True)
 
 
-@app.dialog("Tailwind Notes", width="medium")
-def tailwind_notes_dialog():
-    app.markdown(
-        "- Start with `cls` for utility-first styling.\n"
-        "- Add `style` only when you need exact gradients, borders, or shadows.\n"
-        "- Use `configure_widget()` later if you want app-wide design defaults."
-    )
-    app.callout_info("In Violit, styling can stay in Python and still feel deliberate.")
-
-
-def home_page():
-    demo_count = app.state(0, key="home_demo_count")
-    demo_color = app.state("violet", key="home_demo_color")
-
-    left, right = app.columns([1.05, 0.95], gap="2rem")
-    with left:
-        app.badge("Built-in app stack", variant="primary", pill=True)
-        app.space("0.7rem")
-        app.markdown("## Ship a polished\nPython product")
-        app.text(
-            "Chat, reactivity, auth, ORM — all from one Python surface.",
-            muted=True,
-            style="line-height:1.75;font-size:1.02rem;",
+def launch_latency_figure() -> go.Figure:
+    current = rollout_rows.value.copy()
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=current['cohort'],
+            y=current['traffic_pct'],
+            name='Traffic %',
+            marker=dict(color='#5b7cff'),
+            opacity=0.85,
         )
-        app.space("1.4rem")
-        b1, b2 = app.columns([1.1, 0.9], gap="0.8rem")
-        with b1:
-            app.button(
-                "Start With Chat",
-                icon="comments",
-                on_click=lambda: app.switch_page("Chat"),
-                variant="text",
-                cls="w-full justify-center rounded-2xl px-5 py-4 font-bold text-white bg-violet-600 hover:bg-violet-700 shadow-xl shadow-violet-500/20",
-            )
-        with b2:
-            app.button(
-                "See Widgets",
-                icon="puzzle-piece",
-                on_click=lambda: app.switch_page("Widgets"),
-                variant="text",
-                cls="w-full justify-center rounded-2xl px-5 py-4 font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-lg shadow-slate-200/50",
-            )
-
-        app.space("2.5rem")
-        
-        with app.card(cls="rounded-2xl border-none shadow-sm bg-slate-50/80 p-2 mb-3"):
-            c1, c2 = app.columns([0.1, 0.9], gap="0.3rem")
-            with c1:
-                app.icon("zap", cls="text-violet-600 text-lg mt-0.5")
-            with c2:
-                app.text("Fast Iteration", cls="font-bold text-xs")
-                app.text("Hot-reload & zero-config setup.", muted=True, cls="text-[10px]")
-                
-        with app.card(cls="rounded-2xl border-none shadow-sm bg-slate-50/80 p-2 mb-3"):
-            c1, c2 = app.columns([0.1, 0.9], gap="0.3rem")
-            with c1:
-                app.icon("refresh", cls="text-blue-600 text-lg mt-0.5")
-            with c2:
-                app.text("Reactive State", cls="font-bold text-xs")
-                app.text("Auto UI updates across components.", muted=True, cls="text-[10px]")
-                
-        with app.card(cls="rounded-2xl border-none shadow-sm bg-slate-50/80 p-2"):
-            c1, c2 = app.columns([0.1, 0.9], gap="0.3rem")
-            with c1:
-                app.icon("palette", cls="text-emerald-600 text-lg mt-0.5")
-            with c2:
-                app.text("Modern UI", cls="font-bold text-xs")
-                app.text("Tailwind support via 'cls' parameter.", muted=True, cls="text-[10px]")
-
-    with right:
-        app.card(
-            lambda: _home_demo_html(demo_count.value, demo_color.value, mode),
-            style="background:linear-gradient(180deg,#FAFAFF 0%,white 100%);border:1px solid #E9D5FF;box-shadow:0 24px 56px rgba(109,40,217,0.1);",
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=current['cohort'],
+            y=current['latency_ms'],
+            name='Latency (ms)',
+            mode='lines+markers',
+            yaxis='y2',
+            line=dict(color='#171717', width=3),
+            marker=dict(size=8),
         )
-        app.space("0.55rem")
-        c1, c2, c3, c4 = app.columns(4, gap="0.45rem")
-        for col, (key, (c_hex, _, _, c_name)) in zip([c1, c2, c3, c4], _HOME_COLORS.items()):
-            with col:
-                app.button(
-                    c_name,
-                    on_click=lambda k=key: demo_color.set(k),
-                    variant="text",
-                    cls=(
-                        "w-full rounded-xl px-3 py-2.5 text-xs font-bold text-white border-0 "
-                        "transition-all hover:scale-105 opacity-90 hover:opacity-100 shadow-lg "
-                        f"{_HOME_BUTTON_CLS[key]}"
-                    ),
+    )
+    fig.update_layout(
+        height=360,
+        margin=dict(l=16, r=16, t=28, b=16),
+        legend=dict(orientation='h', y=1.08),
+        yaxis=dict(title='Traffic %'),
+        yaxis2=dict(title='Latency (ms)', overlaying='y', side='right'),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+    )
+    return fig
+
+
+def arr_momentum_figure() -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=pipeline_df['month'],
+            y=pipeline_df['net_new_arr'],
+            name='Net new ARR',
+            marker=dict(color='#5b7cff'),
+            opacity=0.92,
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            x=pipeline_df['month'],
+            y=pipeline_df['expansion_arr'],
+            name='Expansion ARR',
+            marker=dict(color='#91a8ff'),
+            opacity=0.88,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=pipeline_df['month'],
+            y=pipeline_df['total_arr'],
+            name='Total ARR',
+            mode='lines+markers',
+            line=dict(color='#111827', width=3),
+            marker=dict(size=7, color='#111827'),
+        )
+    )
+    fig.update_layout(
+        height=340,
+        margin=dict(l=16, r=16, t=12, b=16),
+        barmode='group',
+        hovermode='x unified',
+        legend=dict(orientation='h', y=1.08),
+        xaxis=dict(title=None, type='category', showgrid=False),
+        yaxis=dict(title='ARR ($k)', gridcolor='rgba(148,163,184,0.18)', zeroline=False),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+    )
+    return fig
+
+
+def service_load_figure() -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=pipeline_df['month'],
+            y=pipeline_df['inbound_tickets'],
+            name='Inbound tickets',
+            mode='lines+markers',
+            line=dict(color='#7c93ff', width=2.5),
+            marker=dict(size=6),
+            fill='tozeroy',
+            fillcolor='rgba(124,147,255,0.16)',
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=pipeline_df['month'],
+            y=pipeline_df['tickets_closed'],
+            name='Resolved tickets',
+            mode='lines+markers',
+            line=dict(color='#2563eb', width=3),
+            marker=dict(size=6),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=pipeline_df['month'],
+            y=pipeline_df['sla_hit_rate'],
+            name='SLA hit rate',
+            mode='lines+markers',
+            yaxis='y2',
+            line=dict(color='#0f172a', width=2, dash='dash'),
+            marker=dict(size=5),
+        )
+    )
+    fig.update_layout(
+        height=340,
+        margin=dict(l=16, r=16, t=12, b=16),
+        hovermode='x unified',
+        legend=dict(orientation='h', y=1.08),
+        xaxis=dict(title=None, type='category', showgrid=False),
+        yaxis=dict(title='Tickets', gridcolor='rgba(148,163,184,0.18)', zeroline=False),
+        yaxis2=dict(title='SLA %', overlaying='y', side='right', range=[84, 100], showgrid=False),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+    )
+    return fig
+
+
+def overview_page() -> None:
+    app.header('Northstar Foundry')
+    app.caption('A product-style showcase for growth, rollout, support, and automation operations.')
+
+    top = app.columns([1.15, 1], gap='large', vertical_alignment='center')
+    with top[0]:
+        with app.container(border=True, cls='rounded-[32px] bg-white/85 p-7 shadow-[0_32px_90px_-52px_rgba(15,23,42,0.28)]'):
+            badge_chip('New Experience', variant='success')
+            app.title('A modern customer operations workspace built with real Violit widgets.')
+            app.text(
+                'The design is intentionally product-like: atmospheric but restrained, with launch metrics, customer intelligence, editable operations, a support copilot, and a workflow studio split into focused pages.',
+                muted=True,
+            )
+            ctas = app.columns(3, gap='small')
+            with ctas[0]:
+                app.button('Open Operations', on_click=lambda: app.switch_page('Operations'), cls='w-full')
+            with ctas[1]:
+                app.button('Review Customers', on_click=lambda: app.switch_page('Customer Radar'), variant='neutral', cls='w-full')
+            with ctas[2]:
+                app.button('Try Copilot', on_click=lambda: app.switch_page('Copilot'), variant='neutral', cls='w-full')
+            app.space('0.75rem')
+            compact_label('Inspired by the product-marketing rhythm of Stripe, Vercel, Mintlify, and Linear.')
+
+    with top[1]:
+        with app.container(border=True, cls='rounded-[30px] bg-white/92 p-5 shadow-[0_24px_72px_-46px_rgba(15,23,42,0.26)]'):
+            compact_label('LIVE PREVIEW')
+            app.subheader('Launch snapshot')
+            metrics = app.columns(3, gap='small')
+            with metrics[0]:
+                app.metric('ARR', money(int(pipeline_df['total_arr'].sum()) * 1000), '+12%')
+            with metrics[1]:
+                app.metric('NPS', str(int(pipeline_df['nps'].iloc[-1])), '+4')
+            with metrics[2]:
+                app.metric('Open risks', '3', '-1')
+            app.space('0.5rem')
+            app.dataframe(customer_df[['company', 'health', 'mrr']].head(4), height=210, hide_index=True, use_container_width=True)
+
+    app.space('0.75rem')
+    kpis = app.columns(4, gap='large')
+    metrics_data = [
+        ('Expansion ARR', money(int(pipeline_df['expansion_arr'].sum()) * 1000), '+9%'),
+        ('Tickets closed', str(int(pipeline_df['tickets_closed'].sum())), '+15%'),
+        ('Active cohorts', str(len(rollout_rows.value)), 'editable'),
+        ('Automation rules', '14', '4 live'),
+    ]
+    for column, (label, value, delta) in zip(kpis, metrics_data):
+        with column:
+            app.metric(label, value, delta)
+
+    app.divider()
+    charts = app.columns(2, gap='large', vertical_alignment='top')
+    with charts[0]:
+        app.subheader('ARR momentum')
+        app.plotly_chart(arr_momentum_figure(), use_container_width=True)
+    with charts[1]:
+        app.subheader('Service load')
+        app.plotly_chart(service_load_figure(), use_container_width=True)
+
+    app.divider()
+    next_steps = app.columns(3, gap='large', equal_height=True)
+    cards = [
+        ('Customer Radar', 'Search live accounts, filter the roster, and inspect at-risk details from an interactive dataframe.', 'Customer Radar'),
+        ('Operations', 'Adjust rollout cohorts, watch launch status, and confirm a release from a realistic control plane.', 'Operations'),
+        ('Workflow Studio', 'Compose a handoff-ready automation rule and export its spec as JSON.', 'Workflow Studio'),
+    ]
+    for column, (title, text, target) in zip(next_steps, cards):
+        with column:
+            with app.container(border=True, cls='rounded-[26px] bg-white/82 p-5 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.16)] h-full'):
+                compact_label('PAGE')
+                app.subheader(title)
+                app.text(text, muted=True)
+                app.button(f'Open {title}', on_click=lambda target=target: app.switch_page(target), variant='neutral')
+
+
+def customer_radar_page() -> None:
+    app.header('Customer Radar')
+    app.caption('A realistic account-review workspace built around live filters and table-driven detail inspection.')
+
+    segment_options = ['All', 'Enterprise', 'Growth', 'SMB']
+    visible_customers = filtered_customers()
+    selected_company = str(selected_customer.value.get('company') or '').strip() if isinstance(selected_customer.value, dict) else ''
+    current_segment_index = segment_options.index(customer_segment.value) if customer_segment.value in segment_options else 0
+
+    if visible_customers.empty:
+        if selected_customer.value:
+            selected_customer.set({})
+    else:
+        visible_rows = visible_customers.to_dict('records')
+        matching_row = next((row for row in visible_rows if row.get('company') == selected_company), None)
+        target_row = matching_row or visible_rows[0]
+        if selected_customer.value != target_row:
+            selected_customer.set(target_row)
+
+    controls = app.columns([1.2, 1, 0.8], gap='small')
+    with controls[0]:
+        app.text_input(
+            'Search customers',
+            value=customer_query.value,
+            key='u0_new_demo_customer_query_input',
+            on_change=lambda value: customer_query.set(value),
+            on_submit=lambda value: customer_query.set(value),
+            live_update=True,
+        )
+    with controls[1]:
+        app.selectbox('Segment', segment_options, index=current_segment_index, key='u0_new_demo_customer_segment_input', on_change=lambda value: customer_segment.set(value))
+    with controls[2]:
+        app.toggle('Priority only', value=customer_priority_only.value, key='u0_new_demo_customer_priority_only_input', on_change=lambda value: customer_priority_only.set(value))
+
+    def on_customer_cell(cell: Any) -> None:
+        if isinstance(cell, dict):
+            selected_customer.set(cell.get('rowData') or {})
+
+    @app.reactivity
+    def render_customer_radar_results() -> None:
+        visible_customers = filtered_customers()
+        selected_company = str(selected_customer.value.get('company') or '').strip() if isinstance(selected_customer.value, dict) else ''
+
+        if visible_customers.empty:
+            if selected_customer.value:
+                selected_customer.set({})
+        else:
+            visible_rows = visible_customers.to_dict('records')
+            matching_row = next((row for row in visible_rows if row.get('company') == selected_company), None)
+            target_row = matching_row or visible_rows[0]
+            if selected_customer.value != target_row:
+                selected_customer.set(target_row)
+
+        selected_panel, table_panel = app.columns([0.92, 1.4], gap='large', vertical_alignment='top')
+
+        with table_panel:
+            app.dataframe(
+                visible_customers,
+                height=420,
+                hide_index=True,
+                use_container_width=True,
+                on_cell_clicked=on_customer_cell,
+            )
+            compact_label(f'{len(visible_customers)} accounts match the current filters.')
+
+        with selected_panel:
+            if selected_customer.value:
+                current = selected_customer.value
+                with app.container(border=True, cls='rounded-[28px] bg-white/90 p-5 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)]'):
+                    badge_chip(current.get('health', 'Unknown'), variant='warning' if current.get('health') in {'Watch', 'At Risk'} else 'success')
+                    app.subheader(current.get('company', 'Account detail'))
+                    app.text(f"Owner: {current.get('owner', '-')} · Region: {current.get('region', '-')} · Last seen: {current.get('last_seen', '-')}", muted=True)
+                    detail_cols = app.columns(2, gap='small')
+                    with detail_cols[0]:
+                        app.metric('MRR', money(int(current.get('mrr', 0))), current.get('plan', '-'))
+                    with detail_cols[1]:
+                        app.metric('Seats', str(current.get('seats', 0)), current.get('segment', '-'))
+                    app.divider()
+                    with app.popover('Recommended playbooks', use_container_width=True):
+                        app.text('1. Trigger success-plan review')
+                        app.text('2. Schedule executive check-in')
+                        app.text('3. Attach deployment telemetry to the next outreach')
+                    app.space('0.5rem')
+                    app.json(current, expanded=False)
+            else:
+                app.callout(
+                    'Click any row in the table to inspect a customer record and recommended next actions.',
+                    title='Select an account',
+                    variant='info',
                 )
-        app.space("0.45rem")
-        i1, i2, i3 = app.columns(3, gap="0.45rem")
-        with i1:
+
+    render_customer_radar_results()
+
+
+def operations_page() -> None:
+    app.header('Operations')
+    app.caption('Phased launch control with status, confirmation dialog, editable cohorts, and telemetry.')
+
+    @app.dialog('Start rollout')
+    def launch_dialog() -> None:
+        app.text('Kick off the next rollout window for the selected cohorts?')
+        app.warning('This demo does not call external systems, but it exercises the real dialog and toast flow.')
+        row = app.columns(2, gap='small')
+        with row[0]:
+            app.button('Cancel', on_click=launch_dialog.close, variant='neutral', use_container_width=True)
+        with row[1]:
             app.button(
-                "+ Click",
-                on_click=lambda: demo_count.set(demo_count.value + 1),
-                variant="primary",
-                cls="w-full rounded-xl font-bold",
-            )
-        with i2:
-            app.button(
-                "− Undo",
-                on_click=lambda: demo_count.set(max(0, demo_count.value - 1)),
-                variant="neutral",
-                cls="w-full rounded-xl",
-            )
-        with i3:
-            app.button(
-                "Reset",
-                on_click=lambda: demo_count.set(0),
-                variant="neutral",
-                cls="w-full rounded-xl",
-            )
-
-    app.divider()
-
-def dashboard_page():
-    app.header("Interactive Dashboard")
-    app.caption("State-driven metrics and chart tabs without a full app rerun.")
-
-    c1, c2 = app.columns([2, 1])
-    with c1:
-        window = app.select_slider(
-            "Time Window",
-            options=[12, 24, 36, 48],
-            value=24,
-            key="showcase_dashboard_window",
-        )
-    with c2:
-        app.button(
-            "Refresh Signals",
-            on_click=lambda: dashboard_seed.set(dashboard_seed.value + 1),
-            variant="neutral",
-        )
-
-    @app.reactivity
-    def render_dashboard():
-        data = _build_chart_frame(dashboard_seed.value, int(window.value))
-        latest = data.iloc[-1]
-        previous = data.iloc[-2] if len(data) > 1 else latest
-
-        m1, m2, m3, m4 = app.columns(4)
-        with m1:
-            app.metric("App Launches", f"{int(round(latest['App Launches']))}", f"{int(round(latest['App Launches'] - previous['App Launches'])):+d}")
-        with m2:
-            app.metric("Teams Active", f"{int(round(latest['Teams Active']))}", f"{int(round(latest['Teams Active'] - previous['Teams Active'])):+d}")
-        with m3:
-            app.metric("Engagement Score", f"{latest['Engagement Score']:.1f}", f"{latest['Engagement Score'] - previous['Engagement Score']:+.1f}")
-        with m4:
-            app.metric("Runtime", "Lite" if mode == "lite" else "WebSocket", "active")
-
-        app.divider()
-        tab1, tab2 = app.tabs(["Line Chart", "Area Chart"], key="showcase_dashboard_tabs")
-        with tab1:
-            app.line_chart(data)
-        with tab2:
-            app.area_chart(data)
-
-        app.subheader("Recent Rows")
-        app.dataframe(data.tail(8), height=320)
-
-    render_dashboard()
-
-
-def widgets_page():
-    app.header("Widgets")
-    app.caption("A live preview styled in Python, plus a gallery of every built-in Violit widget.")
-
-    left, right = app.columns([1, 1])
-    with left:
-        title = app.text_input(
-            "Launch title",
-            value="Violit Studio",
-            on_submit=lambda value: app.toast(f"Saved: {value}", variant="success"),
-        )
-        mood = app.select_slider(
-            "Mood",
-            options=["Soft", "Playful", "Bold"],
-            value="Playful",
-            key="showcase_component_mood",
-        )
-        accent = app.color_picker("Accent", "#7C3AED")
-        glow = app.slider("Glow strength", 0, 100, 58, live_update=True)
-        note = app.text_area(
-            "Mini pitch",
-            value="Reactive widgets, calmer state management, and polished UI surfaces.",
-            height=5,
-        )
-        app.download_button(
-            "Download starter snippet",
-            data=(
-                "import violit as vl\n\n"
-                "app = vl.App(title='Violit Studio', theme='violit_light_jewel')\n"
-                "app.button('Launch', cls='rounded-full shadow-lg')\n"
-                "app.run()\n"
-            ),
-            file_name="violit_starter.py",
-            mime="text/x-python",
-        )
-        app.link_button("Open Documentation", "https://doc.violit.cloud")
-        app.button("Tailwind Notes", on_click=tailwind_notes_dialog, variant="neutral")
-
-    with right:
-        app.subheader("Live Preview")
-        app.card(
-            lambda: _preview_card_html(title.value, mood.value, accent.value, note.value, glow.value),
-            cls="overflow-hidden",
-        )
-        app.callout_success("CTA buttons below use cls utilities instead of hand-written HTML.")
-
-        b1, b2 = app.columns(2)
-        with b1:
-            app.button(
-                "Rounded CTA",
-                variant="primary",
-                cls="w-full rounded-full shadow-lg font-semibold",
-            )
-        with b2:
-            app.button(
-                "Soft Outline",
-                variant="text",
-                cls="w-full rounded-full bg-white border border-violet-200 text-violet-700 font-semibold shadow-sm",
+                'Start launch',
+                on_click=lambda: (app.toast('Rollout window started', icon='rocket', variant='success'), launch_dialog.close()),
+                variant='success',
+                use_container_width=True,
             )
 
-    app.divider()
-    app.subheader("Widget Gallery")
-    app.caption("All widgets below are live — interact with them freely.")
+    status_row = app.columns([1.2, 0.9, 0.9], gap='small')
+    with status_row[0]:
+        launch_state = app.radio('Launch state', ['running', 'complete', 'error'], horizontal=True)
+    with status_row[1]:
+        app.button('Confirm rollout', on_click=launch_dialog.open, cls='w-full')
+    with status_row[2]:
+        app.button('Save cohorts', on_click=lambda: app.toast('Cohorts saved', icon='circle-check', variant='success'), variant='neutral', cls='w-full')
 
-    t_input, t_status, t_layout = app.tabs(
-        ["Input Widgets", "Status & Feedback", "Layout & Display"],
-        key="showcase_widget_gallery_tabs",
+    app.status(lambda: f'Foundry release state = {launch_state.value}', state=launch_state, expanded=True)
+    app.progress(lambda: int(sum(rollout_rows.value['traffic_pct']) % 100))
+
+    tabs = app.tabs(['Cohorts', 'Telemetry', 'Launch log'])
+    with tabs[0]:
+        app.data_editor(
+            rollout_rows.value,
+            num_rows='dynamic',
+            height=320,
+            hide_index=True,
+            use_container_width=True,
+            on_change=lambda new_df: rollout_rows.set(new_df),
+        )
+        app.text(lambda: f'Current cohorts: {len(rollout_rows.value)}', muted=True, size='small')
+    with tabs[1]:
+        app.plotly_chart(launch_latency_figure(), use_container_width=True)
+    with tabs[2]:
+        app.table(launch_events_df)
+
+
+def copilot_page() -> None:
+    app.header('Copilot')
+    app.caption('High-level chat surface using agent_history plus managed_chat_input.')
+
+    app.callout(
+        'This pseudo-agent is local-only, but it exercises the same event schema used by the current production chat surface.',
+        title='Northstar Copilot',
+        variant='info',
     )
 
-    with t_input:
-        app.space("0.5rem")
-        c1, c2 = app.columns(2, gap="1.2rem")
-        with c1:
-            app.subheader("Selection", divider=False)
-            app.checkbox("Enable notifications", value=True, key="wg_chk1")
-            app.checkbox("Dark mode preview", value=False, key="wg_chk2")
-            app.toggle("Live updates", value=True, key="wg_toggle1")
-            app.toggle("Auto-save", value=False, key="wg_toggle2")
-            app.space("0.4rem")
-            app.radio(
-                "Priority",
-                options=["Low", "Medium", "High", "Critical"],
-                index=1,
-                horizontal=True,
-                key="wg_radio1",
-            )
-        with c2:
-            app.subheader("Values", divider=False)
-            app.number_input("Port", value=8080, min_value=1024, max_value=65535, key="wg_num1")
-            app.selectbox(
-                "Theme preset",
-                ["violit_light_jewel", "ocean", "glass", "editorial", "neo_brutalism", "cyberpunk"],
-                key="wg_sel1",
-            )
-            app.multiselect(
-                "Active features",
-                options=["Chat", "Auth", "ORM", "Lite mode", "Desktop", "Broadcasting"],
-                default=["Chat", "Auth"],
-                key="wg_ms1",
-            )
-            app.date_input("Launch date", key="wg_date1")
+    ctl = app.columns([1.2, 1, 1, 1], gap='small')
+    with ctl[0]:
+        persona = app.selectbox('Persona', ['Guide', 'Architect', 'Debugger'], value='Guide', key='u0_new_demo_persona_select')
+    with ctl[1]:
+        reply_mode = app.selectbox('Reply mode', ['streaming', 'instant'], value='streaming', key='u0_new_demo_reply_mode_select')
+    with ctl[2]:
+        show_trace = app.toggle('Show trace', value=True, key='u0_new_demo_show_trace_toggle')
+    with ctl[3]:
+        show_artifacts = app.toggle('Show artifacts', value=True, key='u0_new_demo_show_artifacts_toggle')
 
-    with t_status:
-        app.space("0.5rem")
-        app.callout_info("Callouts are great for contextual guidance — no custom HTML needed.")
-        app.callout_success("Operation completed successfully. State was saved to the database.")
-        app.callout_warning("This widget is in beta. Some props may change in future versions.")
-        app.callout_danger("Authentication failed. Please check your credentials and try again.")
-        app.space("0.5rem")
-        app.subheader("Progress & Badges", divider=False)
-        c1, c2 = app.columns([1.4, 0.6], gap="1.2rem")
-        with c1:
-            app.progress(72)
-            app.progress(35)
-            app.progress(91)
-        with c2:
-            app.badge("primary", variant="primary", pill=True)
-            app.badge("success", variant="success", pill=True)
-            app.badge("warning", variant="warning", pill=True)
-            app.badge("danger", variant="danger", pill=True)
-            app.badge("neutral", variant="neutral", pill=True)
-            app.badge("live", variant="primary", pill=True, pulse=True)
-
-    with t_layout:
-        app.space("0.5rem")
-        with app.expander("What is Violit?", icon="circle-question"):
-            app.text(
-                "Violit is a Python web framework with built-in reactivity, chat, ORM, and auth.",
-                muted=True,
-            )
-            app.callout_info("No JavaScript required to build polished interactive UIs.")
-        with app.expander("Styling approach", icon="palette"):
-            app.text(
-                "Use cls= for Tailwind utilities. Use style= only for gradients or precise shadows.",
-                muted=True,
-            )
-            app.code("app.button('Launch', cls='rounded-full shadow-lg font-bold')", language="python")
-        with app.expander("Deployment options", icon="rocket"):
-            app.text("Deploy as a standard Python web app. Supports Uvicorn, Gunicorn, and Docker.", muted=True)
-            app.code("violit run app.py --port 8080", language="bash")
-        app.space("0.5rem")
-        app.subheader("Code snippet", divider=False)
-        app.code(
-            "app = vl.App(title='My App', theme='violit_light_jewel')\n"
-            "count = app.state(0)\n"
-            "app.button('Click me', on_click=lambda: count.set(count.value + 1))\n"
-            "app.metric('Clicks', lambda: str(count.value))",
-            language="python",
-        )
-
-
-def chat_page():
-    app.header("Pseudo Chat Studio")
-    app.caption("Built with Violit's chat widgets. No real AI provider is called.")
-
-    modes = ["streaming", "instant"]
-    current_mode = chat_mode.value if chat_mode.value in modes else "streaming"
-
-    c1, c2, c3 = app.columns([1, 1, 1])
-    with c1:
-        app.selectbox(
-            "Reply mode",
-            modes,
-            index=modes.index(current_mode),
-            key="showcase_chat_mode",
-        )
-    with c2:
-        app.select_slider(
-            "Assistant vibe",
-            options=["Builder", "Playful", "Bold"],
-            value=chat_style.value,
-            key="showcase_chat_style",
-        )
-    with c3:
-        app.button("Reset chat", on_click=_reset_chat, variant="neutral")
-
-    app.callout_info(
-        "This page demonstrates the primitive Violit chat surface: chat_thread for the transcript area plus chat_message and chat_input for interaction."
-    )
+    app.button('Reset chat', on_click=lambda: support_messages.set(support_boot_messages()), variant='neutral', icon='arrow-rotate-left')
+    compact_label('Prompt ideas: summarize at-risk customers / explain rollout cohorts / draft a workflow rule')
 
     @app.reactivity
-    def render_chat():
-        with app.chat_thread(height="62vh", border=True):
-            for message in chat_history.value:
-                with app.chat_message(message.get("role", "assistant")):
-                    app.render_chat_message_body(message)
+    def render_chat() -> None:
+        app.agent_history(
+            support_messages,
+            height='62vh',
+            border=True,
+            show_trace=show_trace.value,
+            show_artifacts=show_artifacts.value,
+            show_summary=True,
+            show_status=True,
+        )
 
-    cast(Any, render_chat)()
-
-    app.chat_input(
-        "Ask about themes, auth, ORM, Lite mode, or styling...",
-        on_submit=_submit_chat_prompt,
-        disabled=bool(chat_busy.value),
-        accept_file="multiple",
+    render_chat()
+    app.managed_chat_input(
+        'Ask Northstar Copilot...',
+        messages=support_messages,
+        on_submit=lambda prompt: build_support_reply(prompt, persona=persona.value, reply_mode=reply_mode.value),
+        pinned=False,
+        auto_scroll='bottom',
+        stream_speed='smooth',
+        accept_file='multiple',
         accept_audio=True,
         audio_sample_rate=16000,
+        max_chars=1000,
     )
 
 
-def reactive_page():
-    app.header("Reactive Logic")
-    app.caption("Small current patterns: direct state, If, For, callbacks, and reactive blocks.")
+def workflow_studio_page() -> None:
+    app.header('Workflow Studio')
+    app.caption('A compact internal tool for authoring automation rules and exporting the resulting spec.')
 
-    count = app.state(0, key="reactive_count")
+    left, right = app.columns([1.05, 0.95], gap='large', vertical_alignment='top')
+    with left:
+        with app.container(border=True, cls='rounded-[28px] bg-white/90 p-5 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.16)]'):
+            with app.popover('Recommended templates', use_container_width=True):
+                for template in workflow_templates:
+                    app.text(f'- {template}')
 
-    app.subheader("1. Counter with a tiny reactive condition")
-    c1, c2 = app.columns([1, 2])
-    with c1:
-        app.metric("Count", lambda: str(count.value))
-    with c2:
-        btn1, btn2 = app.columns(2)
-        with btn1:
-            app.button("Increase", on_click=lambda: count.set(count.value + 1), variant="primary")
-        with btn2:
-            app.button("Decrease", on_click=lambda: count.set(count.value - 1), variant="neutral")
+            with app.form(key='u0_new_demo_workflow_form', clear_on_submit=False, enter_to_submit=True):
+                flow_name = app.text_input('Workflow name', value=workflow_spec.value['name'])
+                trigger = app.selectbox('Trigger', ['MRR drops 10% week-over-week', 'Health flips to At Risk', 'Support queue breaches SLA', 'Expansion opportunity detected'], value=workflow_spec.value['trigger'])
+                channel = app.selectbox('Routing channel', ['Slack + inbox', 'Email only', 'In-app task', 'Pager rotation'], value=workflow_spec.value['channel'])
+                priority = app.select_slider('Priority', options=['Low', 'Medium', 'High', 'Urgent'], value=workflow_spec.value['priority'])
+                notes = app.text_area('Operational notes', value=workflow_spec.value['notes'], height=120)
+                notify_exec = app.checkbox('Notify executive sponsor', value=workflow_spec.value['notify_exec'])
 
-    app.If(
-        lambda: count.value >= 5,
-        then=lambda: app.callout_success("Counter warmed up. This message appears without a full rerun."),
-        else_=lambda: app.callout_info("Tap a few more times to trigger the success state."),
-    )
+                def submit_workflow() -> None:
+                    workflow_spec.set(
+                        {
+                            'name': flow_name.value,
+                            'trigger': trigger.value,
+                            'channel': channel.value,
+                            'priority': priority.value,
+                            'notes': notes.value,
+                            'notify_exec': notify_exec.value,
+                        }
+                    )
+                    app.toast('Workflow spec updated', icon='wand-magic-sparkles', variant='success')
+
+                app.form_submit_button('Update workflow', on_click=submit_workflow, type='primary', use_container_width=True, icon='wand-magic-sparkles')
+
+    with right:
+        with app.container(border=True, cls='rounded-[28px] bg-white/90 p-5 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.16)]'):
+            compact_label('CURRENT SPEC')
+            app.subheader(workflow_spec.value['name'])
+            app.text(f"Trigger: {workflow_spec.value['trigger']}", muted=True)
+            app.text(f"Channel: {workflow_spec.value['channel']} · Priority: {workflow_spec.value['priority']}", muted=True)
+            app.callout(workflow_spec.value['notes'], title='Notes', variant='info')
+            if workflow_spec.value['notify_exec']:
+                badge_chip('Exec sponsor notified', variant='success')
+            else:
+                badge_chip('Exec sponsor not notified', variant='neutral')
+            app.space('0.75rem')
+            app.json(workflow_spec.value, expanded=False)
+            app.space('0.75rem')
+            app.download_button(
+                'Download JSON',
+                data=json.dumps(workflow_spec.value, ensure_ascii=False, indent=2),
+                file_name='northstar_workflow_spec.json',
+                mime='application/json',
+                icon='file-code',
+                variant='neutral',
+            )
+
+
+def settings_page() -> None:
+    app.header('Settings')
+    app.caption('Theme controls, animation behavior, live status, and an interval-driven pulse.')
+
+    current_theme_index = SHOWCASE_THEME_OPTIONS.index(active_theme_name.value) if active_theme_name.value in SHOWCASE_THEME_OPTIONS else 0
+    controls = app.columns(2, gap='large')
+    with controls[0]:
+        theme_choice = app.selectbox('Theme', SHOWCASE_THEME_OPTIONS, index=current_theme_index, key='u0_new_demo_theme_choice')
+        app.button(
+            'Apply theme',
+            on_click=lambda: (
+                active_theme_name.set(theme_choice.value),
+                app.set_theme(theme_choice.value),
+                app.toast(f'Theme changed to {theme_choice.value}', icon='palette', variant='success'),
+            ),
+        )
+    with controls[1]:
+        animation_mode = app.radio('Animation mode', ['soft', 'hard'], horizontal=True)
+        app.button(
+            'Update animation',
+            on_click=lambda: (app.set_animation_mode(animation_mode.value), app.toast(f'Animation mode set to {animation_mode.value}', icon='sparkles', variant='neutral')),
+            variant='neutral',
+        )
+
+    app.divider()
+    deploy_state = app.radio('Deployment state', ['running', 'complete', 'error'], horizontal=True)
+    app.status(lambda: f'Workspace deployment is {deploy_state.value}', state=deploy_state, expanded=True)
 
     app.divider()
 
-    app.subheader("2. Real-time calculator")
-    v1, v2 = app.columns(2)
-    with v1:
-        value_a = app.slider("Value A", 0, 100, 30, live_update=True)
-    with v2:
-        value_b = app.slider("Value B", 0, 100, 70, live_update=True)
+    def start_pulse() -> None:
+        if pulse_running.value:
+            return
+        handle = app.interval(lambda: pulse_tick.set(pulse_tick.value + 1), ms=1000)
+        pulse_handle.set(handle)
+        pulse_running.set(True)
 
-    app.card(
-        lambda: f"""
-        <div style='text-align:center; padding:0.2rem 0;'>
-          <div style='font-size:0.8rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#7C3AED;'>Live result</div>
-          <div style='margin-top:0.45rem; font-size:3rem; font-weight:800; color:var(--vl-text);'>
-            {value_a.value + value_b.value}
-          </div>
-          <div style='color:var(--vl-text-muted);'>Move the sliders and only this card updates.</div>
-        </div>
-        """,
-        style="background:linear-gradient(180deg,#FFFFFF 0%, #FAF5FF 100%); border:1px solid #E9D5FF; box-shadow:0 18px 40px rgba(109,40,217,0.08);",
-    )
+    def stop_pulse() -> None:
+        if pulse_running.value and pulse_handle.value:
+            pulse_handle.value.stop()
+            pulse_running.set(False)
 
-    app.divider()
+    pulse_row = app.columns(3, gap='small')
+    with pulse_row[0]:
+        app.button('Start pulse', on_click=start_pulse, variant='success', cls='w-full')
+    with pulse_row[1]:
+        app.button('Stop pulse', on_click=stop_pulse, variant='warning', cls='w-full')
+    with pulse_row[2]:
+        app.button('Reset pulse', on_click=lambda: pulse_tick.set(0), variant='neutral', cls='w-full')
 
-    app.subheader("3. Dynamic greeting")
-    name = app.text_input("Enter your name", value="Explorer", key="reactive_name")
-    app.If(
-        lambda: bool(name.value.strip()),
-        then=lambda: app.callout_success(f"Hello, {name.value}. This block is using app.If(...)."),
-        else_=lambda: app.callout_warning("Type a name to personalize the greeting."),
-    )
-
-    app.divider()
-
-    app.subheader("4. For-driven spotlight list")
-    spotlight_count = app.slider("Number of spotlight cards", 1, 6, 3, live_update=True)
-    spotlight_items = [
-        ("Starter-friendly", "Plain Python authoring with polished built-in widgets.", "#7C3AED"),
-        ("Reactive by default", "Use State, lambda bindings, and tiny reactive scopes only where they help.", "#2563EB"),
-        ("Theme-ready", "Switch presets quickly and keep the visual direction inside your app code.", "#EA580C"),
-        ("Chat-ready", "Modern chat demos can use chat_messages and chat_input without external scaffolding.", "#16A34A"),
-        ("Database-friendly", "app.db and built-in auth reduce the need for extra glue in small apps.", "#DB2777"),
-        ("Lite included", "HTMX Lite mode is available when you want a different runtime profile.", "#0891B2"),
-    ]
-    app.For(
-        lambda: spotlight_items[: spotlight_count.value],
-        render=lambda item, index: app.card(
-            f'<div style="display:flex;flex-direction:column;gap:0.4rem;padding:0.1rem 0;">'
-            f'<div style="font-size:0.7rem;font-weight:800;letter-spacing:0.09em;text-transform:uppercase;color:{item[2]};">Spotlight {index + 1}</div>'
-            f'<div style="font-weight:700;color:var(--vl-text);font-size:1.08rem;">{item[0]}</div>'
-            f'<div style="color:var(--vl-text-muted);line-height:1.62;font-size:0.9rem;">{item[1]}</div>'
-            f'</div>',
-            style=f"margin-bottom:0.75rem;background:white;border:1px solid #E9E5F0;border-left:4px solid {item[2]};box-shadow:0 8px 24px rgba(28,17,39,0.05);",
-        ),
-    )
-
-
-def settings_page():
-    app.header("Settings")
-    app.caption("Switch the look and tune a few runtime-feel controls from one page.")
-
-    theme_options = [
-        "violit_light_jewel",
-        "light",
-        "ocean",
-        "glass",
-        "editorial",
-        "neo_brutalism",
-        "violit_dark",
-        "cyberpunk",
-    ]
-    default_theme = "violit_light_jewel"
-    default_index = theme_options.index(default_theme)
-
-    theme_choice = app.selectbox(
-        "Choose Theme",
-        theme_options,
-        index=default_index,
-        key="settings_theme_select",
-    )
-    primary = app.color_picker("Primary Accent", "#6D28D9")
-    animation = app.radio(
-        "Animation Mode",
-        ["soft", "hard"],
-        index=0,
-        horizontal=True,
-        key="settings_animation_mode",
-    )
-    selection = app.toggle("Allow text selection", value=True, key="settings_selection_mode")
-
-    def apply_settings():
-        app.set_theme(theme_choice.value)
-        app.set_primary_color(primary.value)
-        app.set_animation_mode(animation.value)
-        app.set_selection_mode(selection.value)
-        app.toast(f"Applied {theme_choice.value}", variant="success")
-
-    app.button("Apply Settings", on_click=apply_settings, variant="primary")
-    app.callout_info(
-        f"This showcase starts in violit_light_jewel. Current runtime: {'Lite (HTMX)' if mode == 'lite' else 'WebSocket'}."
+    app.metric('Pulse count', pulse_tick)
+    app.progress(lambda: int(pulse_tick.value % 100))
+    app.json(
+        lambda: {
+            'theme': theme_choice.value,
+            'animation_mode': animation_mode.value,
+            'deployment_state': deploy_state.value,
+            'pulse_running': pulse_running.value,
+            'pulse_tick': pulse_tick.value,
+        },
+        expanded=False,
     )
 
 
 with app.sidebar:
-    app.markdown("### Violit Showcase")
-    app.caption("Faster than Light, Beautiful as Violet.")
-    app.badge(f"runtime: {'lite' if mode == 'lite' else 'ws'}", pill=True, variant="primary")
+    with app.container(border=True, cls='rounded-[28px] bg-white/82 p-5 shadow-[0_20px_56px_-38px_rgba(15,23,42,0.18)]'):
+        compact_label('NORTHSTAR FOUNDRY')
+        app.text('Customer operations workspace', size='large', cls='font-semibold')
+        app.text('Curated pages, real widget flows, and a modern product-marketing tone.', muted=True, size='small')
+        app.space('0.5rem')
+        badge_chip(lambda: theme_badge_label(active_theme_name.value), variant='success')
     app.divider()
+    compact_label('FOCUSED MENU')
+    app.text('Each page owns a clear job so the app feels like a believable product rather than a widget dump.', muted=True, size='small')
 
 
 app.navigation(
     [
-        vl.Page(home_page, title="Home", icon="house"),
-        vl.Page(dashboard_page, title="Dashboard", icon="chart-line"),
-        vl.Page(reactive_page, title="Reactive Logic", icon="bolt"),
-        vl.Page(widgets_page, title="Widgets", icon="puzzle-piece"),
-        vl.Page(chat_page, title="Chat", icon="comments"),
-        vl.Page(settings_page, title="Settings", icon="gear"),
+        vl.Page(overview_page, title='Overview', icon='house', url_path='overview'),
+        vl.Page(customer_radar_page, title='Customer Radar', icon='users', url_path='customers'),
+        vl.Page(operations_page, title='Operations', icon='tower-broadcast', url_path='operations'),
+        vl.Page(copilot_page, title='Copilot', icon='comment-dots', url_path='copilot'),
+        vl.Page(workflow_studio_page, title='Workflow Studio', icon='wand-magic-sparkles', url_path='studio'),
+        vl.Page(settings_page, title='Settings', icon='gear', url_path='settings'),
     ]
 )
 
-app.run()
+
+if __name__ == '__main__':
+    app.run()

@@ -1,155 +1,97 @@
 # 1. Violit Showcase Demo
 
-This example is the broad, polished tour of Violit.
+This example is the main polished, user-facing Violit showcase.
 
-It is not the smallest example in the repository.
-It is the example to open when you want to feel what a modern multi-page Violit app can look like with charts, reactive UI, built-in chat widgets, styling helpers, and runtime theme switching in one file.
+It is the best place to start if you want one file that feels like a small product rather than a widget dump. The app is called `Northstar Foundry` and combines charts, reactive state, editable data, built-in chat widgets, workflow authoring, and live runtime theme switching.
 
-## File
+## Files
 
-- `demo_showcase.py`: a multi-page showcase app
+- `demo_showcase.py`: the current showcase app
+- `old_archive_demo_showcase.py`: the previous archived showcase version
 
 ## Run
+
+From this folder:
+
+```bash
+cd examples/1_demo_showcase
+python demo_showcase.py
+```
+
+Or with the Violit CLI:
 
 ```bash
 cd examples/1_demo_showcase
 violit run demo_showcase.py
 ```
 
-By default, the app runs in WebSocket mode and starts with the bright `violit_light_jewel` theme.
+By default, the app runs in WebSocket mode and starts with the `violit_cloud_foundry` theme.
 
-You can also run it in Lite mode:
+You can also run the same example in Lite mode:
 
 ```bash
-violit run demo_showcase.py --lite
+python demo_showcase.py --lite
 ```
-
-Lite mode uses HTMX and is a good way to preview the same demo in Violit's lighter HTTP runtime.
 
 ## What This Example Shows
 
-This app includes several pages in one sidebar navigation:
+This showcase includes six focused pages in one sidebar app:
 
-- `Home`: a more visual landing page with feature cards, quickstart actions, and a curated first impression
-- `Dashboard`: metrics, chart tabs, a dataframe, and a small `@app.reactivity` block
-- `Reactive Logic`: `State`, `app.If(...)`, `app.For(...)`, live sliders, and partial updates
-- `Widgets`: a live preview panel, `download_button`, `link_button`, dialogs, and a broader widget gallery
-- `Chat`: Violit's built-in `chat_history(...)` and `chat_input(...)` with safe pseudo replies instead of a real AI API
-- `Settings`: curated theme presets plus runtime controls for primary color, animation mode, and selection mode
+- `Overview`: a product-style landing page with launch metrics, curated charts, and next-step cards
+- `Customer Radar`: live search, segment filters, risk filtering, dataframe interaction, and account detail sync
+- `Operations`: rollout cohorts, editable launch controls, status surfaces, dialogs, and chart telemetry
+- `Copilot`: `agent_history(...)` plus `managed_chat_input(...)` with attachments, audio capture, and pseudo-agent replies
+- `Workflow Studio`: form-driven workflow authoring with a current-spec preview and JSON download
+- `Settings`: runtime theme switching across all registered themes, animation controls, status widgets, and interval-based updates
 
-There is no database setup and no API key needed.
+There is no database setup and no external AI API key required.
 
-## Read The Code In This Order
+## Why It Is Useful
 
-### 1. Mode detection and app setup
+This example is meant for users who want to learn Violit from a realistic multi-page app instead of isolated snippets.
+
+It demonstrates:
+
+- built-in sidebar navigation with `vl.Page(...)`
+- `State` shared across pages
+- reactive rendering with `@app.reactivity`
+- `plotly_chart`, dataframe, data editor, forms, dialogs, and status widgets
+- the current high-level chat stack with `agent_history(...)` and `managed_chat_input(...)`
+- runtime theme switching, including all themes registered in `Theme.PRESETS`
+
+## Key App Setup
+
+The example chooses WebSocket mode by default and falls back to Lite mode when `--lite` is provided:
 
 ```python
-mode = "lite" if "--lite" in sys.argv else "ws"
+mode = 'lite' if '--lite' in sys.argv else 'ws'
 
 app = vl.App(
-    title="Violit Showcase",
+    title='Northstar Foundry',
     mode=mode,
-    theme="violit_light_jewel",
-    container_width="1200px",
+    theme='violit_cloud_foundry',
+    container_width='1240px',
+    widget_gap='1rem',
 )
 ```
 
-The example chooses `ws` by default and switches to `lite` when you pass `--lite`.
-
-### 2. Shared state
+It also exposes every registered Violit theme in the `Settings` page:
 
 ```python
-chat_history = app.state([...], key="showcase_chat_history")
-chat_mode = app.state("streaming", key="showcase_chat_mode")
-chat_style = app.state("Builder", key="showcase_chat_style")
-dashboard_seed = app.state(0, key="showcase_dashboard_seed")
+SHOWCASE_THEME_OPTIONS = list(Theme.PRESETS.keys())
 ```
-
-This state is shared across pages for the pseudo chat demo and dashboard refreshes.
-
-### 3. Page functions
-
-Each page is still a normal Python function:
-
-```python
-def home_page():
-    ...
-
-def dashboard_page():
-    ...
-
-def chat_page():
-    ...
-```
-
-This keeps the app easy to scan even though it covers a lot of surface area.
-
-### 4. Built-in chat widgets
-
-The `Chat` page now demonstrates the recommended Violit chat pattern:
-
-```python
-@app.reactivity
-def render_chat():
-    app.chat_history(chat_history, height="62vh", border=True)
-
-render_chat()
-
-app.chat_input(
-    "Ask about themes, auth, ORM, Lite mode, or styling...",
-    messages=chat_history,
-    on_submit=_pseudo_chat_reply,
-)
-```
-
-The reply function only returns pseudo content.
-It does not call OpenAI, Gemini, or any external LLM API.
-
-### 5. Reactive bindings and helpers
-
-This showcase demonstrates several current Violit patterns in one place:
-
-```python
-app.card(lambda: ...)
-app.If(lambda: ..., then=..., else_=...)
-app.For(lambda: items[:count.value], render=...)
-```
-
-The `Reactive Logic` page is the clearest place to study these patterns.
-
-### 6. Styling and dialogs
-
-The `Widgets` page mixes input widgets with styling-oriented examples:
-
-```python
-app.button("Rounded CTA", cls="w-full rounded-full shadow-lg font-semibold")
-app.download_button(...)
-app.link_button(...)
-
-@app.dialog("Tailwind Notes")
-def tailwind_notes_dialog():
-    ...
-```
-
-This is a good page to inspect if you want examples of `cls`, visual cards, helper widgets, and a larger built-in widget gallery.
-
-### 7. Sidebar navigation
-
-```python
-app.navigation([
-    vl.Page(home_page, title="Home", icon="house"),
-    vl.Page(dashboard_page, title="Dashboard", icon="chart-line"),
-    ...
-])
-```
-
-The example uses Violit's built-in sidebar and page navigation to turn one file into a small showcase app.
 
 ## Good Pages To Explore First
 
-If you only want a quick feel for the updated showcase, start here:
+If you want a quick feel for the current showcase, start here:
 
-- `Home` for the overall visual direction and quickstart actions
-- `Chat` for the built-in chat widget flow with pseudo replies
-- `Widgets` for Tailwind-friendly button styling, helper widgets, and dialog usage
-- `Reactive Logic` for clear examples of partial UI updates without full reruns
+- `Overview` for the visual direction, metric cards, and themed Plotly charts
+- `Customer Radar` for live filtering and dataframe-driven detail views
+- `Copilot` for the built-in chat experience with managed input, file attachment, and audio capture
+- `Settings` for trying all available themes and runtime controls
+
+## Notes
+
+- The pseudo-copilot replies are local demo logic, not a real LLM backend.
+- The app is intentionally styled to feel like a believable internal product surface.
+- If you are studying Violit patterns, this is the most complete single-file example in the repository.
