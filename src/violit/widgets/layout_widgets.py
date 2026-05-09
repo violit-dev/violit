@@ -266,11 +266,12 @@ class LayoutWidgetsMixin:
         """Create an expandable/collapsible section
         
         Args:
-            label: Section header text
+            label: Section header text, State, ComputedState, or callable returning text
             expanded: Whether the section is initially expanded
             icon: Optional icon (emoji or string) to display before the label
         """
         cid = self._get_next_cid("expander")
+        summary_cid = f"{cid}__summary"
         
         class ExpanderContext:
             def __init__(self, app, expander_id, label, expanded, icon=None, user_cls="", user_style=""):
@@ -283,6 +284,43 @@ class LayoutWidgetsMixin:
                 self.user_style = user_style
                 
             def __enter__(self):
+                def summary_builder():
+                    from ..state import State, ComputedState
+
+                    token = rendering_ctx.set(summary_cid)
+                    try:
+                        if isinstance(self.label, (State, ComputedState)):
+                            resolved_label = str(self.label.value)
+                        elif callable(self.label):
+                            resolved_label = str(self.label())
+                        else:
+                            resolved_label = str(self.label)
+
+                        if isinstance(self.icon, (State, ComputedState)):
+                            resolved_icon = str(self.icon.value)
+                        elif callable(self.icon):
+                            resolved_icon = str(self.icon())
+                        else:
+                            resolved_icon = str(self.icon) if self.icon is not None else ""
+                    finally:
+                        rendering_ctx.reset(token)
+
+                    icon_html = f'{resolved_icon} ' if resolved_icon else ''
+                    return Component(
+                        "span",
+                        id=summary_cid,
+                        content=f"{icon_html}{resolved_label}",
+                        slot="summary",
+                        style="font-weight:500;",
+                    )
+
+                if session_ctx.get() is None:
+                    self.app.static_builders[summary_cid] = summary_builder
+                else:
+                    from ..state import get_session_store
+                    store = get_session_store()
+                    store['builders'][summary_cid] = summary_builder
+
                 # Register builder BEFORE entering context
                 def builder():
                     from ..state import get_session_store
@@ -299,10 +337,10 @@ class LayoutWidgetsMixin:
                     
                     inner_html = "".join(htmls)
                     open_attr = "open" if self.expanded else ""
-                    icon_html = f'{self.icon} ' if self.icon else ''
+                    summary_html = summary_builder().render()
                     html = f'''
                     <wa-details {open_attr} style="margin-bottom:1rem;">
-                        <span slot="summary" style="font-weight:500;">{icon_html}{self.label}</span>
+                        {summary_html}
                         <div style="padding:0.5rem 0;">{inner_html}</div>
                     </wa-details>
                     '''
