@@ -284,6 +284,143 @@ _ASYNC_CHART_THRESHOLD = 50000
 class ChartWidgetsMixin:
     """Chart widgets (line, bar, area, scatter, plotly, pyplot, etc.)"""
 
+    @staticmethod
+    def _plotly_rgba(color: str, alpha: float) -> str:
+        if not color:
+            return f"rgba(148,163,184,{alpha})"
+
+        value = str(color).strip()
+        if value.startswith("rgba("):
+            parts = [part.strip() for part in value[5:-1].split(",")]
+            if len(parts) >= 3:
+                return f"rgba({parts[0]},{parts[1]},{parts[2]},{alpha})"
+            return value
+        if value.startswith("rgb("):
+            parts = [part.strip() for part in value[4:-1].split(",")]
+            if len(parts) >= 3:
+                return f"rgba({parts[0]},{parts[1]},{parts[2]},{alpha})"
+            return value
+        if value.startswith("#"):
+            hex_value = value[1:]
+            if len(hex_value) == 3:
+                hex_value = "".join(ch * 2 for ch in hex_value)
+            if len(hex_value) == 6:
+                red = int(hex_value[0:2], 16)
+                green = int(hex_value[2:4], 16)
+                blue = int(hex_value[4:6], 16)
+                return f"rgba({red},{green},{blue},{alpha})"
+        return value
+
+    def _apply_plotly_theme(self, fig):
+        import plotly.graph_objects as go
+
+        theme = getattr(getattr(self, "theme_manager", None), "current", None) or {}
+        if not theme:
+            return fig
+
+        themed_fig = go.Figure(fig)
+        mode = theme.get("mode", "light")
+        text = theme.get("text", "#0f172a")
+        text_muted = theme.get("text_muted", "#64748b")
+        border = theme.get("border", "#cbd5e1")
+        bg_card = theme.get("bg_card", "#ffffff")
+        primary = theme.get("primary", "#7c3aed")
+        secondary = theme.get("secondary", primary)
+        success = theme.get("success", "#10b981")
+        warning = theme.get("warning", "#f59e0b")
+        danger = theme.get("danger", "#ef4444")
+
+        palette = []
+        for color in [primary, secondary, success, warning, danger, text_muted, border]:
+            if color and color not in palette:
+                palette.append(color)
+
+        if not palette:
+            palette = ["#7c3aed", "#ec4899", "#10b981", "#f59e0b", "#ef4444"]
+
+        grid_color = self._plotly_rgba(border, 0.32 if mode == "dark" else 0.22)
+        zero_color = self._plotly_rgba(border, 0.52 if mode == "dark" else 0.34)
+        fill_alpha = 0.22 if mode == "dark" else 0.14
+        font_family = "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+
+        axis_style = dict(
+            gridcolor=grid_color,
+            linecolor=grid_color,
+            zerolinecolor=zero_color,
+            tickfont=dict(color=text_muted),
+            title=dict(font=dict(color=text_muted)),
+            automargin=True,
+        )
+
+        polar_axis_style = dict(
+            gridcolor=grid_color,
+            linecolor=grid_color,
+            tickfont=dict(color=text_muted),
+            title=dict(font=dict(color=text_muted)),
+        )
+
+        scene_axis_style = dict(
+            showbackground=False,
+            gridcolor=grid_color,
+            linecolor=grid_color,
+            tickfont=dict(color=text_muted),
+            title=dict(font=dict(color=text_muted)),
+        )
+
+        themed_fig.update_layout(
+            template=go.layout.Template(
+                layout=go.Layout(
+                    colorway=palette,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color=text, family=font_family),
+                    title=dict(font=dict(color=text)),
+                    legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=text_muted)),
+                    hoverlabel=dict(bgcolor=bg_card, bordercolor=border, font=dict(color=text)),
+                    xaxis=axis_style,
+                    yaxis=axis_style,
+                    polar=dict(
+                        bgcolor="rgba(0,0,0,0)",
+                        radialaxis=polar_axis_style,
+                        angularaxis=dict(gridcolor=grid_color, linecolor=grid_color, tickfont=dict(color=text_muted)),
+                    ),
+                    scene=dict(
+                        bgcolor="rgba(0,0,0,0)",
+                        xaxis=scene_axis_style,
+                        yaxis=scene_axis_style,
+                        zaxis=scene_axis_style,
+                    ),
+                )
+            )
+        )
+
+        for index, trace in enumerate(themed_fig.data):
+            color = palette[index % len(palette)]
+            trace_type = getattr(trace, "type", "")
+            marker = getattr(trace, "marker", None)
+            line = getattr(trace, "line", None)
+
+            if trace_type in {"pie", "sunburst", "treemap", "funnelarea"}:
+                if marker is not None and not getattr(marker, "colors", None):
+                    trace.update(marker=dict(colors=palette))
+                continue
+
+            if marker is not None and getattr(marker, "color", None) is None:
+                trace.update(marker=dict(color=color))
+
+            if line is not None and getattr(line, "color", None) is None:
+                trace.update(line=dict(color=color))
+
+            if getattr(trace, "fill", None) not in (None, "none") and getattr(trace, "fillcolor", None) is None:
+                trace.update(fillcolor=self._plotly_rgba(color, fill_alpha))
+
+            if trace_type == "bar":
+                marker_line = getattr(marker, "line", None)
+                if marker_line is not None and getattr(marker_line, "color", None) is None:
+                    trace.update(marker=dict(line=dict(color=self._plotly_rgba(color, 0.84))))
+
+        return themed_fig
+
     def _chart_should_defer_first_render(self, cid, data_points=0):
         if getattr(self, 'mode', None) != 'ws':
             return False
@@ -385,6 +522,8 @@ class ChartWidgetsMixin:
         def builder():
             import plotly.graph_objects as go
             current_fig = self._resolve_chart_data(fig, cid)
+            if current_fig is not None:
+                current_fig = self._apply_plotly_theme(current_fig)
             
             data_points_est = 0
             if current_fig and hasattr(current_fig, "data"):
@@ -586,8 +725,8 @@ class ChartWidgetsMixin:
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
-                template='plotly_white'
             )
+            fig = self._apply_plotly_theme(fig)
             
             fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
@@ -642,8 +781,8 @@ class ChartWidgetsMixin:
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
-                template='plotly_white'
             )
+            fig = self._apply_plotly_theme(fig)
             
             fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
@@ -695,8 +834,8 @@ class ChartWidgetsMixin:
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
-                template='plotly_white'
             )
+            fig = self._apply_plotly_theme(fig)
             
             fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
@@ -750,8 +889,8 @@ class ChartWidgetsMixin:
             fig.update_layout(
                 height=height,
                 margin=dict(l=0, r=0, t=30, b=0),
-                template='plotly_white'
             )
+            fig = self._apply_plotly_theme(fig)
             
             fj = _plotly_json_dumps(fig)
             container_width = "width: 100%;" if use_container_width else f"width: {width}px;" if width else "width: 100%;"
