@@ -121,6 +121,7 @@ class LayoutWidgetsMixin:
         column_objects = []
         for i in range(count):
             col = ColumnObject(self, columns_id, i, count, gap)
+            _reset_dynamic_fragment_children(col.col_id)
             column_objects.append(col)
         
         # Register the columns container builder
@@ -394,6 +395,7 @@ class LayoutWidgetsMixin:
                 # Create tab objects immediately
                 for i, label in enumerate(self.labels):
                     tab_obj = TabObject(self.app, f"{self.tabs_id}_tab_{i}", label, i == 0)
+                    _reset_dynamic_fragment_children(tab_obj.tab_id)
                     self.tab_objects.append(tab_obj)
 
                 def tab_action(panel_name):
@@ -890,7 +892,6 @@ class ColumnObject:
         
     def __enter__(self):
         from ..context import fragment_ctx, rendering_ctx
-        _reset_dynamic_fragment_children(self.col_id)
         self.token = fragment_ctx.set(self.col_id)
         # We don't set rendering_ctx here because individual widgets inside will set their own
         return self
@@ -913,7 +914,6 @@ class TabObject:
         self.active = active
         
     def __enter__(self):
-        _reset_dynamic_fragment_children(self.tab_id)
         self.token = fragment_ctx.set(self.tab_id)
         return self
         
