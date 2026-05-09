@@ -73,13 +73,16 @@ def _parse_chat_submit_value(value: Any) -> Any:
     data = value
     if isinstance(value, str):
         stripped = value.strip()
-        if stripped.startswith("{"):
+        if stripped.startswith("{") or stripped.startswith('"'):
             try:
                 data = json.loads(stripped)
             except Exception:
                 return stripped
         else:
             return stripped
+
+        if isinstance(data, str):
+            return data.strip()
 
     if not isinstance(data, dict):
         return data
@@ -371,6 +374,15 @@ def _push_stream_frame(app):
     if app.ws_engine and app.ws_engine.has_socket(sid, current_view_id):
         main_loop = getattr(app, "_main_loop", None)
         if main_loop is not None and main_loop.is_running():
+            try:
+                running_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                running_loop = None
+
+            if running_loop is main_loop:
+                main_loop.create_task(app.ws_engine.push_updates(sid, dirty, view_id=current_view_id))
+                return
+
             future = asyncio.run_coroutine_threadsafe(
                 app.ws_engine.push_updates(sid, dirty, view_id=current_view_id),
                 main_loop,
@@ -1758,6 +1770,8 @@ class ChatWidgetsMixin:
             def clear_submit_lock():
                 _set_chat_submit_inflight(store, cid, False)
                 _set_chat_submit_task(store, cid, None)
+                store.setdefault('forced_dirty', set()).add(cid)
+                _push_stream_frame(self)
 
             def clear_submit_lock_and_continue():
                 clear_submit_lock()
@@ -2250,7 +2264,34 @@ class ChatWidgetsMixin:
                             '[data-chat-message="true"][data-chat-role="assistant"][data-chat-thinking="true"]'
                         );
                     }};
+                    const hasCompletedAssistantAfterLatestUser = () => {{
+                        const chatThread = getChatThread();
+                        if (!chatThread) return false;
+                        const messages = Array.from(chatThread.querySelectorAll('[data-chat-message="true"]'));
+                        let lastUserIndex = -1;
+                        let lastCompletedAssistantIndex = -1;
+                        messages.forEach((node, index) => {{
+                            if (!(node instanceof Element)) return;
+                            const role = node.getAttribute('data-chat-role');
+                            const phase = node.getAttribute('data-chat-phase');
+                            if (role === 'user') {{
+                                lastUserIndex = index;
+                            }}
+                            if (role === 'assistant' && (phase === 'done' || phase === 'error')) {{
+                                lastCompletedAssistantIndex = index;
+                            }}
+                        }});
+                        return lastUserIndex !== -1 && lastCompletedAssistantIndex > lastUserIndex;
+                    }};
+                    const clearStaleServerPendingFromTranscript = () => {{
+                        if (!root || !isServerPending() || !window[pendingSeenChatKey]) return false;
+                        if (hasRunningAssistantMessage()) return false;
+                        if (!hasCompletedAssistantAfterLatestUser()) return false;
+                        root.dataset.chatSubmitPending = 'false';
+                        return true;
+                    }};
                     const syncPendingPhase = () => {{
+                        clearStaleServerPendingFromTranscript();
                         if (getPendingPhase() === 'stopping') {{
                             if (isServerPending() || hasRunningAssistantMessage()) {{
                                 setPendingPhase('server');
@@ -2438,13 +2479,6 @@ class ChatWidgetsMixin:
                     }};
 
                     window.syncChatInput_{cid} = () => {{
-                        if (
-                            getPendingPhase() === 'submitted' &&
-                            !isServerPending() &&
-                            !hasRunningAssistantMessage()
-                        ) {{
-                            setPendingPhase('idle');
-                        }}
                         syncDraftState();
                         autoResize();
                         syncSendButtonState();
@@ -2535,13 +2569,6 @@ class ChatWidgetsMixin:
                     const syncSendButtonState = () => {{
                         if (!sendButton) return;
                         syncPendingPhase();
-                        if (
-                            getPendingPhase() === 'submitted' &&
-                            !isServerPending() &&
-                            !hasRunningAssistantMessage()
-                        ) {{
-                            setPendingPhase('idle');
-                        }}
                         syncTextareaDisabledState();
                         syncAuxButtonState();
                         renderSendButtonMode();
@@ -2725,6 +2752,9 @@ class ChatWidgetsMixin:
                             setPendingPhase('submitted');
                             window[pendingSeenChatKey] = false;
                         }}
+                        if (typeof window._vlAllowNextFocusedUpdate === 'function') {{
+                            window._vlAllowNextFocusedUpdate('{cid}');
+                        }}
                         const payload = (fileUploadEnabled || audioCaptureEnabled)
                             ? {{ text: trimmed, files: files, audio: audio, audio_sample_rate: preferredAudioSampleRate }}
                             : trimmed;
@@ -2740,6 +2770,9 @@ class ChatWidgetsMixin:
                     window.stopChatInput_{cid} = function() {{
                         if (!{'true' if show_stop_button else 'false'} || !isPending()) return;
                         setPendingPhase('stopping');
+                        if (typeof window._vlAllowNextFocusedUpdate === 'function') {{
+                            window._vlAllowNextFocusedUpdate('{cid}');
+                        }}
                         {f"window.sendAction('{stop_cid}', 'stop');" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{stop_cid}', {{values: {{value: 'stop', _csrf_token: window._csrf_token || '', _vl_lite_stream_dirty: 'true'}}, swap: 'none'}});"}
                         syncSendButtonState();
                     }};
@@ -2838,10 +2871,20 @@ class ChatWidgetsMixin:
                         return false;
                     }};
 
+                    const noteChatMutationDuringPending = () => {{
+                        if (getPendingPhase() !== 'submitted') return;
+                        if (!isServerPending() && !hasRunningAssistantMessage() && !hasCompletedAssistantAfterLatestUser()) return;
+                        window[pendingSeenChatKey] = true;
+                        if (!isServerPending()) {{
+                            setPendingPhase('server');
+                        }}
+                    }};
+
                     window.__violitChatObserver_{cid} = new MutationObserver((mutationList) => {{
                         if (scrollMode !== 'bottom') return;
                         for (const mutation of mutationList) {{
                             if ((mutation.type === 'childList' || mutation.type === 'characterData') && mutationTouchesChat(mutation)) {{
+                                noteChatMutationDuringPending();
                                 syncSendButtonState();
                                 scheduleScrollToLatest();
                                 break;
