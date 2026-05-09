@@ -86,7 +86,15 @@ class DataWidgetsMixin:
         def action(v):
             """Handle cell click events"""
             if on_cell_clicked and callable(on_cell_clicked):
-                on_cell_clicked(v)
+                payload = v
+                if isinstance(v, str):
+                    stripped = v.strip()
+                    if stripped.startswith("{") or stripped.startswith("["):
+                        try:
+                            payload = json.loads(stripped)
+                        except Exception:
+                            payload = v
+                on_cell_clicked(payload)
         
         def builder():
             import pandas as pd
