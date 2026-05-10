@@ -403,9 +403,64 @@
                 return Math.min(remaining, baseStep);
             };
 
-            const renderHtmlState = (state, html) => {
+            const upsertHtmlSnapshot = (state, length, html) => {
+                if (!state || !Number.isFinite(Number(length)) || length < 0 || !html) {
+                    return;
+                }
+                const snapshotLength = Number(length);
+                const existingSnapshots = Array.isArray(state.htmlSnapshots) ? state.htmlSnapshots : [];
+                const filtered = existingSnapshots.filter((entry) => entry && Number.isFinite(Number(entry.length)) && Number(entry.length) <= snapshotLength);
+                const sameIndex = filtered.findIndex((entry) => Number(entry.length) === snapshotLength);
+                const nextEntry = { length: snapshotLength, html };
+                if (sameIndex >= 0) {
+                    filtered[sameIndex] = nextEntry;
+                } else {
+                    filtered.push(nextEntry);
+                }
+                filtered.sort((left, right) => Number(left.length) - Number(right.length));
+                state.htmlSnapshots = filtered.slice(-120);
+            };
+
+            const resolveHtmlRenderPayload = (state) => {
+                if (!state) {
+                    return null;
+                }
+                const displayed = typeof state.displayed === 'string' ? state.displayed : '';
+                const displayedLength = displayed.length;
+                const snapshots = Array.isArray(state.htmlSnapshots) ? state.htmlSnapshots : [];
+                let snapshot = null;
+                for (let index = 0; index < snapshots.length; index += 1) {
+                    const entry = snapshots[index];
+                    if (!entry || !Number.isFinite(Number(entry.length))) {
+                        continue;
+                    }
+                    if (Number(entry.length) <= displayedLength) {
+                        snapshot = entry;
+                        continue;
+                    }
+                    break;
+                }
+                if (!snapshot && state.liveHtml && displayedLength === (state.target || '').length) {
+                    snapshot = { length: displayedLength, html: state.liveHtml };
+                }
+                if (!snapshot) {
+                    return displayedLength > 0 ? { html: '', rawSuffix: displayed } : null;
+                }
+                const rawSuffix = displayedLength > Number(snapshot.length)
+                    ? displayed.slice(Number(snapshot.length))
+                    : '';
+                return { html: snapshot.html || '', rawSuffix };
+            };
+
+            const renderHtmlState = (state, html, rawSuffix) => {
                 state.live.style.whiteSpace = 'normal';
                 state.live.innerHTML = html || '';
+                if (rawSuffix) {
+                    const suffixNode = document.createElement('span');
+                    suffixNode.style.whiteSpace = 'pre-wrap';
+                    suffixNode.textContent = rawSuffix;
+                    state.live.appendChild(suffixNode);
+                }
                 if (!state.cursor) {
                     return;
                 }
@@ -416,21 +471,57 @@
                 state.live.appendChild(cursorNode);
             };
 
+            const syncClosestChatThreadBottom = (state) => {
+                if (!state || !state.host || typeof state.host.closest !== 'function') {
+                    return;
+                }
+                const thread = state.host.closest('[data-chat-thread="true"]');
+                if (!thread) {
+                    return;
+                }
+                if ((thread.getAttribute('data-chat-scroll-mode') || '').toLowerCase() !== 'bottom') {
+                    return;
+                }
+
+                const syncBottom = () => {
+                    const nextTop = Math.max(thread.scrollHeight - thread.clientHeight, 0);
+                    thread.scrollTop = nextTop;
+                    if (typeof thread.scrollTo === 'function') {
+                        thread.scrollTo({ top: nextTop, behavior: 'auto' });
+                    }
+                };
+
+                syncBottom();
+
+                const frameKey = '__vlVisualStreamFollowFrame';
+                if (thread[frameKey]) {
+                    cancelAnimationFrame(thread[frameKey]);
+                }
+                thread[frameKey] = requestAnimationFrame(() => {
+                    thread[frameKey] = 0;
+                    syncBottom();
+                });
+            };
+
             const renderState = (state) => {
                 if (!state || !state.live || !state.host || !state.host.isConnected) {
                     return;
                 }
-                if (state.liveHtml) {
-                    renderHtmlState(state, state.finalHtml && !state.cursor ? state.finalHtml : state.liveHtml);
+                const htmlPayload = resolveHtmlRenderPayload(state);
+                if (htmlPayload) {
+                    renderHtmlState(state, htmlPayload.html, htmlPayload.rawSuffix);
+                    syncClosestChatThreadBottom(state);
                     return;
                 }
                 if (state.finalHtml && state.displayed === (state.target || '')) {
                     state.live.style.whiteSpace = 'normal';
                     state.live.innerHTML = state.finalHtml;
+                    syncClosestChatThreadBottom(state);
                     return;
                 }
                 state.live.style.whiteSpace = 'pre-wrap';
                 state.live.textContent = state.displayed + (state.cursor || '');
+                syncClosestChatThreadBottom(state);
             };
 
             const scheduleState = (state) => {
@@ -495,14 +586,9 @@
                 state.raf = Number.isFinite(Number(state.raf)) ? Number(state.raf) : 0;
 
                 if (state.liveHtml) {
-                    if (state.raf) {
-                        cancelAnimationFrame(state.raf);
-                        state.raf = 0;
-                    }
-                    state.displayed = state.cursor ? target.slice(0, Math.max(0, target.length - 1)) : target;
-                    window._vlVisualStreamState[key] = state;
-                    renderState(state);
-                    return;
+                    upsertHtmlSnapshot(state, target.length, state.liveHtml);
+                } else {
+                    state.htmlSnapshots = [];
                 }
 
                 if (!target.startsWith(state.displayed)) {
