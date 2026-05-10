@@ -105,7 +105,15 @@ def replace_last_message(message: dict[str, Any]) -> None:
 def run_reply(prompt: str, *, answer_mode: str, display_mode: str, display_speed: int) -> None:
     result = reply(prompt, answer_mode=answer_mode)
     if isinstance(result, str):
-        replace_last_message({"role": "assistant", "content": result, "display_mode": display_mode, "display_speed": display_speed})
+        replace_last_message({
+            "role": "assistant",
+            "content": result,
+            "phase": "done",
+            "thinking_label": "Thinking...",
+            "content_format": "markdown",
+            "display_mode": display_mode,
+            "display_speed": display_speed,
+        })
         return
 
     chunks: list[str] = []
@@ -114,18 +122,36 @@ def run_reply(prompt: str, *, answer_mode: str, display_mode: str, display_speed
         if not text:
             continue
         chunks.append(text)
-        replace_last_message({"role": "assistant", "content": "".join(chunks), "display_mode": display_mode, "display_speed": display_speed})
+        replace_last_message({
+            "role": "assistant",
+            "content": "".join(chunks),
+            "phase": "running",
+            "thinking_label": "Thinking...",
+            "content_format": "markdown",
+            "display_mode": display_mode,
+            "display_speed": display_speed,
+        })
 
     final_text = "".join(chunks).strip()
     if not final_text:
         raise RuntimeError("OpenAI returned an empty response.")
-    replace_last_message({"role": "assistant", "content": final_text, "display_mode": display_mode, "display_speed": display_speed})
+    replace_last_message({
+        "role": "assistant",
+        "content": final_text,
+        "phase": "done",
+        "thinking_label": "Thinking...",
+        "content_format": "markdown",
+        "display_mode": display_mode,
+        "display_speed": display_speed,
+    })
 
 
 def fail_reply(exc: Exception) -> None:
     replace_last_message({
         "role": "assistant",
         "content": f"Error:\n\n```text\n{exc}\n```",
+        "phase": "error",
+        "content_format": "markdown",
         "display_mode": "instant",
     })
     busy.set(False)
@@ -140,14 +166,23 @@ def submit_prompt(prompt: str) -> None:
     current_display = str(display.value).strip().lower() or "smooth"
     current_display_speed = max(1, min(10, int(float(smooth_speed.value or 7))))
 
-    append_message({"role": "user", "content": cleaned})
-    append_message({"role": "assistant", "content": "", "display_mode": current_display, "display_speed": current_display_speed})
+    append_message({"role": "user", "content": cleaned, "content_format": "text"})
+    append_message({
+        "role": "assistant",
+        "content": "",
+        "phase": "thinking",
+        "thinking_label": "Thinking...",
+        "content_format": "markdown",
+        "display_mode": current_display,
+        "display_speed": current_display_speed,
+    })
     busy.set(True)
 
     app.background(
         lambda prompt=cleaned, answer_mode=current_mode, display_mode=current_display, display_speed=current_display_speed: run_reply(prompt, answer_mode=answer_mode, display_mode=display_mode, display_speed=display_speed),
         on_complete=lambda: busy.set(False),
         on_error=fail_reply,
+        flush_interval=0.03,
     ).start()
 
 
@@ -164,8 +199,21 @@ app.slider("Smooth speed", 1, 10, bind=smooth_speed, step=1, help="1 = fastest r
 @reactivity
 def render_chat():
     with app.chat_thread(height="60vh"):
-        for message in messages.value:
-            with app.chat_message(message.get("role", "assistant")):
+        for index, message in enumerate(messages.value):
+            role = str(message.get("role", "assistant") or "assistant")
+            phase = str(message.get("phase", "") or "").strip().lower()
+            status = str(message.get("status_text", "") or "")
+            thinking_label = str(message.get("thinking_label", "Thinking...") or "Thinking...")
+            thinking = role == "assistant" and not str(message.get("content", "") or "").strip() and phase in {"thinking", "running"}
+            message_key = str(message.get("key") or f"msg_{index}_{role}")
+            with app.chat_message(
+                role,
+                phase=phase or None,
+                thinking=thinking,
+                thinking_label=thinking_label,
+                status=status,
+                key=message_key,
+            ):
                 app.render_chat_message_body(message)
 
 

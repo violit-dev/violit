@@ -1,6 +1,6 @@
 import json
 import urllib.request
-from typing import cast
+from typing import Any, cast
 
 import violit as vl
 
