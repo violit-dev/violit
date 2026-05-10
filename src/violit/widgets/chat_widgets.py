@@ -1488,16 +1488,16 @@ class ChatWidgetsMixin:
                         display_speed=effective_display_speed,
                     )
                     if resolved_content_format == "text":
-                        self.html(visual_html)
+                        self.html(visual_html, key=f"{visual_key}:text-visual")
                     else:
-                        self.html(visual_html, cls="markdown")
+                        self.html(visual_html, key=f"{visual_key}:markdown-visual", cls="markdown")
                 else:
                     if status == "streaming" and cursor:
                         streamed_text += str(cursor)
                     if resolved_content_format == "text":
-                        self.text(streamed_text)
+                        self.text(streamed_text, key=(stream_key or _default_chat_stream_key(item, suffix=":chunks-text")))
                     else:
-                        self.markdown(streamed_text)
+                        self.markdown(streamed_text, key=(stream_key or _default_chat_stream_key(item, suffix=":chunks-markdown")))
             else:
                 self.write_stream(
                     chunks,
@@ -1525,14 +1525,14 @@ class ChatWidgetsMixin:
                     display_speed=effective_display_speed,
                 )
                 if resolved_content_format == "text":
-                    self.html(visual_html)
+                    self.html(visual_html, key=f"{visual_key}:text-visual")
                 else:
-                    self.html(visual_html, cls="markdown")
+                    self.html(visual_html, key=f"{visual_key}:markdown-visual", cls="markdown")
             else:
                 if resolved_content_format == "text":
-                    self.text(content)
+                    self.text(content, key=(stream_key or _default_chat_stream_key(item, suffix=":content-text")))
                 else:
-                    self.markdown(content)
+                    self.markdown(content, key=(stream_key or _default_chat_stream_key(item, suffix=":content-markdown")))
             rendered = True
 
         attachment_html = _render_chat_attachment_html(self, item)

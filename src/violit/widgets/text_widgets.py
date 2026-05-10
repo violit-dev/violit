@@ -17,6 +17,10 @@ from ..context import rendering_ctx
 from ..style_utils import merge_cls, merge_style
 
 
+def _sanitize_text_key(value: Any) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", str(value)).strip("_") or "text"
+
+
 def _sanitize_markdown_url(raw_url: str, *, allowed_schemes: set[str], allow_relative: bool = False) -> str | None:
     url = html_lib.unescape(raw_url).strip()
     if not url or url.startswith("//"):
@@ -611,14 +615,14 @@ class TextWidgetsMixin:
         """Display subheader (h3)"""
         self.heading(*args, level=3, divider=divider, anchor=anchor, help=help, cls=cls, style=style)
 
-    def text(self, *args, size: str = "medium", muted: bool = False, cls: str = "", style: str = ""):
+    def text(self, *args, size: str = "medium", muted: bool = False, key: Optional[Union[str, int]] = None, cls: str = "", style: str = ""):
         """Display text paragraph
         
         Supports multiple arguments which will be joined by spaces.
         """
         from ..state import State, ComputedState
         
-        cid = self._get_next_cid("text")
+        cid = f"text_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("text")
         def builder():
             token = rendering_ctx.set(cid)
             
@@ -644,7 +648,7 @@ class TextWidgetsMixin:
             return Component("p", id=cid, content=safe_val, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
     
-    def caption(self, *args, unsafe_allow_html=False, help: str = None, cls: str = "", style: str = ""):
+    def caption(self, *args, unsafe_allow_html=False, help: str = None, key: Optional[Union[str, int]] = None, cls: str = "", style: str = ""):
         """Display caption text (small, muted)
 
         Args:
@@ -652,18 +656,18 @@ class TextWidgetsMixin:
             help: Tooltip text
         """
         if unsafe_allow_html:
-            self.html(*args, cls=f"text-small text-muted {cls}", style=style)
+            self.html(*args, key=key, cls=f"text-small text-muted {cls}", style=style)
         else:
-            self.text(*args, size="small", muted=True, cls=cls, style=style)
+            self.text(*args, size="small", muted=True, key=key, cls=cls, style=style)
 
-    def markdown(self, *args, unsafe_allow_html=False, help: str = None, cls: str = "", style: str = "", **props):
+    def markdown(self, *args, unsafe_allow_html=False, help: str = None, key: Optional[Union[str, int]] = None, cls: str = "", style: str = "", **props):
         """Display markdown-formatted text
 
         Args:
             unsafe_allow_html: If True, allow raw HTML tags to participate in markdown rendering
             help: Tooltip text
         """
-        cid = self._get_next_cid("markdown")
+        cid = f"markdown_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("markdown")
         def builder():
             token = rendering_ctx.set(cid)
             from ..state import State, ComputedState
@@ -691,7 +695,7 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=html, class_=_fc, style=_fs or None, **props)
         self._register_component(cid, builder)
     
-    def html(self, *args, cls: str = "", style: str = "", **props):
+    def html(self, *args, key: Optional[Union[str, int]] = None, cls: str = "", style: str = "", **props):
         """Display raw HTML content
         
         Use this when you need to render HTML directly without markdown processing.
@@ -700,7 +704,7 @@ class TextWidgetsMixin:
         Example:
             app.html('<div class="custom">', count, '</div>')
         """
-        cid = self._get_next_cid("html")
+        cid = f"html_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("html")
         def builder():
             from ..state import State, ComputedState
             token = rendering_ctx.set(cid)
