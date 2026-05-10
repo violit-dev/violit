@@ -916,6 +916,12 @@ def _chat_item_has_visible_content(item: Any) -> bool:
     return False
 
 
+def _apply_agent_event_render_overrides(item: dict[str, Any], event: dict[str, Any]) -> None:
+    for field in ("display_mode", "display_speed", "content_format"):
+        if field in event and event[field] is not None:
+            item[field] = event[field]
+
+
 def _apply_agent_event(item: Any, event: dict[str, Any], *, cursor: Optional[str] = None):
     next_item: dict[str, Any] = _clone_chat_item(item)
     if not isinstance(next_item, dict):
@@ -928,6 +934,7 @@ def _apply_agent_event(item: Any, event: dict[str, Any], *, cursor: Optional[str
         or event.get("message")
         or event.get("status")
     )
+    _apply_agent_event_render_overrides(next_item, event)
 
     if event_type == "status":
         if text_value:
