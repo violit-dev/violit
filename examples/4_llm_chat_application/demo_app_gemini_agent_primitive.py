@@ -754,7 +754,7 @@ def run_reply(prompt: Any, *, answer_mode: str, display_mode: str, display_speed
         if event_type == "error":
             error_text = str(event.get("text") or "Unknown error.").strip()
             patch_last_message(
-                content=f"Error:\n\n```text\n{error_text}\n```",
+                content="",
                 error=error_text,
                 phase="error",
                 status_text="",
@@ -768,10 +768,11 @@ def run_reply(prompt: Any, *, answer_mode: str, display_mode: str, display_speed
 
 def fail_reply(exc: Exception) -> None:
     patch_last_message(
-        content=f"Error:\n\n```text\n{exc}\n```",
+        content="",
         error=str(exc),
         phase="error",
         status_text="",
+        display_mode="instant",
     )
     busy.set(False)
 
@@ -789,24 +790,28 @@ def submit_prompt(prompt: Any) -> None:
     user_message: dict[str, Any] = {
         "role": "user",
         "content": prompt_payload["text"],
+        "content_format": "text",
         "files": list(prompt_payload["files"]),
     }
     if prompt_payload["audio"] is not None:
         user_message["audio"] = prompt_payload["audio"]
 
-    append_message(user_message)
-    append_message({
-        "role": "assistant",
-        "content": "",
-        "status_text": f"Planning with Gemini {MODEL}",
-        "summary": "",
-        "trace": [],
-        "artifacts": [],
-        "error": "",
-        "phase": "thinking",
-        "display_mode": current_display,
-        "display_speed": current_display_speed,
-    })
+    messages.set([
+        *messages.value,
+        user_message,
+        {
+            "role": "assistant",
+            "content": "",
+            "status_text": f"Planning with Gemini {MODEL}",
+            "summary": "",
+            "trace": [],
+            "artifacts": [],
+            "error": "",
+            "phase": "thinking",
+            "display_mode": current_display,
+            "display_speed": current_display_speed,
+        },
+    ])
     busy.set(True)
 
     app.background(
@@ -829,7 +834,7 @@ app.slider("Smooth speed", 1, 10, bind=smooth_speed, step=1, help="1 = fastest r
 @reactivity
 def render_chat():
     with app.chat_thread(height="64vh", border=True):
-        for message in messages.value:
+        for index, message in enumerate(messages.value):
             phase = str(message.get("phase") or "done").strip().lower()
             status = str(message.get("status") or "").strip().lower()
             content = str(message.get("content") or "").strip()
@@ -838,6 +843,9 @@ def render_chat():
             artifacts = message.get("artifacts") if isinstance(message.get("artifacts"), list) else None
             error_text = str(message.get("error") or "").strip()
             thinking_label = str(message.get("thinking_label") or message.get("status_text") or "Thinking...").strip() or "Thinking..."
+            stable_message_key = message.get("key") if isinstance(message, dict) else None
+            if stable_message_key is None:
+                stable_message_key = f"agent-msg-{index}"
 
             show_status_text = ""
             if message.get("role") == "assistant" and not content:
@@ -858,7 +866,7 @@ def render_chat():
                 trace=trace,
                 artifacts=artifacts,
                 error_text=error_text,
-                key=message.get("key") if isinstance(message, dict) else None,
+                key=str(stable_message_key),
             ):
                 if app.render_chat_message_body(message):
                     continue

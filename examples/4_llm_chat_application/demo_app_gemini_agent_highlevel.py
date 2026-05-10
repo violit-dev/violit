@@ -703,7 +703,7 @@ app.managed_chat_input(
     pinned=False,
     auto_scroll="bottom",
     stream_speed="smooth",
-    response_display=display.value,
+    response_display=display,
     response_display_speed=smooth_speed,
     accept_file="multiple",
     accept_audio=True,
