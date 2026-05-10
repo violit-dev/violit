@@ -10,6 +10,10 @@ from typing import Any, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+from _local_violit_bootstrap import bootstrap_local_violit
+
+bootstrap_local_violit()
+
 import violit as vl
 
 
@@ -54,6 +58,8 @@ messages = app.state([
 ], key="demo_gemini_agent_highlevel_messages")
 api_key = app.state("", key="demo_gemini_agent_highlevel_api_key")
 mode = app.state("streaming", key="demo_gemini_agent_highlevel_mode")
+display = app.state("smooth", key="demo_gemini_agent_highlevel_display")
+smooth_speed = app.state(7, key="demo_gemini_agent_highlevel_smooth_speed")
 
 
 def _normalize_prompt_payload(prompt: Any) -> dict[str, Any]:
@@ -680,6 +686,8 @@ app.title("Gemini Agent Chat (High-level)")
 app.caption("High-level Violit agent chat example using agent_history and managed_chat_input.")
 app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_agent_highlevel_api_key", type="password")
 app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_agent_highlevel_mode")
+app.selectbox("Display", ["smooth", "instant"], value=display.value, key="demo_gemini_agent_highlevel_display")
+app.slider("Smooth speed", 1, 10, value=int(smooth_speed.value), step=1, key="demo_gemini_agent_highlevel_smooth_speed", help="1 = fastest reveal, 10 = most gradual.")
 
 
 @reactivity
@@ -695,6 +703,8 @@ app.managed_chat_input(
     pinned=False,
     auto_scroll="bottom",
     stream_speed="smooth",
+    response_display=display.value,
+    response_display_speed=smooth_speed,
     accept_file="multiple",
     accept_audio=True,
     audio_sample_rate=16000,

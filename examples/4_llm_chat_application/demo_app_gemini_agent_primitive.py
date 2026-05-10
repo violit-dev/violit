@@ -10,6 +10,10 @@ from typing import Any, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+from _local_violit_bootstrap import bootstrap_local_violit
+
+bootstrap_local_violit()
+
 import violit as vl
 
 
@@ -54,6 +58,8 @@ messages = app.state([
 ], key="demo_gemini_agent_messages")
 api_key = app.state("", key="demo_gemini_agent_api_key")
 mode = app.state("streaming", key="demo_gemini_agent_mode")
+display = app.state("smooth", key="demo_gemini_agent_display")
+smooth_speed = app.state(7, key="demo_gemini_agent_smooth_speed")
 busy = app.state(False, key="demo_gemini_agent_busy")
 
 
@@ -573,14 +579,12 @@ def _generate_gemini_answer(key: str, prompt: str, *, source_prompt: Any = None)
     return text
 
 
-def reply(prompt: Any):
+def reply(prompt: Any, *, answer_mode: str):
     prompt_payload = _normalize_prompt_payload(prompt)
     prompt_text = _prompt_text(prompt_payload)
     key = api_key.value.strip()
     if not key:
         raise RuntimeError("Paste your Gemini API key above.")
-
-    answer_mode = str(mode.value).strip().lower() or "streaming"
 
     def stream():
         tool_history: list[dict[str, Any]] = []
@@ -693,19 +697,20 @@ def patch_last_message(**updates: Any) -> None:
     messages.set(items)
 
 
-def run_reply(prompt: str) -> None:
+def run_reply(prompt: Any, *, answer_mode: str, display_mode: str, display_speed: int) -> None:
     text_parts: list[str] = []
     trace: list[dict[str, Any]] = []
     artifacts: list[dict[str, Any]] = []
     saw_done = False
 
-    for event in cast(Any, reply(prompt)):
+    for event in cast(Any, reply(prompt, answer_mode=answer_mode)):
         event_type = str(event.get("type", "")).strip().lower() if isinstance(event, dict) else ""
 
         if event_type == "status":
             patch_last_message(
                 status_text=str(event.get("text") or "Working...").strip(),
                 phase="running" if text_parts or trace or artifacts else "thinking",
+                display_mode=display_mode,
             )
             continue
 
@@ -719,30 +724,31 @@ def run_reply(prompt: str) -> None:
                 trace=list(trace),
                 status_text=str(event.get("text") or event.get("title") or "Running...").strip(),
                 phase="running",
+                display_mode=display_mode,
             )
             continue
 
         if event_type == "summary":
-            patch_last_message(summary=str(event.get("text") or "").strip())
+            patch_last_message(summary=str(event.get("text") or "").strip(), display_mode=display_mode)
             continue
 
         if event_type == "artifact":
             artifact = event.get("artifact")
             if isinstance(artifact, dict):
                 artifacts.append(dict(artifact))
-                patch_last_message(artifacts=list(artifacts))
+                patch_last_message(artifacts=list(artifacts), display_mode=display_mode)
             continue
 
         if event_type == "text":
             text = event.get("text") if isinstance(event.get("text"), str) else str(event.get("text") or "")
             if text:
                 text_parts.append(text)
-                patch_last_message(content="".join(text_parts), phase="running")
+                patch_last_message(content="".join(text_parts), phase="running", display_mode=display_mode)
             continue
 
         if event_type == "done":
             saw_done = True
-            patch_last_message(phase="done", status_text="")
+            patch_last_message(phase="done", status_text="", display_mode=display_mode)
             continue
 
         if event_type == "error":
@@ -752,11 +758,12 @@ def run_reply(prompt: str) -> None:
                 error=error_text,
                 phase="error",
                 status_text="",
+                display_mode="instant",
             )
             return
 
     if not saw_done:
-        patch_last_message(phase="done", status_text="")
+        patch_last_message(phase="done", status_text="", display_mode=display_mode)
 
 
 def fail_reply(exc: Exception) -> None:
@@ -774,6 +781,10 @@ def submit_prompt(prompt: Any) -> None:
     cleaned = _prompt_text(prompt_payload)
     if not cleaned or busy.value:
         return
+
+    current_mode = str(mode.value).strip().lower() or "streaming"
+    current_display = str(display.value).strip().lower() or "smooth"
+    current_display_speed = max(1, min(10, int(float(smooth_speed.value or 7))))
 
     user_message: dict[str, Any] = {
         "role": "user",
@@ -793,11 +804,13 @@ def submit_prompt(prompt: Any) -> None:
         "artifacts": [],
         "error": "",
         "phase": "thinking",
+        "display_mode": current_display,
+        "display_speed": current_display_speed,
     })
     busy.set(True)
 
     app.background(
-        lambda prompt=prompt: run_reply(prompt),
+        lambda prompt=prompt, answer_mode=current_mode, display_mode=current_display, display_speed=current_display_speed: run_reply(prompt, answer_mode=answer_mode, display_mode=display_mode, display_speed=display_speed),
         on_complete=lambda: busy.set(False),
         on_error=fail_reply,
     ).start()
@@ -809,6 +822,8 @@ app.title("Gemini Agent Chat")
 app.caption("A real Gemini-powered agent example rendered only with Violit primitive chat APIs.")
 app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_agent_api_key", type="password")
 app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_agent_mode")
+app.selectbox("Display", ["smooth", "instant"], value=display.value, key="demo_gemini_agent_display")
+app.slider("Smooth speed", 1, 10, value=int(smooth_speed.value), step=1, key="demo_gemini_agent_smooth_speed", help="1 = fastest reveal, 10 = most gradual.")
 
 
 @reactivity

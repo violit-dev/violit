@@ -2,6 +2,10 @@ import json
 import urllib.request
 from typing import Any, cast
 
+from _local_violit_bootstrap import bootstrap_local_violit
+
+bootstrap_local_violit()
+
 import violit as vl
 
 
@@ -12,6 +16,9 @@ messages = app.state([
     {"role": "assistant", "content": "Hello. Ask ChatGPT anything."}
 ], key="demo_openai_messages")
 api_key = app.state("", key="demo_openai_api_key")
+mode = app.state("streaming", key="demo_openai_mode")
+display = app.state("smooth", key="demo_openai_display")
+smooth_speed = app.state(7, key="demo_openai_smooth_speed")
 busy = app.state(False, key="demo_openai_busy")
 
 
@@ -65,7 +72,7 @@ def _reply_streaming(payload: dict, key: str):
     return stream()
 
 
-def reply(_prompt: str):
+def reply(_prompt: str, *, answer_mode: str):
     key = api_key.value.strip()
     if not key:
         raise RuntimeError("Paste your OpenAI API key above.")
@@ -78,10 +85,12 @@ def reply(_prompt: str):
             if item.get("content")
         ],
         "temperature": 0.4,
-        "stream": True,
+        "stream": answer_mode == "streaming",
     }
 
-    return _reply_streaming(payload, key)
+    if answer_mode == "streaming":
+        return _reply_streaming(payload, key)
+    return _reply_non_streaming(payload, key)
 
 
 def append_message(message: dict[str, Any]) -> None:
@@ -97,10 +106,10 @@ def replace_last_message(message: dict[str, Any]) -> None:
     messages.set(items)
 
 
-def run_reply(prompt: str) -> None:
-    result = reply(prompt)
+def run_reply(prompt: str, *, answer_mode: str, display_mode: str, display_speed: int) -> None:
+    result = reply(prompt, answer_mode=answer_mode)
     if isinstance(result, str):
-        replace_last_message({"role": "assistant", "content": result})
+        replace_last_message({"role": "assistant", "content": result, "display_mode": display_mode, "display_speed": display_speed})
         return
 
     chunks: list[str] = []
@@ -109,18 +118,19 @@ def run_reply(prompt: str) -> None:
         if not text:
             continue
         chunks.append(text)
-        replace_last_message({"role": "assistant", "content": "".join(chunks)})
+        replace_last_message({"role": "assistant", "content": "".join(chunks), "display_mode": display_mode, "display_speed": display_speed})
 
     final_text = "".join(chunks).strip()
     if not final_text:
         raise RuntimeError("OpenAI returned an empty response.")
-    replace_last_message({"role": "assistant", "content": final_text})
+    replace_last_message({"role": "assistant", "content": final_text, "display_mode": display_mode, "display_speed": display_speed})
 
 
 def fail_reply(exc: Exception) -> None:
     replace_last_message({
         "role": "assistant",
         "content": f"Error:\n\n```text\n{exc}\n```",
+        "display_mode": "instant",
     })
     busy.set(False)
 
@@ -130,12 +140,16 @@ def submit_prompt(prompt: str) -> None:
     if not cleaned or busy.value:
         return
 
+    current_mode = str(mode.value).strip().lower() or "streaming"
+    current_display = str(display.value).strip().lower() or "smooth"
+    current_display_speed = max(1, min(10, int(float(smooth_speed.value or 7))))
+
     append_message({"role": "user", "content": cleaned})
-    append_message({"role": "assistant", "content": ""})
+    append_message({"role": "assistant", "content": "", "display_mode": current_display, "display_speed": current_display_speed})
     busy.set(True)
 
     app.background(
-        lambda prompt=cleaned: run_reply(prompt),
+        lambda prompt=cleaned, answer_mode=current_mode, display_mode=current_display, display_speed=current_display_speed: run_reply(prompt, answer_mode=answer_mode, display_mode=display_mode, display_speed=display_speed),
         on_complete=lambda: busy.set(False),
         on_error=fail_reply,
     ).start()
@@ -146,6 +160,9 @@ reactivity = cast(Any, app.reactivity)
 app.title("Simple OpenAI Chat")
 app.caption("A small text-only Violit chat example.")
 app.text_input("OPENAI_API_KEY", value=api_key.value, key="demo_openai_api_key", type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_openai_mode")
+app.selectbox("Display", ["smooth", "instant"], value=display.value, key="demo_openai_display")
+app.slider("Smooth speed", 1, 10, value=int(smooth_speed.value), step=1, key="demo_openai_smooth_speed", help="1 = fastest reveal, 10 = most gradual.")
 
 
 @reactivity

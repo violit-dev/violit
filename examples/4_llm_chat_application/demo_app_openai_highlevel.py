@@ -2,6 +2,10 @@ import json
 import urllib.request
 from typing import cast
 
+from _local_violit_bootstrap import bootstrap_local_violit
+
+bootstrap_local_violit()
+
 import violit as vl
 
 
@@ -13,6 +17,8 @@ messages = app.state([
 ], key="demo_openai_highlevel_messages")
 api_key = app.state("", key="demo_openai_highlevel_api_key")
 mode = app.state("streaming", key="demo_openai_highlevel_mode")
+display = app.state("smooth", key="demo_openai_highlevel_display")
+smooth_speed = app.state(7, key="demo_openai_highlevel_smooth_speed")
 
 
 def _reply_non_streaming(payload: dict, key: str) -> str:
@@ -92,6 +98,8 @@ app.title("Simple OpenAI Chat (High-level)")
 app.caption("A small text-only high-level Violit chat example.")
 app.text_input("OPENAI_API_KEY", value=api_key.value, key="demo_openai_highlevel_api_key", type="password")
 app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_openai_highlevel_mode")
+app.selectbox("Display", ["smooth", "instant"], value=display.value, key="demo_openai_highlevel_display")
+app.slider("Smooth speed", 1, 10, value=int(smooth_speed.value), step=1, key="demo_openai_highlevel_smooth_speed", help="1 = fastest reveal, 10 = most gradual.")
 
 
 @reactivity
@@ -107,6 +115,8 @@ app.managed_chat_input(
     pinned=False,
     auto_scroll="bottom",
     stream_speed="smooth",
+    response_display=display.value,
+    response_display_speed=smooth_speed,
 )
 
 

@@ -31,14 +31,14 @@ Then run whichever example file you want to try.
 
 ## Example Matrix
 
-| File | Provider | Level | Main transcript API | Input API | Mode select | Attachments/audio |
-| --- | --- | --- | --- | --- | --- | --- |
-| `demo_app_gemini_primitive.py` | Gemini | Primitive | `chat_thread(...)` + `chat_message(...)` + `render_chat_message_body(...)` | `chat_input(...)` | No | No |
-| `demo_app_openai_primitive.py` | OpenAI | Primitive | `chat_thread(...)` + `chat_message(...)` + `render_chat_message_body(...)` | `chat_input(...)` | No | No |
-| `demo_app_gemini_highlevel.py` | Gemini | High-level | `chat_history(...)` | `managed_chat_input(...)` | Yes | No |
-| `demo_app_openai_highlevel.py` | OpenAI | High-level | `chat_history(...)` | `managed_chat_input(...)` | Yes | No |
-| `demo_app_gemini_agent_primitive.py` | Gemini | Primitive agent | `chat_thread(...)` + `agent_turn(...)` + `render_chat_message_body(...)` | `chat_input(...)` | Yes | Yes |
-| `demo_app_gemini_agent_highlevel.py` | Gemini | High-level agent | `agent_history(...)` | `managed_chat_input(...)` | Yes | Yes |
+| File | Provider | Level | Main transcript API | Input API | Mode select | Display select | Smooth speed | Attachments/audio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `demo_app_gemini_primitive.py` | Gemini | Primitive | `chat_thread(...)` + `chat_message(...)` + `render_chat_message_body(...)` | `chat_input(...)` | Yes | Yes | Yes | No |
+| `demo_app_openai_primitive.py` | OpenAI | Primitive | `chat_thread(...)` + `chat_message(...)` + `render_chat_message_body(...)` | `chat_input(...)` | Yes | Yes | Yes | No |
+| `demo_app_gemini_highlevel.py` | Gemini | High-level | `chat_history(...)` | `managed_chat_input(...)` | Yes | Yes | Yes | No |
+| `demo_app_openai_highlevel.py` | OpenAI | High-level | `chat_history(...)` | `managed_chat_input(...)` | Yes | Yes | Yes | No |
+| `demo_app_gemini_agent_primitive.py` | Gemini | Primitive agent | `chat_thread(...)` + `agent_turn(...)` + `render_chat_message_body(...)` | `chat_input(...)` | Yes | Yes | Yes | Yes |
+| `demo_app_gemini_agent_highlevel.py` | Gemini | High-level agent | `agent_history(...)` | `managed_chat_input(...)` | Yes | Yes | Yes | Yes |
 
 ## Run
 
@@ -96,19 +96,23 @@ Open the app and paste the API key into the password input at runtime.
 
 For Git safety, keep real keys out of source files, screenshots, and committed config files.
 
-Only four of the six examples expose a `Mode` selectbox:
+All six examples expose the same top-level runtime controls:
 
-- `demo_app_gemini_highlevel.py`
-- `demo_app_openai_highlevel.py`
-- `demo_app_gemini_agent_primitive.py`
-- `demo_app_gemini_agent_highlevel.py`
+- `Mode`
+- `Display`
+- `Smooth speed`
 
-The available options are:
+The `Mode` options are:
 
 - `streaming`
 - `non-streaming`
 
-The two plain primitive examples are intentionally simpler and always use the streaming path.
+The `Display` options are:
+
+- `smooth`
+- `instant`
+
+`Smooth speed` uses a 1 to 10 slider, where 1 is the fastest reveal and 10 is the most gradual.
 
 Only the two Gemini agent examples accept file and audio input.
 

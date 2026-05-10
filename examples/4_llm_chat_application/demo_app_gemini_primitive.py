@@ -3,6 +3,10 @@ import urllib.parse
 import urllib.request
 from typing import Any, cast
 
+from _local_violit_bootstrap import bootstrap_local_violit
+
+bootstrap_local_violit()
+
 import violit as vl
 
 
@@ -13,6 +17,9 @@ messages = app.state([
     {"role": "assistant", "content": "Hello. Ask Gemini anything."}
 ], key="demo_gemini_messages")
 api_key = app.state("", key="demo_gemini_api_key")
+mode = app.state("streaming", key="demo_gemini_mode")
+display = app.state("smooth", key="demo_gemini_display")
+smooth_speed = app.state(7, key="demo_gemini_smooth_speed")
 busy = app.state(False, key="demo_gemini_busy")
 
 
@@ -111,7 +118,7 @@ def _reply_streaming(payload: dict, model: str, api_key_value: str):
     return stream()
 
 
-def reply(_prompt: str):
+def reply(_prompt: str, *, answer_mode: str):
     key = api_key.value.strip()
     if not key:
         raise RuntimeError("Paste your Gemini API key above.")
@@ -130,7 +137,9 @@ def reply(_prompt: str):
 
     model = urllib.parse.quote(MODEL, safe="")
     api_key_value = urllib.parse.quote(key, safe="")
-    return _reply_streaming(payload, model, api_key_value)
+    if answer_mode == "streaming":
+        return _reply_streaming(payload, model, api_key_value)
+    return _reply_non_streaming(payload, model, api_key_value)
 
 
 def append_message(message: dict[str, Any]) -> None:
@@ -146,15 +155,8 @@ def replace_last_message(message: dict[str, Any]) -> None:
     messages.set(items)
 
 
-def last_message_content() -> str:
-    items = messages.value
-    if not items:
-        return ""
-    return str(items[-1].get("content", ""))
-
-
-def run_reply(prompt: str) -> None:
-    result = reply(prompt)
+def run_reply(prompt: str, *, answer_mode: str, display_mode: str, display_speed: int) -> None:
+    result = reply(prompt, answer_mode=answer_mode)
     if isinstance(result, str):
         replace_last_message({
             "role": "assistant",
@@ -162,6 +164,8 @@ def run_reply(prompt: str) -> None:
             "phase": "done",
             "thinking_label": "Thinking...",
             "content_format": "markdown",
+            "display_mode": display_mode,
+            "display_speed": display_speed,
         })
         return
 
@@ -177,19 +181,22 @@ def run_reply(prompt: str) -> None:
             "phase": "running",
             "thinking_label": "Thinking...",
             "content_format": "markdown",
+            "display_mode": display_mode,
+            "display_speed": display_speed,
         })
 
     final_text = "".join(chunks).strip()
     if not final_text:
         raise RuntimeError("Gemini returned an empty response.")
-    if last_message_content() != final_text:
-        replace_last_message({
-            "role": "assistant",
-            "content": final_text,
-            "phase": "done",
-            "thinking_label": "Thinking...",
-            "content_format": "markdown",
-        })
+    replace_last_message({
+        "role": "assistant",
+        "content": final_text,
+        "phase": "done",
+        "thinking_label": "Thinking...",
+        "content_format": "markdown",
+        "display_mode": display_mode,
+        "display_speed": display_speed,
+    })
 
 
 def fail_reply(exc: Exception) -> None:
@@ -198,6 +205,7 @@ def fail_reply(exc: Exception) -> None:
         "content": f"Error:\n\n```text\n{exc}\n```",
         "phase": "error",
         "content_format": "markdown",
+        "display_mode": "instant",
     })
     busy.set(False)
 
@@ -207,6 +215,10 @@ def submit_prompt(prompt: str) -> None:
     if not cleaned or busy.value:
         return
 
+    current_mode = str(mode.value).strip().lower() or "streaming"
+    current_display = str(display.value).strip().lower() or "smooth"
+    current_display_speed = max(1, min(10, int(float(smooth_speed.value or 7))))
+
     append_message({"role": "user", "content": cleaned, "content_format": "text"})
     append_message({
         "role": "assistant",
@@ -214,11 +226,13 @@ def submit_prompt(prompt: str) -> None:
         "phase": "thinking",
         "thinking_label": "Thinking...",
         "content_format": "markdown",
+        "display_mode": current_display,
+        "display_speed": current_display_speed,
     })
     busy.set(True)
 
     app.background(
-        lambda prompt=cleaned: run_reply(prompt),
+        lambda prompt=cleaned, answer_mode=current_mode, display_mode=current_display, display_speed=current_display_speed: run_reply(prompt, answer_mode=answer_mode, display_mode=display_mode, display_speed=display_speed),
         on_complete=lambda: busy.set(False),
         on_error=fail_reply,
         flush_interval=0.03,
@@ -230,6 +244,9 @@ reactivity = cast(Any, app.reactivity)
 app.title("Simple Gemini Chat")
 app.caption("A small text-only Violit chat example.")
 app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_api_key", type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_mode")
+app.selectbox("Display", ["smooth", "instant"], value=display.value, key="demo_gemini_display")
+app.slider("Smooth speed", 1, 10, value=int(smooth_speed.value), step=1, key="demo_gemini_smooth_speed", help="1 = fastest reveal, 10 = most gradual.")
 
 
 @reactivity
