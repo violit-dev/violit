@@ -269,7 +269,7 @@ def _resolve_chat_response_display_value(response_display: Any) -> str:
     if callable(candidate) and not isinstance(candidate, str):
         candidate = candidate()
     normalized = _normalize_chat_display_mode(candidate)
-    return normalized if normalized != "auto" else "auto"
+    return normalized if normalized != "auto" else "instant"
 
 
 def _normalize_chat_display_speed(value: Any) -> Optional[int]:
@@ -1896,7 +1896,7 @@ class ChatWidgetsMixin:
         assistant_name: str = "assistant",
         stream_cursor: Optional[str] = "|",
         stream_speed: Any = None,
-        response_display: Any = "auto",
+        response_display: Any = "instant",
         response_display_speed: Any = None,
         flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
@@ -1924,8 +1924,8 @@ class ChatWidgetsMixin:
         receives a dict with ``text``, ``files``, and ``audio`` keys.
 
         ``response_display`` controls how assistant text is shown after it is
-        received. Use ``"smooth"`` for typing-style reveal, ``"instant"`` for
-        direct rendering, or ``"auto"`` to keep the current behavior.
+        received. Use ``"smooth"`` for typing-style reveal or ``"instant"`` for
+        direct rendering.
 
         ``response_display_speed`` tunes the browser-side smooth reveal from 1
         (fastest) to 10 (most gradual). It is only used when
@@ -1985,7 +1985,7 @@ class ChatWidgetsMixin:
         assistant_name: str = "assistant",
         stream_cursor: Optional[str] = "|",
         stream_speed: Any = None,
-        response_display: Any = "auto",
+        response_display: Any = "instant",
         response_display_speed: Any = None,
         flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
