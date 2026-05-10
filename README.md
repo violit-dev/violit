@@ -314,11 +314,16 @@ Violit ships with a powerful CLI. The recommended way to run your apps is via `v
 
 `--lite` runs the app in HTMX-based HTTP mode instead of the default WebSocket runtime. This is often the better choice when you want to handle more concurrent users or deploy in environments where WebSockets are limited.
 
+`--ws` explicitly selects the WebSocket runtime. If you do not pass either `--lite` or `--ws`, Violit already defaults to WebSocket mode.
+
+If the app itself was created with an explicit runtime such as `vl.App(mode="lite")` or `vl.App(mode="ws")`, that code-level setting takes priority over CLI runtime flags.
+
 ```bash
 python app.py --reload --localhost
 violit run app.py --reload --localhost
 
 violit run app.py --help       # Show runtime flags accepted by app.run()
+violit run app.py --ws         # Explicitly run in the default WebSocket mode
 violit run app.py --reload     # Auto-reload on code changes
 violit run app.py --localhost  # Bind to 127.0.0.1 and print localhost URL
 violit run app.py --native     # Launch as a Desktop App

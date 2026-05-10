@@ -337,7 +337,9 @@ class AppLauncherMixin:
         parser.add_argument("--native", action="store_true")
         parser.add_argument("--nosplash", action="store_true", help="Disable splash screen")
         parser.add_argument("--reload", action="store_true", help="Enable hot reload")
-        parser.add_argument("--lite", action="store_true", help="Use Lite mode (HTMX)")
+        runtime_group = parser.add_mutually_exclusive_group()
+        runtime_group.add_argument("--lite", action="store_true", help="Use Lite mode (HTMX)")
+        runtime_group.add_argument("--ws", action="store_true", help="Use WebSocket mode")
         parser.add_argument("--debug", action="store_true", help="Enable developer tools (native mode)")
         parser.add_argument("--on-top", action="store_true", help="Keep window always on top (native mode)")
         parser.add_argument("--port", type=int, default=8000)
@@ -395,11 +397,17 @@ class AppLauncherMixin:
                     f"[violit:db] Migration error during startup: {db_exc}"
                 )
 
-        if args.lite:
-            self.mode = "lite"
-            if self.lite_engine is None:
-                from .engine import LiteEngine
-                self.lite_engine = LiteEngine()
+        if not getattr(self, "_mode_is_explicit", False):
+            if getattr(args, "lite", False):
+                self.mode = "lite"
+                if self.lite_engine is None:
+                    from .engine import LiteEngine
+                    self.lite_engine = LiteEngine()
+            elif getattr(args, "ws", False):
+                self.mode = "ws"
+                if self.ws_engine is None:
+                    from .engine import WsEngine
+                    self.ws_engine = WsEngine()
 
         is_server_only = bool(os.environ.get("VIOLIT_SERVER_ONLY"))
         if is_server_only:

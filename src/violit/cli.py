@@ -135,6 +135,7 @@ def main():
             Examples:
               violit create my_app
               violit run app.py
+              violit run app.py --ws
               violit run app.py --reload --localhost
               violit run app.py --help
         """)
@@ -158,6 +159,7 @@ def main():
         epilog=textwrap.dedent("""\
             Common examples:
               violit run app.py
+                            violit run app.py --ws
               violit run app.py --reload
               violit run app.py --reload --localhost
               violit run app.py --port 8010

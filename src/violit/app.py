@@ -68,8 +68,9 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode='ws', title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, use_cdn_fontawesome_only=False, disconnect_timeout=0, root_path: str = "", db: Optional[str] = None, migrate='auto'):
-        self.mode = mode
+    def __init__(self, mode: Optional[str] = None, title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, use_cdn_fontawesome_only=False, disconnect_timeout=0, root_path: str = "", db: Optional[str] = None, migrate='auto'):
+        self._mode_is_explicit = mode is not None
+        self.mode = (mode or 'ws').strip().lower()
         self.use_cdn = use_cdn
         self.use_cdn_fontawesome_only = use_cdn_fontawesome_only
         self.disconnect_timeout = disconnect_timeout
@@ -400,8 +401,8 @@ class App(
         self._selection_state = self.state(allow_selection)
         self._animation_state = self.state(animation_mode)
         
-        self.ws_engine = WsEngine() if mode == 'ws' else None
-        self.lite_engine = LiteEngine() if mode == 'lite' else None
+        self.ws_engine = WsEngine() if self.mode == 'ws' else None
+        self.lite_engine = LiteEngine() if self.mode == 'lite' else None
         self._lite_stream_queues: Dict[tuple[str, str], queue.Queue] = {}
         self._lite_stream_lock = threading.Lock()
         self._main_loop: asyncio.AbstractEventLoop | None = None
