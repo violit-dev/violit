@@ -189,7 +189,11 @@ api_key = app.state("")
 app.text_input("API key", bind=api_key, type="password")
 ```
 
-Use `key=` for widget identity, not for external state sharing.
+If both `bind=` and `value=` are provided, `bind=` wins and `value=` is ignored.
+
+`bind=` only accepts a writable `State`.
+
+Use `key=` for widget identity, not for external state sharing. Explicit widget keys must be unique within the same render scope.
 
 ## Quick Start
 

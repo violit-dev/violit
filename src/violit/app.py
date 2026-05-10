@@ -25,7 +25,7 @@ from pathlib import Path
 from .app_launcher import AppLauncherMixin
 from .app_runtime import AppRuntimeMixin
 from .app_support import FileWatcher, IntervalHandle, Page, SidebarProxy, print_terminal_splash
-from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx, pending_shared_views_ctx
+from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx, pending_shared_views_ctx, registration_pass_ctx
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
@@ -693,6 +693,21 @@ class App(
         store = get_session_store()
         sid = session_ctx.get()
         builder = self._wrap_component_builder(builder)
+
+        active_registration_pass = registration_pass_ctx.get()
+        if active_registration_pass is not None:
+            if cid in active_registration_pass:
+                raise ValueError(
+                    f"Duplicate widget key detected: component id '{cid}' was registered more than once in the same render pass. "
+                    "Explicit key= values must be unique within a render scope."
+                )
+            active_registration_pass.add(cid)
+        elif not action_ctx.get(False):
+            if cid in store.get('builders', {}) or cid in self.static_builders:
+                raise ValueError(
+                    f"Duplicate widget key detected: component id '{cid}' is already registered. "
+                    "Explicit key= values must be unique within a render scope."
+                )
         
         store['builders'][cid] = builder
         if action:
@@ -1148,6 +1163,7 @@ class App(
     def _render_all(self):
         """Render all components"""
         store = get_session_store()
+        registration_token = registration_pass_ctx.set(set())
         
         main_html = []
         sidebar_html = []
@@ -1174,19 +1190,23 @@ class App(
                     finally:
                         rendering_ctx.reset(token)
 
-        # Static Components
-        render_cids(self.static_order, main_html)
-        render_cids(self.static_sidebar_order, sidebar_html)
-        
-        # Dynamic Components
-        render_cids(store['order'], main_html)
-        render_cids(store['sidebar_order'], sidebar_html)
-        
-        return "".join(main_html), "".join(sidebar_html)
+        try:
+            # Static Components
+            render_cids(self.static_order, main_html)
+            render_cids(self.static_sidebar_order, sidebar_html)
+
+            # Dynamic Components
+            render_cids(store['order'], main_html)
+            render_cids(store['sidebar_order'], sidebar_html)
+
+            return "".join(main_html), "".join(sidebar_html)
+        finally:
+            registration_pass_ctx.reset(registration_token)
 
     def _get_dirty_rendered(self):
         """Get components that need updating"""
         store = get_session_store()
+        registration_token = registration_pass_ctx.set(set())
         tracker = store['tracker']
         current_session_id = session_ctx.get()
         current_view_id = view_ctx.get()
@@ -1202,51 +1222,54 @@ class App(
             
         store['dirty_states'] = set()
         
-        res = []
-        for cid in aff:
-            builder = store['builders'].get(cid) or self.static_builders.get(cid)
-            if builder:
-                # Clear stale subscriptions before re-rendering so that:
-                # 1. Dependencies that are no longer read get removed.
-                # 2. The upcoming builder() call re-registers only current deps.
-                tracker.unregister_component(cid)
-                unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
-                
-                # [FIX PHANTOM WIDGETS] Use a token to ensure widgets created 
-                # inside a DIRTY re-render are correctly registered.
-                # This ensures they are kids of the dirty component, not root level phantoms.
-                token = rendering_ctx.set(cid)
-                
-                # [ID SYNC FIX] Reset component_count for this specific sub-render
-                # This ensures widgets created inside a builder get the SAME IDs as before.
-                prev_count = store['component_count']
-                
-                try:
-                    res.append(builder())
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).error(
-                        f"[render] dirty component '{cid}' failed: {e}"
-                    )
-                    from .component import Component
-                    res.append(Component(
-                        "div", id=cid,
-                        content=(
-                            f'<span style="color:var(--vl-danger,red);font-size:0.85rem;">'
-                            f'[Render error] <code>{cid}</code>: {e}</span>'
+        try:
+            res = []
+            for cid in aff:
+                builder = store['builders'].get(cid) or self.static_builders.get(cid)
+                if builder:
+                    # Clear stale subscriptions before re-rendering so that:
+                    # 1. Dependencies that are no longer read get removed.
+                    # 2. The upcoming builder() call re-registers only current deps.
+                    tracker.unregister_component(cid)
+                    unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
+
+                    # [FIX PHANTOM WIDGETS] Use a token to ensure widgets created 
+                    # inside a DIRTY re-render are correctly registered.
+                    # This ensures they are kids of the dirty component, not root level phantoms.
+                    token = rendering_ctx.set(cid)
+
+                    # [ID SYNC FIX] Reset component_count for this specific sub-render
+                    # This ensures widgets created inside a builder get the SAME IDs as before.
+                    prev_count = store['component_count']
+
+                    try:
+                        res.append(builder())
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).error(
+                            f"[render] dirty component '{cid}' failed: {e}"
                         )
-                    ))
-                finally:
-                    rendering_ctx.reset(token)
-                    # Restore global count after sub-render
-                    store['component_count'] = prev_count
-            else:
-                # Component is permanently gone (e.g. navigation page switch,
-                # If-block condition flip).  Clean it from the tracker so it
-                # never appears in future dirty sets.
-                tracker.unregister_component(cid)
-                unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
-        return res
+                        from .component import Component
+                        res.append(Component(
+                            "div", id=cid,
+                            content=(
+                                f'<span style="color:var(--vl-danger,red);font-size:0.85rem;">'
+                                f'[Render error] <code>{cid}</code>: {e}</span>'
+                            )
+                        ))
+                    finally:
+                        rendering_ctx.reset(token)
+                        # Restore global count after sub-render
+                        store['component_count'] = prev_count
+                else:
+                    # Component is permanently gone (e.g. navigation page switch,
+                    # If-block condition flip).  Clean it from the tracker so it
+                    # never appears in future dirty sets.
+                    tracker.unregister_component(cid)
+                    unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
+            return res
+        finally:
+            registration_pass_ctx.reset(registration_token)
 
     async def _flush_view_updates_async(self, session_id: str, current_view_id: str) -> None:
         if not session_id or not current_view_id:
