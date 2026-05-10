@@ -24,6 +24,7 @@ pip install violit
 ```
 
 - **Docs:** <https://doc.violit.cloud>
+- **Demo Showcase:** <https://demo-showcase.violit.cloud>
 - **PyPI:** <https://pypi.org/project/violit/>
 - **GitHub:** <https://github.com/violit-dev/violit>
 
