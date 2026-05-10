@@ -507,15 +507,15 @@
                 if (!state || !state.live || !state.host || !state.host.isConnected) {
                     return;
                 }
-                const htmlPayload = resolveHtmlRenderPayload(state);
-                if (htmlPayload) {
-                    renderHtmlState(state, htmlPayload.html, htmlPayload.rawSuffix);
-                    syncClosestChatThreadBottom(state);
-                    return;
-                }
                 if (state.finalHtml && state.displayed === (state.target || '')) {
                     state.live.style.whiteSpace = 'normal';
                     state.live.innerHTML = state.finalHtml;
+                    syncClosestChatThreadBottom(state);
+                    return;
+                }
+                const htmlPayload = resolveHtmlRenderPayload(state);
+                if (htmlPayload) {
+                    renderHtmlState(state, htmlPayload.html, htmlPayload.rawSuffix);
                     syncClosestChatThreadBottom(state);
                     return;
                 }
