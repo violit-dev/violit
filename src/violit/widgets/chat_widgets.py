@@ -272,6 +272,39 @@ def _resolve_chat_response_display_value(response_display: Any) -> str:
     return normalized if normalized != "auto" else "auto"
 
 
+def _normalize_chat_display_speed(value: Any) -> Optional[int]:
+    candidate = value.value if hasattr(value, "value") else value
+    if callable(candidate) and not isinstance(candidate, str):
+        candidate = candidate()
+    if candidate is None or isinstance(candidate, bool):
+        return None
+    if isinstance(candidate, (int, float)):
+        normalized = int(float(candidate))
+    else:
+        normalized_text = _coerce_chat_text(candidate).strip()
+        if not normalized_text:
+            return None
+        try:
+            normalized = int(float(normalized_text))
+        except (TypeError, ValueError):
+            return None
+    return max(1, min(10, normalized))
+
+
+def _resolve_chat_display_speed(item: Any = None, *, override: Any = None, fallback: Optional[int] = 7) -> Optional[int]:
+    candidates: list[Any] = [override]
+    if isinstance(item, dict):
+        candidates.extend([item.get("display_speed"), item.get("smooth_speed"), item.get("reveal_speed")])
+    if fallback is not None:
+        candidates.append(fallback)
+
+    for candidate in candidates:
+        normalized = _normalize_chat_display_speed(candidate)
+        if normalized is not None:
+            return normalized
+    return None
+
+
 def _chat_history_display_text(item: Any) -> str:
     if not isinstance(item, dict):
         return _coerce_chat_text(item)
@@ -1431,6 +1464,7 @@ class ChatWidgetsMixin:
             override=display_mode,
             fallback="smooth" if is_active_stream and visual_stream_smoothing else "instant",
         )
+        effective_display_speed = _resolve_chat_display_speed(item) if effective_display_mode == "smooth" else None
         rendered = False
         rendered_text_from_chunks = False
 
@@ -1451,6 +1485,7 @@ class ChatWidgetsMixin:
                         cursor=cursor if is_active_stream else None,
                         live_html=live_html,
                         final_html=final_html,
+                        display_speed=effective_display_speed,
                     )
                     if resolved_content_format == "text":
                         self.html(visual_html)
@@ -1487,6 +1522,7 @@ class ChatWidgetsMixin:
                         _render_chat_display_final_html(content, content_format=resolved_content_format)
                         if not is_active_stream else None
                     ),
+                    display_speed=effective_display_speed,
                 )
                 if resolved_content_format == "text":
                     self.html(visual_html)
@@ -1861,6 +1897,7 @@ class ChatWidgetsMixin:
         stream_cursor: Optional[str] = "|",
         stream_speed: Any = None,
         response_display: Any = "auto",
+        response_display_speed: Any = None,
         flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
@@ -1890,6 +1927,10 @@ class ChatWidgetsMixin:
         received. Use ``"smooth"`` for typing-style reveal, ``"instant"`` for
         direct rendering, or ``"auto"`` to keep the current behavior.
 
+        ``response_display_speed`` tunes the browser-side smooth reveal from 1
+        (fastest) to 10 (most gradual). It is only used when
+        ``response_display`` resolves to ``"smooth"``.
+
         Pair this with ``chat_history(...)`` for the default high-level chat
         surface, or with ``agent_history(...)`` in agent-first apps.
         """
@@ -1909,6 +1950,7 @@ class ChatWidgetsMixin:
             stream_cursor=stream_cursor,
             stream_speed=stream_speed,
             response_display=response_display,
+            response_display_speed=response_display_speed,
             flush_interval=flush_interval,
             args=args,
             kwargs=kwargs,
@@ -1944,6 +1986,7 @@ class ChatWidgetsMixin:
         stream_cursor: Optional[str] = "|",
         stream_speed: Any = None,
         response_display: Any = "auto",
+        response_display_speed: Any = None,
         flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
@@ -2077,6 +2120,10 @@ class ChatWidgetsMixin:
                 ])
 
                 resolved_response_display = _resolve_chat_response_display_value(response_display)
+                resolved_response_display_speed = (
+                    _resolve_chat_display_speed(override=response_display_speed)
+                    if resolved_response_display == "smooth" else None
+                )
 
                 def run_reply():
                     task = _get_chat_submit_task(store, cid)
@@ -2102,6 +2149,7 @@ class ChatWidgetsMixin:
                             status_text="",
                             cursor=None,
                             display_mode=final_display_mode,
+                            display_speed=resolved_response_display_speed,
                         )
                         return reply
 
@@ -2120,6 +2168,7 @@ class ChatWidgetsMixin:
                             status_text="",
                             cursor=None,
                             display_mode=final_display_mode,
+                            display_speed=resolved_response_display_speed,
                         )
                         return reply
 
@@ -2140,6 +2189,8 @@ class ChatWidgetsMixin:
                             event_payload = dict(raw_chunk) if isinstance(raw_chunk, dict) else raw_chunk
                             if isinstance(event_payload, dict) and resolved_response_display in {"smooth", "instant"}:
                                 event_payload.setdefault("display_mode", resolved_response_display)
+                                if resolved_response_display == "smooth":
+                                    event_payload.setdefault("display_speed", resolved_response_display_speed)
                             elif isinstance(event_payload, dict) and event_type == "text" and event_text and not event_should_stream:
                                 event_payload.setdefault("display_mode", "instant")
 
@@ -2169,6 +2220,8 @@ class ChatWidgetsMixin:
                             }
                             if resolved_response_display in {"smooth", "instant"}:
                                 updates["display_mode"] = resolved_response_display
+                                if resolved_response_display == "smooth":
+                                    updates["display_speed"] = resolved_response_display_speed
                             _patch_last_chat_item(
                                 messages,
                                 **updates,
@@ -2186,6 +2239,8 @@ class ChatWidgetsMixin:
                         }
                         if resolved_response_display in {"smooth", "instant"}:
                             updates["display_mode"] = resolved_response_display
+                            if resolved_response_display == "smooth":
+                                updates["display_speed"] = resolved_response_display_speed
                         _patch_last_chat_item(
                             messages,
                             **updates,
@@ -2204,6 +2259,8 @@ class ChatWidgetsMixin:
                             final_updates["status_text"] = ""
                         if resolved_response_display in {"smooth", "instant"}:
                             final_updates["display_mode"] = resolved_response_display
+                            if resolved_response_display == "smooth":
+                                final_updates["display_speed"] = resolved_response_display_speed
                         if reply:
                             final_updates["content"] = reply
                             final_updates["chunks"] = list(chunks)
@@ -2225,6 +2282,8 @@ class ChatWidgetsMixin:
                     }
                     if resolved_response_display in {"smooth", "instant"}:
                         final_updates["display_mode"] = resolved_response_display
+                        if resolved_response_display == "smooth":
+                            final_updates["display_speed"] = resolved_response_display_speed
                     _patch_last_chat_item(
                         messages,
                         **final_updates,

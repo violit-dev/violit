@@ -388,6 +388,20 @@
 
             window._vlVisualStreamState = window._vlVisualStreamState || {};
             const activeKeys = new Set();
+            const resolveStreamSpeed = (rawValue) => {
+                const numeric = Number(rawValue);
+                if (!Number.isFinite(numeric)) {
+                    return 7;
+                }
+                return Math.max(1, Math.min(10, Math.round(numeric)));
+            };
+            const resolveStepSize = (state, remaining) => {
+                const desiredLength = (state.target || '').length;
+                const speed = Number.isFinite(Number(state.speed)) ? Number(state.speed) : 7;
+                const frameBudget = 10 + (speed * 10);
+                const baseStep = Math.max(1, Math.ceil(Math.max(desiredLength, remaining) / frameBudget));
+                return Math.min(remaining, baseStep);
+            };
 
             const renderHtmlState = (state, html) => {
                 state.live.style.whiteSpace = 'normal';
@@ -442,7 +456,7 @@
 
                     const remaining = desired.length - state.displayed.length;
                     if (remaining > 0) {
-                        const step = Math.min(remaining, Math.max(3, Math.ceil(remaining * 0.35)));
+                        const step = resolveStepSize(state, remaining);
                         state.displayed = desired.slice(0, state.displayed.length + step);
                         renderState(state);
                     } else {
@@ -467,6 +481,7 @@
                 const cursor = host.getAttribute('data-vl-stream-cursor') || '';
                 const liveHtml = decodeBase64Utf8(host.getAttribute('data-vl-stream-live-html') || '');
                 const finalHtml = decodeBase64Utf8(host.getAttribute('data-vl-stream-final-html') || '');
+                const speed = resolveStreamSpeed(host.getAttribute('data-vl-stream-speed'));
                 const existing = window._vlVisualStreamState[key];
                 const state = existing && typeof existing === 'object' ? existing : {};
                 state.displayed = typeof state.displayed === 'string' ? state.displayed : '';
@@ -474,6 +489,7 @@
                 state.cursor = cursor;
                 state.liveHtml = liveHtml;
                 state.finalHtml = finalHtml;
+                state.speed = speed;
                 state.host = host;
                 state.live = live;
                 state.raf = Number.isFinite(Number(state.raf)) ? Number(state.raf) : 0;

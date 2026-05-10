@@ -294,10 +294,12 @@ def _build_visual_stream_html(
     cursor: Optional[str] = None,
     live_html: Optional[str] = None,
     final_html: Optional[str] = None,
+    display_speed: Optional[int] = None,
 ) -> str:
     encoded_target = base64.b64encode(text.encode("utf-8")).decode("ascii")
     safe_key = html_lib.escape(str(stream_key), quote=True)
     safe_cursor = html_lib.escape(str(cursor or ""), quote=True)
+    safe_display_speed = html_lib.escape(str(display_speed), quote=True) if display_speed is not None else ""
     encoded_live_html = ""
     if live_html:
         encoded_live_html = base64.b64encode(live_html.encode("utf-8")).decode("ascii")
@@ -306,11 +308,13 @@ def _build_visual_stream_html(
         encoded_final_html = base64.b64encode(final_html.encode("utf-8")).decode("ascii")
     live_html_attr = f' data-vl-stream-live-html="{encoded_live_html}"' if encoded_live_html else ""
     final_html_attr = f' data-vl-stream-final-html="{encoded_final_html}"' if encoded_final_html else ""
+    display_speed_attr = f' data-vl-stream-speed="{safe_display_speed}"' if safe_display_speed else ""
     return (
         f'<div data-vl-stream-smooth="true" data-vl-stream-key="{safe_key}" '
         f'data-vl-stream-target="{encoded_target}" data-vl-stream-cursor="{safe_cursor}" '
         f'{live_html_attr}'
         f'{final_html_attr}'
+        f'{display_speed_attr}'
         'style="display:block;min-width:0;">'
         '<div data-vl-stream-live="true" '
         'style="white-space:pre-wrap;word-break:break-word;line-height:1.7;"></div>'
