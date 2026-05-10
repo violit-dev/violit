@@ -305,6 +305,9 @@
                     const currentRoot = document.getElementById(targetId);
                     if (currentRoot) {
                         let smartUpdated = trySmartUpdateTextLikeWidget(currentRoot, incomingRoot);
+                        if (!smartUpdated && targetId.endsWith('_wrapper') && currentRoot.querySelector('[data-chat-thread="true"]')) {
+                            smartUpdated = trySmartUpdateChatThreadWrapper(currentRoot, incomingRoot);
+                        }
                         if (targetId.endsWith('_wrapper') && currentRoot.querySelector('.js-plotly-plot')) {
                             smartUpdated = trySmartUpdatePlotlyWrapper(currentRoot, incomingRoot.outerHTML);
                         }
@@ -386,10 +389,33 @@
             window._vlVisualStreamState = window._vlVisualStreamState || {};
             const activeKeys = new Set();
 
+            const renderHtmlState = (state, html) => {
+                state.live.style.whiteSpace = 'normal';
+                state.live.innerHTML = html || '';
+                if (!state.cursor) {
+                    return;
+                }
+                const cursorNode = document.createElement('span');
+                cursorNode.setAttribute('data-vl-stream-cursor-live', 'true');
+                cursorNode.style.whiteSpace = 'pre-wrap';
+                cursorNode.textContent = state.cursor;
+                state.live.appendChild(cursorNode);
+            };
+
             const renderState = (state) => {
                 if (!state || !state.live || !state.host || !state.host.isConnected) {
                     return;
                 }
+                if (state.liveHtml) {
+                    renderHtmlState(state, state.finalHtml && !state.cursor ? state.finalHtml : state.liveHtml);
+                    return;
+                }
+                if (state.finalHtml && state.displayed === (state.target || '')) {
+                    state.live.style.whiteSpace = 'normal';
+                    state.live.innerHTML = state.finalHtml;
+                    return;
+                }
+                state.live.style.whiteSpace = 'pre-wrap';
                 state.live.textContent = state.displayed + (state.cursor || '');
             };
 
@@ -439,15 +465,29 @@
                 const live = host.querySelector('[data-vl-stream-live="true"]') || host;
                 const target = decodeBase64Utf8(host.getAttribute('data-vl-stream-target') || '');
                 const cursor = host.getAttribute('data-vl-stream-cursor') || '';
-                const existing = window._vlVisualStreamState[key] || {};
-                const state = {
-                    displayed: typeof existing.displayed === 'string' ? existing.displayed : '',
-                    target,
-                    cursor,
-                    host,
-                    live,
-                    raf: existing.raf || 0,
-                };
+                const liveHtml = decodeBase64Utf8(host.getAttribute('data-vl-stream-live-html') || '');
+                const finalHtml = decodeBase64Utf8(host.getAttribute('data-vl-stream-final-html') || '');
+                const existing = window._vlVisualStreamState[key];
+                const state = existing && typeof existing === 'object' ? existing : {};
+                state.displayed = typeof state.displayed === 'string' ? state.displayed : '';
+                state.target = target;
+                state.cursor = cursor;
+                state.liveHtml = liveHtml;
+                state.finalHtml = finalHtml;
+                state.host = host;
+                state.live = live;
+                state.raf = Number.isFinite(Number(state.raf)) ? Number(state.raf) : 0;
+
+                if (state.liveHtml) {
+                    if (state.raf) {
+                        cancelAnimationFrame(state.raf);
+                        state.raf = 0;
+                    }
+                    state.displayed = state.cursor ? target.slice(0, Math.max(0, target.length - 1)) : target;
+                    window._vlVisualStreamState[key] = state;
+                    renderState(state);
+                    return;
+                }
 
                 if (!target.startsWith(state.displayed)) {
                     let prefix = 0;
@@ -581,6 +621,125 @@
             });
 
             executeInlineScripts(temp);
+            return true;
+        }
+
+        function getSingleChatThread(root) {
+            if (!root) return null;
+            const matches = [];
+            if (root instanceof Element && root.matches('[data-chat-thread="true"]')) {
+                matches.push(root);
+            }
+            if (root.querySelectorAll) {
+                root.querySelectorAll('[data-chat-thread="true"]').forEach((node) => matches.push(node));
+            }
+            return matches.length === 1 ? matches[0] : null;
+        }
+
+        function isChatMessageWrapper(node) {
+            return !!(node instanceof Element && node.querySelector('[data-chat-message="true"]'));
+        }
+
+        function trySmartUpdateChatMessage(currentRoot, incomingMarkupOrRoot) {
+            if (!currentRoot || !incomingMarkupOrRoot) return false;
+
+            let nextRoot = null;
+            if (typeof incomingMarkupOrRoot === 'string') {
+                const temp = document.createElement('div');
+                temp.innerHTML = incomingMarkupOrRoot;
+                nextRoot = temp.firstElementChild;
+            } else {
+                nextRoot = incomingMarkupOrRoot;
+            }
+
+            if (!(nextRoot instanceof Element) || currentRoot.id !== nextRoot.id) return false;
+
+            const currentMessage = currentRoot.querySelector('[data-chat-message="true"]');
+            const nextMessage = nextRoot.querySelector('[data-chat-message="true"]');
+            if (!(currentMessage instanceof Element) || !(nextMessage instanceof Element)) return false;
+
+            const currentChatKey = currentMessage.getAttribute('data-chat-key') || '';
+            const nextChatKey = nextMessage.getAttribute('data-chat-key') || '';
+            if (currentChatKey && nextChatKey && currentChatKey !== nextChatKey) return false;
+
+            copyElementAttributes(currentRoot, nextRoot);
+            if (currentRoot.innerHTML !== nextRoot.innerHTML) {
+                currentRoot.innerHTML = nextRoot.innerHTML;
+            }
+            executeInlineScripts(currentRoot);
+            return true;
+        }
+
+        function trySmartUpdateChatThreadWrapper(currentRoot, incomingMarkupOrRoot) {
+            if (!currentRoot || !incomingMarkupOrRoot) return false;
+
+            let nextRoot = null;
+            if (typeof incomingMarkupOrRoot === 'string') {
+                const temp = document.createElement('div');
+                temp.innerHTML = incomingMarkupOrRoot;
+                nextRoot = temp.firstElementChild;
+            } else {
+                nextRoot = incomingMarkupOrRoot;
+            }
+
+            if (!(nextRoot instanceof Element) || currentRoot.id !== nextRoot.id) return false;
+
+            const currentThread = getSingleChatThread(currentRoot);
+            const nextThread = getSingleChatThread(nextRoot);
+            if (!(currentThread instanceof Element) || !(nextThread instanceof Element)) return false;
+
+            const currentChildren = Array.from(currentThread.children);
+            const nextChildren = Array.from(nextThread.children);
+            if (!currentChildren.every((child) => child.id) || !nextChildren.every((child) => child.id)) return false;
+
+            copyElementAttributes(currentRoot, nextRoot);
+            copyElementAttributes(currentThread, nextThread);
+
+            const currentById = new Map(currentChildren.map((child) => [child.id, child]));
+            const nextIds = nextChildren.map((child) => child.id);
+
+            nextChildren.forEach((nextChild, index) => {
+                let liveChild = currentById.get(nextChild.id) || null;
+                const referenceNode = currentThread.children[index] || null;
+
+                if (!liveChild) {
+                    liveChild = nextChild.cloneNode(true);
+                    currentThread.insertBefore(liveChild, referenceNode);
+                    executeInlineScripts(liveChild);
+                    currentById.set(nextChild.id, liveChild);
+                    return;
+                }
+
+                if (currentThread.children[index] !== liveChild) {
+                    currentThread.insertBefore(liveChild, referenceNode);
+                }
+
+                if (liveChild.outerHTML === nextChild.outerHTML) {
+                    return;
+                }
+
+                if (isChatMessageWrapper(liveChild) && isChatMessageWrapper(nextChild)) {
+                    if (!trySmartUpdateChatMessage(liveChild, nextChild)) {
+                        liveChild.outerHTML = nextChild.outerHTML;
+                        liveChild = document.getElementById(nextChild.id);
+                    }
+                } else {
+                    liveChild.outerHTML = nextChild.outerHTML;
+                    liveChild = document.getElementById(nextChild.id);
+                }
+
+                if (liveChild) {
+                    executeInlineScripts(liveChild);
+                    currentById.set(nextChild.id, liveChild);
+                }
+            });
+
+            currentChildren.forEach((child) => {
+                if (!nextIds.includes(child.id)) {
+                    child.remove();
+                }
+            });
+
             return true;
         }
 
@@ -2057,6 +2216,10 @@
 
                                     if (!smartUpdated && (widgetType === 'input' || widgetType === 'textarea')) {
                                         smartUpdated = trySmartUpdateTextLikeWidget(el, item.html);
+                                    }
+
+                                    if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('[data-chat-thread="true"]')) {
+                                        smartUpdated = trySmartUpdateChatThreadWrapper(el, item.html);
                                     }
                                     
                                     // Slider: Update value property only (preserve drag interaction)

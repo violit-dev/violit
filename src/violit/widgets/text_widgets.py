@@ -287,13 +287,30 @@ def _render_markdown_html(text: str, *, allow_html: bool) -> str:
     return _sanitize_rendered_markdown_html(rendered_html)
 
 
-def _build_visual_stream_html(text: str, *, stream_key: str, cursor: Optional[str] = None) -> str:
+def _build_visual_stream_html(
+    text: str,
+    *,
+    stream_key: str,
+    cursor: Optional[str] = None,
+    live_html: Optional[str] = None,
+    final_html: Optional[str] = None,
+) -> str:
     encoded_target = base64.b64encode(text.encode("utf-8")).decode("ascii")
     safe_key = html_lib.escape(str(stream_key), quote=True)
     safe_cursor = html_lib.escape(str(cursor or ""), quote=True)
+    encoded_live_html = ""
+    if live_html:
+        encoded_live_html = base64.b64encode(live_html.encode("utf-8")).decode("ascii")
+    encoded_final_html = ""
+    if final_html:
+        encoded_final_html = base64.b64encode(final_html.encode("utf-8")).decode("ascii")
+    live_html_attr = f' data-vl-stream-live-html="{encoded_live_html}"' if encoded_live_html else ""
+    final_html_attr = f' data-vl-stream-final-html="{encoded_final_html}"' if encoded_final_html else ""
     return (
         f'<div data-vl-stream-smooth="true" data-vl-stream-key="{safe_key}" '
         f'data-vl-stream-target="{encoded_target}" data-vl-stream-cursor="{safe_cursor}" '
+        f'{live_html_attr}'
+        f'{final_html_attr}'
         'style="display:block;min-width:0;">'
         '<div data-vl-stream-live="true" '
         'style="white-space:pre-wrap;word-break:break-word;line-height:1.7;"></div>'
@@ -403,7 +420,15 @@ class TextWidgetsMixin:
                     is_streaming_tail = visual_stream_smoothing and bool(cursor) and index == len(items) - 1
                     if is_streaming_tail:
                         stream_key = f"{getattr(placeholder, 'container_id', 'stream')}:{index}"
-                        self.html(_build_visual_stream_html(text, stream_key=stream_key, cursor=cursor), cls="markdown")
+                        self.html(
+                            _build_visual_stream_html(
+                                text,
+                                stream_key=stream_key,
+                                cursor=cursor,
+                                live_html=_render_markdown_html(text, allow_html=False),
+                            ),
+                            cls="markdown",
+                        )
                     else:
                         if cursor and index == len(items) - 1:
                             text += str(cursor)

@@ -4,14 +4,15 @@ import asyncio
 import json
 import re
 import time
+import uuid
 from typing import Optional, Union, Callable, Any, Sequence, cast
 from ..background import CancelledError
 from ..component import Component
-from ..context import fragment_ctx, session_ctx, view_ctx, layout_ctx
+from ..context import fragment_ctx, session_ctx, view_ctx, layout_ctx, rendering_ctx
 from ..state import get_session_store
 from ..style_utils import merge_cls, merge_style
 from .input_widgets import UploadedFile
-from .text_widgets import _build_visual_stream_html
+from .text_widgets import _build_visual_stream_html, _render_markdown_html
 
 
 def _reset_dynamic_chat_children(message_id: str):
@@ -40,6 +41,23 @@ def _clone_chat_item(item: Any):
 
 def _clone_chat_items(messages_state):
     return [_clone_chat_item(item) for item in messages_state.value]
+
+
+def _default_chat_stream_key(item: Any, *, suffix: str = "") -> str:
+    if isinstance(item, dict):
+        explicit_key = _coerce_chat_text(item.get("key")).strip()
+        if explicit_key:
+            return f"chat-stream:{explicit_key}{suffix}"
+
+    current_message_id = _coerce_chat_text(fragment_ctx.get()).strip()
+    if current_message_id:
+        return f"chat-stream:{current_message_id}{suffix}"
+
+    current_component_id = _coerce_chat_text(rendering_ctx.get()).strip()
+    if current_component_id:
+        return f"chat-stream:{current_component_id}{suffix}"
+
+    return f"chat-stream:{id(item)}{suffix}"
 
 
 def _build_chat_uploaded_file(payload: Any) -> Optional[UploadedFile]:
@@ -180,6 +198,31 @@ def _chat_attachment_data_url(entry: UploadedFile) -> str:
     return f"data:{_chat_attachment_mime_type(entry)};base64,{encoded}"
 
 
+def _chat_attachment_id(entry: UploadedFile) -> str:
+    attachment_id = _coerce_chat_text(getattr(entry, "_violit_chat_attachment_id", "")).strip()
+    if attachment_id:
+        return attachment_id
+
+    attachment_id = uuid.uuid4().hex
+    setattr(entry, "_violit_chat_attachment_id", attachment_id)
+    return attachment_id
+
+
+def _chat_attachment_public_url(app, entry: UploadedFile) -> str:
+    if session_ctx.get() is None:
+        return _chat_attachment_data_url(entry)
+
+    store = get_session_store()
+    attachment_id = _chat_attachment_id(entry)
+    registry = store.setdefault("_vl_chat_attachments", {})
+    registry[attachment_id] = {
+        "file": entry,
+        "name": _coerce_chat_text(getattr(entry, "name", "attachment")).strip() or "attachment",
+        "mime": _chat_attachment_mime_type(entry),
+    }
+    return app._public_path(f"/__violit_attachment/{attachment_id}")
+
+
 def _chat_message_files(item: Any) -> list[UploadedFile]:
     if not isinstance(item, dict):
         return []
@@ -195,6 +238,38 @@ def _chat_message_audio(item: Any) -> Optional[UploadedFile]:
 
 def _chat_message_has_attachments(item: Any) -> bool:
     return bool(_chat_message_files(item) or _chat_message_audio(item))
+
+
+def _normalize_chat_display_mode(value: Any) -> str:
+    normalized = _coerce_chat_text(value).strip().lower()
+    if normalized in {"", "auto", "default"}:
+        return "auto"
+    if normalized in {"smooth", "stream", "streaming", "animated", "typing"}:
+        return "smooth"
+    if normalized in {"instant", "plain", "raw", "none", "off", "false"}:
+        return "instant"
+    return "auto"
+
+
+def _resolve_chat_display_mode(item: Any, *, override: Any = None, fallback: str = "instant") -> str:
+    candidates: list[Any] = [override]
+    if isinstance(item, dict):
+        candidates.extend([item.get("display_mode"), item.get("reveal_mode")])
+    candidates.append(fallback)
+
+    for candidate in candidates:
+        normalized = _normalize_chat_display_mode(candidate)
+        if normalized != "auto":
+            return normalized
+    return "instant"
+
+
+def _resolve_chat_response_display_value(response_display: Any) -> str:
+    candidate = response_display.value if hasattr(response_display, "value") else response_display
+    if callable(candidate) and not isinstance(candidate, str):
+        candidate = candidate()
+    normalized = _normalize_chat_display_mode(candidate)
+    return normalized if normalized != "auto" else "auto"
 
 
 def _chat_history_display_text(item: Any) -> str:
@@ -220,7 +295,20 @@ def _resolve_chat_content_format(item: Any, content_format: Optional[str] = None
     return "markdown"
 
 
-def _render_chat_attachment_html(item: Any) -> str:
+def _render_chat_display_final_html(text: str, *, content_format: str) -> str:
+    if not text:
+        return ""
+    if content_format == "text":
+        safe_text = html_lib.escape(text).replace("\n", "<br>")
+        return (
+            '<div style="white-space:pre-wrap;word-break:break-word;line-height:1.7;">'
+            f"{safe_text}"
+            "</div>"
+        )
+    return _render_markdown_html(text, allow_html=False)
+
+
+def _render_chat_attachment_html(app, item: Any) -> str:
     files = _chat_message_files(item)
     audio_file = _chat_message_audio(item)
     if not files and audio_file is None:
@@ -233,13 +321,13 @@ def _render_chat_attachment_html(item: Any) -> str:
     if image_files:
         image_cards: list[str] = []
         for entry in image_files[:4]:
-            data_url = _chat_attachment_data_url(entry)
-            if not data_url:
+            image_src = _chat_attachment_public_url(app, entry)
+            if not image_src:
                 continue
             safe_name = html_lib.escape(_coerce_chat_text(entry.name) or "image")
             image_cards.append(
                 f'''<figure data-chat-part="attachment-image" style="margin:0;display:flex;flex-direction:column;gap:0.35rem;min-width:0;flex:0 1 220px;">
-<img src="{html_lib.escape(data_url, quote=True)}" alt="{html_lib.escape(safe_name, quote=True)}" style="display:block;width:100%;max-width:220px;max-height:180px;object-fit:cover;border-radius:16px;border:1px solid color-mix(in srgb, var(--vl-border) 72%, transparent);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent);background:var(--vl-bg-card);" />
+<img src="{html_lib.escape(image_src, quote=True)}" alt="{html_lib.escape(safe_name, quote=True)}" loading="lazy" style="display:block;width:100%;max-width:220px;max-height:180px;object-fit:cover;border-radius:16px;border:1px solid color-mix(in srgb, var(--vl-border) 72%, transparent);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent);background:var(--vl-bg-card);" />
 <figcaption style="font-size:0.74rem;color:var(--vl-text-muted);line-height:1.3;word-break:break-word;">{safe_name}</figcaption>
 </figure>'''
             )
@@ -1264,10 +1352,21 @@ class ChatWidgetsMixin:
                                 thread.scrollTo({{ top: nextTop, behavior }});
                             }}
                         }};
+                        const hasActiveVisualStream = () => {{
+                            const visualState = window._vlVisualStreamState || {{}};
+                            const hosts = Array.from(thread.querySelectorAll('[data-vl-stream-smooth="true"]'));
+                            return hosts.some((host) => {{
+                                const key = host.getAttribute('data-vl-stream-key') || '';
+                                if (!key) return false;
+                                const state = visualState[key];
+                                if (!state || typeof state.displayed !== 'string') return false;
+                                return state.displayed !== (state.target || '');
+                            }});
+                        }};
                         const maybeScrollToLatest = () => {{
                             if (scrollMode !== 'bottom') return;
                             syncBottom('auto');
-                            requestAnimationFrame(() => syncBottom(scrollBehavior === 'instant' ? 'auto' : scrollBehavior));
+                            requestAnimationFrame(() => syncBottom(scrollBehavior === 'instant' || hasActiveVisualStream() ? 'auto' : scrollBehavior));
                             setTimeout(() => syncBottom('auto'), 80);
                         }};
                         const scheduleScrollToLatest = () => {{
@@ -1318,21 +1417,41 @@ class ChatWidgetsMixin:
         cursor: Optional[str] = "|",
         content_format: Optional[str] = None,
         stream_key: Optional[str] = None,
+        display_mode: Optional[str] = None,
         visual_stream_smoothing: bool = True,
     ) -> bool:
         content = _chat_history_display_text(item)
         chunks = item.get("chunks") if isinstance(item, dict) else None
         resolved_content_format = _resolve_chat_content_format(item, content_format)
+        status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
+        phase = _normalize_chat_phase(item)
+        is_active_stream = status == "streaming" or phase in {"thinking", "running"}
+        effective_display_mode = _resolve_chat_display_mode(
+            item,
+            override=display_mode,
+            fallback="smooth" if is_active_stream and visual_stream_smoothing else "instant",
+        )
         rendered = False
         rendered_text_from_chunks = False
 
         if chunks:
             if isinstance(chunks, (list, tuple)) and all(isinstance(chunk, str) for chunk in chunks):
                 streamed_text = "".join(chunks)
-                status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
-                if status == "streaming" and visual_stream_smoothing:
-                    visual_key = stream_key or f"chat-stream:{id(item)}"
-                    visual_html = _build_visual_stream_html(streamed_text, stream_key=visual_key, cursor=cursor)
+                if effective_display_mode == "smooth":
+                    visual_key = stream_key or _default_chat_stream_key(item)
+                    live_html = None
+                    if is_active_stream and resolved_content_format != "text":
+                        live_html = _render_chat_display_final_html(streamed_text, content_format=resolved_content_format)
+                    final_html = None
+                    if not is_active_stream:
+                        final_html = _render_chat_display_final_html(streamed_text, content_format=resolved_content_format)
+                    visual_html = _build_visual_stream_html(
+                        streamed_text,
+                        stream_key=visual_key,
+                        cursor=cursor if is_active_stream else None,
+                        live_html=live_html,
+                        final_html=final_html,
+                    )
                     if resolved_content_format == "text":
                         self.html(visual_html)
                     else:
@@ -1345,23 +1464,42 @@ class ChatWidgetsMixin:
                     else:
                         self.markdown(streamed_text)
             else:
-                status = _coerce_chat_text(item.get("status")).strip().lower() if isinstance(item, dict) else ""
                 self.write_stream(
                     chunks,
-                    cursor=cursor if status == "streaming" else None,
-                    visual_stream_smoothing=visual_stream_smoothing,
+                    cursor=cursor if is_active_stream else None,
+                    visual_stream_smoothing=effective_display_mode == "smooth",
                 )
             rendered_text_from_chunks = True
             rendered = True
 
         if content and not rendered_text_from_chunks:
-            if resolved_content_format == "text":
-                self.text(content)
+            if effective_display_mode == "smooth":
+                visual_key = stream_key or _default_chat_stream_key(item, suffix=":content")
+                live_html = None
+                if is_active_stream and resolved_content_format != "text":
+                    live_html = _render_chat_display_final_html(content, content_format=resolved_content_format)
+                visual_html = _build_visual_stream_html(
+                    content,
+                    stream_key=visual_key,
+                    cursor=cursor if is_active_stream else None,
+                    live_html=live_html,
+                    final_html=(
+                        _render_chat_display_final_html(content, content_format=resolved_content_format)
+                        if not is_active_stream else None
+                    ),
+                )
+                if resolved_content_format == "text":
+                    self.html(visual_html)
+                else:
+                    self.html(visual_html, cls="markdown")
             else:
-                self.markdown(content)
+                if resolved_content_format == "text":
+                    self.text(content)
+                else:
+                    self.markdown(content)
             rendered = True
 
-        attachment_html = _render_chat_attachment_html(item)
+        attachment_html = _render_chat_attachment_html(self, item)
         if attachment_html:
             self.html(attachment_html)
             rendered = True
@@ -1375,6 +1513,7 @@ class ChatWidgetsMixin:
         cursor: Optional[str] = "|",
         content_format: Optional[str] = None,
         stream_key: Optional[str] = None,
+        display_mode: Optional[str] = None,
         visual_stream_smoothing: bool = True,
     ) -> bool:
         """Render the shared chat transcript body inside a manual chat_message block.
@@ -1385,12 +1524,17 @@ class ChatWidgetsMixin:
 
         ``content_format`` accepts ``"markdown"`` or ``"text"``. When omitted,
         a dict item may supply ``item["content_format"]``; otherwise markdown is used.
+
+        Primitive callers can force visual behavior per message with
+        ``item["display_mode"]`` (or ``display_mode=...``), using ``"smooth"``
+        for typing-style reveal and ``"instant"`` for direct rendering.
         """
         return self._render_chat_history_body(
             item,
             cursor=cursor,
             content_format=content_format,
             stream_key=stream_key,
+            display_mode=display_mode,
             visual_stream_smoothing=visual_stream_smoothing,
         )
 
@@ -1716,6 +1860,7 @@ class ChatWidgetsMixin:
         assistant_name: str = "assistant",
         stream_cursor: Optional[str] = "|",
         stream_speed: Any = None,
+        response_display: Any = "auto",
         flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
@@ -1741,6 +1886,10 @@ class ChatWidgetsMixin:
         When ``accept_file`` or ``accept_audio`` is enabled, ``on_submit``
         receives a dict with ``text``, ``files``, and ``audio`` keys.
 
+        ``response_display`` controls how assistant text is shown after it is
+        received. Use ``"smooth"`` for typing-style reveal, ``"instant"`` for
+        direct rendering, or ``"auto"`` to keep the current behavior.
+
         Pair this with ``chat_history(...)`` for the default high-level chat
         surface, or with ``agent_history(...)`` in agent-first apps.
         """
@@ -1759,6 +1908,7 @@ class ChatWidgetsMixin:
             assistant_name=assistant_name,
             stream_cursor=stream_cursor,
             stream_speed=stream_speed,
+            response_display=response_display,
             flush_interval=flush_interval,
             args=args,
             kwargs=kwargs,
@@ -1793,6 +1943,7 @@ class ChatWidgetsMixin:
         assistant_name: str = "assistant",
         stream_cursor: Optional[str] = "|",
         stream_speed: Any = None,
+        response_display: Any = "auto",
         flush_interval: float = 0.01,
         args: Optional[Sequence[Any]] = None,
         kwargs: Optional[dict[str, Any]] = None,
@@ -1864,6 +2015,8 @@ class ChatWidgetsMixin:
             if not on_submit:
                 return
             submit_callback = on_submit
+            resolved_stream_speed = _resolve_stream_speed_value(stream_speed)
+            stream_profile = _resolve_stream_profile(resolved_stream_speed, flush_interval)
             val = _parse_chat_submit_value(val)
             if isinstance(val, str):
                 val = val.strip()
@@ -1923,6 +2076,8 @@ class ChatWidgetsMixin:
                     },
                 ])
 
+                resolved_response_display = _resolve_chat_response_display_value(response_display)
+
                 def run_reply():
                     task = _get_chat_submit_task(store, cid)
 
@@ -1937,6 +2092,7 @@ class ChatWidgetsMixin:
                         reply = result.strip()
                         if not reply:
                             raise RuntimeError("Chat reply was empty.")
+                        final_display_mode = "smooth" if resolved_response_display == "smooth" else None
                         _patch_last_chat_item(
                             messages,
                             content=reply,
@@ -1945,6 +2101,7 @@ class ChatWidgetsMixin:
                             phase="done",
                             status_text="",
                             cursor=None,
+                            display_mode=final_display_mode,
                         )
                         return reply
 
@@ -1953,6 +2110,7 @@ class ChatWidgetsMixin:
                         reply = str(result).strip()
                         if not reply:
                             raise RuntimeError("Chat reply was empty.")
+                        final_display_mode = "smooth" if resolved_response_display == "smooth" else None
                         _patch_last_chat_item(
                             messages,
                             content=reply,
@@ -1961,6 +2119,7 @@ class ChatWidgetsMixin:
                             phase="done",
                             status_text="",
                             cursor=None,
+                            display_mode=final_display_mode,
                         )
                         return reply
 
@@ -1978,12 +2137,18 @@ class ChatWidgetsMixin:
                             if isinstance(raw_chunk, dict) and raw_chunk.get("stream") is not None:
                                 event_should_stream = bool(raw_chunk.get("stream"))
 
+                            event_payload = dict(raw_chunk) if isinstance(raw_chunk, dict) else raw_chunk
+                            if isinstance(event_payload, dict) and resolved_response_display in {"smooth", "instant"}:
+                                event_payload.setdefault("display_mode", resolved_response_display)
+                            elif isinstance(event_payload, dict) and event_type == "text" and event_text and not event_should_stream:
+                                event_payload.setdefault("display_mode", "instant")
+
                             if event_type == "text" and event_text and event_should_stream:
-                                _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
+                                _patch_last_chat_item_with_event(messages, event_payload, cursor=stream_cursor)
                                 _push_stream_frame(self)
                                 continue
 
-                            _patch_last_chat_item_with_event(messages, raw_chunk, cursor=stream_cursor)
+                            _patch_last_chat_item_with_event(messages, event_payload, cursor=stream_cursor)
                             _push_stream_frame(self)
                             continue
 
@@ -1994,26 +2159,36 @@ class ChatWidgetsMixin:
 
                         if agent_stream_seen:
                             chunks.append(text)
+                            updates = {
+                                "chunks": list(chunks),
+                                "content": "".join(chunks),
+                                "status": "streaming",
+                                "phase": "running",
+                                "status_text": "",
+                                "cursor": stream_cursor,
+                            }
+                            if resolved_response_display in {"smooth", "instant"}:
+                                updates["display_mode"] = resolved_response_display
                             _patch_last_chat_item(
                                 messages,
-                                chunks=list(chunks),
-                                content="".join(chunks),
-                                status="streaming",
-                                phase="running",
-                                status_text="",
-                                cursor=stream_cursor,
+                                **updates,
                             )
                             _push_stream_frame(self)
                             continue
 
                         chunks.append(text)
+                        updates = {
+                            "chunks": list(chunks),
+                            "status": "streaming",
+                            "phase": "running",
+                            "status_text": "",
+                            "cursor": stream_cursor,
+                        }
+                        if resolved_response_display in {"smooth", "instant"}:
+                            updates["display_mode"] = resolved_response_display
                         _patch_last_chat_item(
                             messages,
-                            chunks=list(chunks),
-                            status="streaming",
-                            phase="running",
-                            status_text="",
-                            cursor=stream_cursor,
+                            **updates,
                         )
                         _push_stream_frame(self)
 
@@ -2027,6 +2202,8 @@ class ChatWidgetsMixin:
                             final_updates["phase"] = "done"
                             final_updates["status"] = "done"
                             final_updates["status_text"] = ""
+                        if resolved_response_display in {"smooth", "instant"}:
+                            final_updates["display_mode"] = resolved_response_display
                         if reply:
                             final_updates["content"] = reply
                             final_updates["chunks"] = list(chunks)
@@ -2038,14 +2215,19 @@ class ChatWidgetsMixin:
 
                     if not reply:
                         raise RuntimeError("Chat reply was empty.")
+                    final_updates = {
+                        "content": reply,
+                        "chunks": list(chunks),
+                        "status": "done",
+                        "phase": "done",
+                        "status_text": "",
+                        "cursor": None,
+                    }
+                    if resolved_response_display in {"smooth", "instant"}:
+                        final_updates["display_mode"] = resolved_response_display
                     _patch_last_chat_item(
                         messages,
-                        content=reply,
-                        chunks=list(chunks),
-                        status="done",
-                        phase="done",
-                        status_text="",
-                        cursor=None,
+                        **final_updates,
                     )
                     return reply
 

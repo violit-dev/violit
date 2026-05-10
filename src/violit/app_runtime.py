@@ -8,7 +8,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.websockets import WebSocketState
 
 from .app_assets import get_preconnect_links, get_vendor_resources
@@ -429,6 +429,43 @@ class AppRuntimeMixin:
                     "Expires": "0",
                 },
             )
+
+        @self.fastapi.get("/__violit_attachment/{attachment_id}")
+        async def chat_attachment(request: Request, attachment_id: str):
+            sid = request.cookies.get("ss_sid")
+            if not sid:
+                return Response(status_code=404)
+
+            current_view_id = self._resolve_http_view_id(request, sid, generate=False)
+            session_token, view_token = self._set_runtime_context(sid, current_view_id)
+            try:
+                store = get_session_store()
+                registry = store.get("_vl_chat_attachments") or {}
+                payload = registry.get(attachment_id)
+                if not isinstance(payload, dict):
+                    return Response(status_code=404)
+
+                uploaded = payload.get("file")
+                if uploaded is None:
+                    return Response(status_code=404)
+
+                file_bytes = uploaded.getvalue() or b""
+                if not file_bytes:
+                    return Response(status_code=404)
+
+                media_type = str(payload.get("mime") or "application/octet-stream")
+                file_name = str(payload.get("name") or "attachment")
+                safe_file_name = file_name.replace('"', "")
+                return Response(
+                    content=file_bytes,
+                    media_type=media_type,
+                    headers={
+                        "Cache-Control": "private, max-age=3600, immutable",
+                        "Content-Disposition": f'inline; filename="{safe_file_name}"',
+                    },
+                )
+            finally:
+                self._reset_runtime_context(session_token, view_token)
 
         @self.fastapi.get("/lite-stream")
         async def lite_stream(request: Request):
