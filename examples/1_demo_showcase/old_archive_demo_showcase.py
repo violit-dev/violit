@@ -589,14 +589,13 @@ def chat_page():
             "Reply mode",
             modes,
             index=modes.index(current_mode),
-            key="showcase_chat_mode",
+            bind=chat_mode,
         )
     with c2:
         app.select_slider(
             "Assistant vibe",
             options=["Builder", "Playful", "Bold"],
-            value=chat_style.value,
-            key="showcase_chat_style",
+            bind=chat_style,
         )
     with c3:
         app.button("Reset chat", on_click=_reset_chat, variant="neutral")

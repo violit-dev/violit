@@ -102,6 +102,22 @@ All six examples expose the same top-level runtime controls:
 - `Display`
 - `Smooth speed`
 
+These examples use the recommended external-state pattern for controls:
+
+```python
+api_key = app.state("")
+mode = app.state("streaming")
+display = app.state("smooth")
+smooth_speed = app.state(7)
+
+app.text_input("GEMINI_API_KEY", bind=api_key, type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], bind=mode)
+app.selectbox("Display", ["smooth", "instant"], bind=display)
+app.slider("Smooth speed", 1, 10, bind=smooth_speed, step=1)
+```
+
+`key=` remains available for widget identity, but external state binding should use `bind=`.
+
 The `Mode` options are:
 
 - `streaming`

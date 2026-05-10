@@ -56,10 +56,10 @@ messages = app.state([
         "summary": "Gemini-backed agent demo with local tools and visible trace.",
     }
 ], key="demo_gemini_agent_highlevel_messages")
-api_key = app.state("", key="demo_gemini_agent_highlevel_api_key")
-mode = app.state("streaming", key="demo_gemini_agent_highlevel_mode")
-display = app.state("smooth", key="demo_gemini_agent_highlevel_display")
-smooth_speed = app.state(7, key="demo_gemini_agent_highlevel_smooth_speed")
+api_key = app.state("")
+mode = app.state("streaming")
+display = app.state("smooth")
+smooth_speed = app.state(7)
 
 
 def _normalize_prompt_payload(prompt: Any) -> dict[str, Any]:
@@ -684,10 +684,10 @@ reactivity = cast(Any, app.reactivity)
 
 app.title("Gemini Agent Chat (High-level)")
 app.caption("High-level Violit agent chat example using agent_history and managed_chat_input.")
-app.text_input("GEMINI_API_KEY", value=api_key.value, key="demo_gemini_agent_highlevel_api_key", type="password")
-app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_gemini_agent_highlevel_mode")
-app.selectbox("Display", ["smooth", "instant"], value=display.value, key="demo_gemini_agent_highlevel_display")
-app.slider("Smooth speed", 1, 10, value=int(smooth_speed.value), step=1, key="demo_gemini_agent_highlevel_smooth_speed", help="1 = fastest reveal, 10 = most gradual.")
+app.text_input("GEMINI_API_KEY", bind=api_key, type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], bind=mode)
+app.selectbox("Display", ["smooth", "instant"], bind=display)
+app.slider("Smooth speed", 1, 10, bind=smooth_speed, step=1, help="1 = fastest reveal, 10 = most gradual.")
 
 
 @reactivity

@@ -531,16 +531,13 @@ def customer_radar_page() -> None:
     with controls[0]:
         app.text_input(
             'Search customers',
-            value=customer_query.value,
-            key='u0_new_demo_customer_query_input',
-            on_change=lambda value: customer_query.set(value),
-            on_submit=lambda value: customer_query.set(value),
+            bind=customer_query,
             live_update=True,
         )
     with controls[1]:
-        app.selectbox('Segment', segment_options, index=current_segment_index, key='u0_new_demo_customer_segment_input', on_change=lambda value: customer_segment.set(value))
+        app.selectbox('Segment', segment_options, index=current_segment_index, bind=customer_segment)
     with controls[2]:
-        app.toggle('Priority only', value=customer_priority_only.value, key='u0_new_demo_customer_priority_only_input', on_change=lambda value: customer_priority_only.set(value))
+        app.toggle('Priority only', bind=customer_priority_only)
 
     def on_customer_cell(cell: Any) -> None:
         if isinstance(cell, dict):
@@ -640,6 +637,7 @@ def operations_page() -> None:
             height=320,
             hide_index=True,
             use_container_width=True,
+            bind=rollout_rows,
             on_change=lambda new_df: rollout_rows.set(normalized_rollout_rows(new_df)),
         )
         app.text(lambda: f'Current cohorts: {len(rollout_rows.value)}', muted=True, size='small')
@@ -764,11 +762,10 @@ def settings_page() -> None:
     current_theme_index = SHOWCASE_THEME_OPTIONS.index(active_theme_name.value) if active_theme_name.value in SHOWCASE_THEME_OPTIONS else 0
     controls = app.columns(2, gap='large')
     with controls[0]:
-        theme_choice = app.selectbox('Theme', SHOWCASE_THEME_OPTIONS, index=current_theme_index, key='u0_new_demo_theme_choice')
+        theme_choice = app.selectbox('Theme', SHOWCASE_THEME_OPTIONS, index=current_theme_index, bind=active_theme_name, key='u0_new_demo_theme_choice')
         app.button(
             'Apply theme',
             on_click=lambda: (
-                active_theme_name.set(theme_choice.value),
                 app.set_theme(theme_choice.value),
                 app.toast(f'Theme changed to {theme_choice.value}', icon='palette', variant='success'),
             ),

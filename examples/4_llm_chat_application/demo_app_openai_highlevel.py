@@ -15,10 +15,10 @@ app = vl.App(title="Simple OpenAI Chat (High-level)", theme="violit_light_jewel"
 messages = app.state([
     {"role": "assistant", "content": "Hello. Ask ChatGPT anything."}
 ], key="demo_openai_highlevel_messages")
-api_key = app.state("", key="demo_openai_highlevel_api_key")
-mode = app.state("streaming", key="demo_openai_highlevel_mode")
-display = app.state("smooth", key="demo_openai_highlevel_display")
-smooth_speed = app.state(7, key="demo_openai_highlevel_smooth_speed")
+api_key = app.state("")
+mode = app.state("streaming")
+display = app.state("smooth")
+smooth_speed = app.state(7)
 
 
 def _reply_non_streaming(payload: dict, key: str) -> str:
@@ -96,10 +96,10 @@ reactivity = cast(Any, app.reactivity)
 
 app.title("Simple OpenAI Chat (High-level)")
 app.caption("A small text-only high-level Violit chat example.")
-app.text_input("OPENAI_API_KEY", value=api_key.value, key="demo_openai_highlevel_api_key", type="password")
-app.selectbox("Mode", ["streaming", "non-streaming"], value=mode.value, key="demo_openai_highlevel_mode")
-app.selectbox("Display", ["smooth", "instant"], value=display.value, key="demo_openai_highlevel_display")
-app.slider("Smooth speed", 1, 10, value=int(smooth_speed.value), step=1, key="demo_openai_highlevel_smooth_speed", help="1 = fastest reveal, 10 = most gradual.")
+app.text_input("OPENAI_API_KEY", bind=api_key, type="password")
+app.selectbox("Mode", ["streaming", "non-streaming"], bind=mode)
+app.selectbox("Display", ["smooth", "instant"], bind=display)
+app.slider("Smooth speed", 1, 10, bind=smooth_speed, step=1, help="1 = fastest reveal, 10 = most gradual.")
 
 
 @reactivity

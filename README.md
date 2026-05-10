@@ -174,6 +174,23 @@ app.run()
 - **The Vibe:** The top-down simplicity of Streamlit, powered by the reactive performance of modern JS frameworks.
 - **The Advantage:** The syntax remains lightweight, but the runtime updates only the necessary DOM nodes seamlessly.
 
+### External State Binding
+
+When a widget owns its own state, bind the return value directly:
+
+```python
+name = app.text_input("Name", value="Violit")
+```
+
+When you want a widget to edit an existing external `app.state(...)`, use `bind=`:
+
+```python
+api_key = app.state("")
+app.text_input("API key", bind=api_key, type="password")
+```
+
+Use `key=` for widget identity, not for external state sharing.
+
 ## Quick Start
 
 Experience the core Violit philosophy: declare state, bind widgets, and let the runtime update only what's necessary.
