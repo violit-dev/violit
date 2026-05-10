@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 import time
+import urllib.parse
 import uuid
 from typing import Optional, Union, Callable, Any, Sequence, cast
 from ..background import CancelledError
@@ -220,7 +221,13 @@ def _chat_attachment_public_url(app, entry: UploadedFile) -> str:
         "name": _coerce_chat_text(getattr(entry, "name", "attachment")).strip() or "attachment",
         "mime": _chat_attachment_mime_type(entry),
     }
-    return app._public_path(f"/__violit_attachment/{attachment_id}")
+    url = app._public_path(f"/__violit_attachment/{attachment_id}")
+    current_view_id = _coerce_chat_text(view_ctx.get()).strip()
+    if not current_view_id:
+        return url
+
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}_vl_view_id={urllib.parse.quote(current_view_id, safe='')}"
 
 
 def _chat_message_files(item: Any) -> list[UploadedFile]:
