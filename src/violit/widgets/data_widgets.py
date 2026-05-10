@@ -1,8 +1,10 @@
 """Data Widgets Mixin for Violit"""
 
 from typing import Union, Callable, Optional, Any
+import hashlib
 import inspect
 import json
+import re
 from ..component import Component
 from ..context import rendering_ctx
 from ..state import State
@@ -11,6 +13,63 @@ from ..style_utils import merge_cls, merge_style, resolve_value
 
 class DataWidgetsMixin:
     """Data display widgets (dataframe, table, data_editor, metric, json)"""
+
+    @staticmethod
+    def _sanitize_widget_key(value: Any) -> str:
+        raw = str(value)
+        normalized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+
+        if normalized and normalized == raw and len(normalized) <= 64:
+            return normalized
+
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        if not normalized:
+            return f"widget_{digest}"
+        return f"{normalized[:48]}_{digest}"
+
+    def _resolve_widget_cid(self, widget_type: str, key=None) -> str:
+        if key is None:
+            return self._get_next_cid(widget_type)
+        return f"{widget_type}_{self._sanitize_widget_key(key)}"
+
+    @staticmethod
+    def _clone_editor_state_value(value: Any):
+        try:
+            import pandas as pd  # type: ignore
+        except Exception:
+            pd = None
+
+        if pd is not None and isinstance(value, pd.DataFrame):
+            return value.copy()
+        if isinstance(value, list):
+            return [dict(row) if isinstance(row, dict) else row for row in value]
+        return value
+
+    @staticmethod
+    def _coerce_editor_records(value: Any) -> list[dict[str, Any]]:
+        try:
+            import pandas as pd  # type: ignore
+        except Exception:
+            pd = None
+
+        if pd is not None and isinstance(value, pd.DataFrame):
+            return value.to_dict('records')
+        if isinstance(value, list):
+            return [dict(row) if isinstance(row, dict) else row for row in value]
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            return [dict(value)]
+        return []
+
+    @staticmethod
+    def _editor_prefers_dataframe(current_value: Any, seed_value: Any) -> bool:
+        try:
+            import pandas as pd  # type: ignore
+        except Exception:
+            return False
+        return isinstance(current_value, pd.DataFrame) or isinstance(seed_value, pd.DataFrame)
 
     @staticmethod
     def _build_ag_grid_theme_style(theme: str = "auto", theme_colors: Optional[dict] = None) -> str:
@@ -309,13 +368,18 @@ class DataWidgetsMixin:
                     on_row_click=None, disabled=False, hide_index=False, column_order=None, use_container_width=True,
                     column_config=None, validator=None, grid_options=None,
                     theme: str = "auto", theme_colors: Optional[dict] = None,
-                    cls: str = "", style: str = "", **props):
+                    cls: str = "", style: str = "", bind=None, **props):
         """Interactive data editor with optional column config and validation."""
         import pandas as pd
-        cid = self._get_next_cid("data_editor")
-        
-        state_key = key or f"data_editor:{cid}"
-        s = self.state(df.to_dict('records'), key=state_key)
+        cid = self._resolve_widget_cid("data_editor", key)
+
+        if bind is not None:
+            if not isinstance(bind, State):
+                raise TypeError("data_editor bind= must be a State instance.")
+            s = bind
+        else:
+            state_key = f"_vl_widget:data_editor:key:{key}" if key is not None else f"_vl_widget:data_editor:cid:{cid}"
+            s = self.state(df.to_dict('records'), key=state_key)
 
         def _invoke_on_change(updated_df, payload):
             if not on_change:
@@ -377,7 +441,8 @@ class DataWidgetsMixin:
         def action(v):
             try:
                 payload = json.loads(v) if isinstance(v, str) else v
-                previous_data = [dict(row) for row in (s.value or [])]
+                previous_store_value = self._clone_editor_state_value(s.value)
+                previous_data = self._coerce_editor_records(s.value)
                 event_payload = payload if isinstance(payload, dict) else {"eventType": "full_sync", "allData": payload}
                 event_type = event_payload.get("eventType")
 
@@ -400,19 +465,20 @@ class DataWidgetsMixin:
 
                     valid, message, normalized_df = _normalize_validation_result(validation_result, candidate_df)
                     if not valid:
-                        s.set(previous_data)
+                        s.set(previous_store_value)
                         if message:
                             self.toast(message, variant="danger", icon="triangle-exclamation")
                         return
                     candidate_df = normalized_df if isinstance(normalized_df, pd.DataFrame) else pd.DataFrame(normalized_df)
                     new_data = candidate_df.to_dict('records')
 
-                s.set(new_data)
+                next_store_value = candidate_df if self._editor_prefers_dataframe(s.value, df) else new_data
+                s.set(next_store_value)
 
                 try:
                     _invoke_on_change(pd.DataFrame(new_data), event_payload)
                 except Exception as exc:
-                    s.set(previous_data)
+                    s.set(previous_store_value)
                     self.toast(str(exc), variant="danger", icon="triangle-exclamation")
             except Exception:
                 pass
@@ -420,11 +486,12 @@ class DataWidgetsMixin:
         def builder():
             # Subscribe to own state - client-side will handle smart updates
             token = rendering_ctx.set(cid)
-            data = s.value
+            data = self._coerce_editor_records(s.value)
             rendering_ctx.reset(token)
             
             # Apply column_order and hide_index
-            _cols_list = list(df.columns)
+            source_df = df if isinstance(df, pd.DataFrame) else pd.DataFrame(data)
+            _cols_list = list(source_df.columns)
             if column_order:
                 _cols_list = [c for c in column_order if c in _cols_list]
             editable = not disabled

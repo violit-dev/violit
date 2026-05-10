@@ -2,9 +2,11 @@
 
 from typing import Union, Callable, Optional, List, Any
 import base64
+import hashlib
 import html as html_lib
 import io
 import json
+import re
 from ..component import Component
 from ..context import rendering_ctx, layout_ctx
 from ..state import State
@@ -36,6 +38,45 @@ class UploadedFile(io.BytesIO):
 
 
 class InputWidgetsMixin:
+
+    @staticmethod
+    def _sanitize_widget_key(value: Any) -> str:
+        raw = str(value)
+        normalized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+
+        if normalized and normalized == raw and len(normalized) <= 64:
+            return normalized
+
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        if not normalized:
+            return f"widget_{digest}"
+        return f"{normalized[:48]}_{digest}"
+
+    def _resolve_widget_cid(self, widget_type: str, key=None) -> str:
+        if key is None:
+            return self._get_next_cid(widget_type)
+        return f"{widget_type}_{self._sanitize_widget_key(key)}"
+
+    @staticmethod
+    def _resolve_widget_state_key(widget_type: str, label: Any, key=None) -> str:
+        if key is not None:
+            return f"_vl_widget:{widget_type}:key:{key}"
+        return f"_vl_widget:{widget_type}:label:{label}"
+
+    def _resolve_widget_state(self, widget_type: str, label: Any, default_value: Any, *, key=None, bind=None) -> State:
+        if bind is not None:
+            if not isinstance(bind, State):
+                raise TypeError(f"{widget_type} bind= must be a State instance.")
+            return bind
+
+        if isinstance(default_value, State):
+            raise TypeError(
+                f"{widget_type} value= received a State. Pass bind=state instead of value=state."
+            )
+
+        state_key = self._resolve_widget_state_key(widget_type, label, key=key)
+        return self.state(default_value, key=state_key)
 
     @staticmethod
     def _part_bridge_script(target_selector: str) -> str:
@@ -91,7 +132,7 @@ class InputWidgetsMixin:
                    type="default", max_chars=None, placeholder="",
                    autocomplete=None, disabled=False,
                    label_visibility="visible", help=None,
-                   cls: str = "", style: str = "", **props):
+                   cls: str = "", style: str = "", bind=None, **props):
         """Single-line text input
 
         Args:
@@ -117,12 +158,13 @@ class InputWidgetsMixin:
                          on_submit=on_submit,
                                      live_update=live_update,
                                      cls=cls, style=style, label_visibility=label_visibility,
+                                     bind=bind,
                                      **extra, **props)
 
     def slider(self, label, min_value=0, max_value=100, value=None, step=1,
                key=None, on_change=None, live_update=False,
                disabled=False, label_visibility="visible", help=None,
-               cls: str = "", style: str = "", **props):
+               cls: str = "", style: str = "", bind=None, **props):
         """Slider widget
 
         Args:
@@ -139,10 +181,11 @@ class InputWidgetsMixin:
         return self._input_component("slider", "wa-slider", label, value, on_change, key,
                                      cls=cls, style=style, live_update=live_update,
                                      label_visibility=label_visibility,
+                                     bind=bind,
                                      min=min_value, max=max_value, step=step,
                                      **extra, **props)
 
-    def select_slider(self, label, options=None, value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
+    def select_slider(self, label, options=None, value=None, key=None, on_change=None, cls: str = "", style: str = "", bind=None, **props):
         """Slider widget with discrete values from a list
         
         Args:
@@ -155,10 +198,9 @@ class InputWidgetsMixin:
         if options is None or len(options) == 0:
             return None
 
-        cid = self._get_next_cid("select_slider")
-        state_key = key or f"select_slider:{label}"
+        cid = self._resolve_widget_cid("select_slider", key)
         default_val = value if value is not None else options[0]
-        s = self.state(default_val, key=state_key)
+        s = self._resolve_widget_state("select_slider", label, default_val, key=key, bind=bind)
         options_str = [str(o) for o in options]
 
         def action(v):
@@ -253,7 +295,7 @@ class InputWidgetsMixin:
 
     def checkbox(self, label, value=False, key=None, on_change=None,
                   disabled=False, label_visibility="visible", help=None,
-                  cls: str = "", style: str = "", **props):
+                  cls: str = "", style: str = "", bind=None, **props):
         """Checkbox widget
 
         Args:
@@ -261,11 +303,10 @@ class InputWidgetsMixin:
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text
         """
-        cid = self._get_next_cid("checkbox")
+        cid = self._resolve_widget_cid("checkbox", key)
         user_part_cls = props.pop("part_cls", None)
         
-        state_key = key or f"checkbox:{label}"
-        s = self.state(value, key=state_key)
+        s = self._resolve_widget_state("checkbox", label, value, key=key, bind=bind)
         
         def action(v):
             real_val = str(v).lower() == 'true'
@@ -319,7 +360,7 @@ class InputWidgetsMixin:
     def radio(self, label, options, index=0, key=None, on_change=None,
               horizontal=False, captions=None,
               disabled=False, label_visibility="visible", help=None,
-              cls: str = "", style: str = "", **props):
+              cls: str = "", style: str = "", bind=None, **props):
         """Radio button group
 
         Args:
@@ -329,12 +370,11 @@ class InputWidgetsMixin:
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text
         """
-        cid = self._get_next_cid("radio_group")
+        cid = self._resolve_widget_cid("radio_group", key)
         user_part_cls = props.pop("part_cls", None)
         
-        state_key = key or f"radio:{label}"
         default_val = options[index] if options else None
-        s = self.state(default_val, key=state_key)
+        s = self._resolve_widget_state("radio", label, default_val, key=key, bind=bind)
         
         def action(v):
             s.set(v)
@@ -426,7 +466,7 @@ class InputWidgetsMixin:
     def selectbox(self, label, options, index=0, key=None, on_change=None,
                    placeholder=None, disabled=False,
                    label_visibility="visible", label_position="top", help=None,
-                   cls: str = "", style: str = "", **props):
+                   cls: str = "", style: str = "", bind=None, **props):
         """Single select dropdown
 
         Args:
@@ -436,13 +476,12 @@ class InputWidgetsMixin:
             label_position: "top", "left", "right", or "bottom"
             help: Tooltip / help text
         """
-        cid = self._get_next_cid("select")
+        cid = self._resolve_widget_cid("select", key)
         user_part_cls = props.pop("part_cls", None)
         label_position = self._normalize_label_position(label_position)
         
-        state_key = key or f"select:{label}"
         default_val = options[index] if options else None
-        s = self.state(default_val, key=state_key)
+        s = self._resolve_widget_state("select", label, default_val, key=key, bind=bind)
         
         def action(v):
             decoded = InputWidgetsMixin._select_decode(v)
@@ -569,7 +608,7 @@ class InputWidgetsMixin:
     def multiselect(self, label, options, default=None, key=None, on_change=None,
                      max_selections=None, placeholder=None, disabled=False,
                      label_visibility="visible", help=None,
-                     cls: str = "", style: str = "", **props):
+                     cls: str = "", style: str = "", bind=None, **props):
         """Multi-select dropdown
 
         Args:
@@ -579,12 +618,11 @@ class InputWidgetsMixin:
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text
         """
-        cid = self._get_next_cid("multiselect")
+        cid = self._resolve_widget_cid("multiselect", key)
         user_part_cls = props.pop("part_cls", None)
         
-        state_key = key or f"multiselect:{label}"
         default_val = default or []
-        s = self.state(default_val, key=state_key)
+        s = self._resolve_widget_state("multiselect", label, default_val, key=key, bind=bind)
         
         def action(v):
             if isinstance(v, str):
@@ -719,7 +757,7 @@ class InputWidgetsMixin:
     def text_area(self, label, value="", height=None, key=None, on_change=None,
                    max_chars=None, placeholder="", disabled=False,
                    label_visibility="visible", help=None,
-                   cls: str = "", style: str = "", **props):
+                   cls: str = "", style: str = "", bind=None, **props):
         """Multi-line text input
 
         Args:
@@ -733,11 +771,10 @@ class InputWidgetsMixin:
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text
         """
-        cid = self._get_next_cid("textarea")
+        cid = self._resolve_widget_cid("textarea", key)
         user_part_cls = props.pop("part_cls", None)
         
-        state_key = key or f"textarea:{label}"
-        s = self.state(value, key=state_key)
+        s = self._resolve_widget_state("textarea", label, value, key=key, bind=bind)
         
         def action(v):
             s.set(v)
@@ -902,7 +939,7 @@ class InputWidgetsMixin:
                       key=None, on_change=None,
                       placeholder="", disabled=False,
                       label_visibility="visible", help=None,
-                      cls: str = "", style: str = "", **props):
+                      cls: str = "", style: str = "", bind=None, **props):
         """Numeric input
 
         Args:
@@ -911,11 +948,10 @@ class InputWidgetsMixin:
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text
         """
-        cid = self._get_next_cid("number")
+        cid = self._resolve_widget_cid("number", key)
         user_part_cls = props.pop("part_cls", None)
         
-        state_key = key or f"number:{label}"
-        s = self.state(value, key=state_key)
+        s = self._resolve_widget_state("number", label, value, key=key, bind=bind)
         
         def action(v):
             try:
@@ -982,7 +1018,7 @@ class InputWidgetsMixin:
     def file_uploader(self, label, type=None, accept=None, accept_multiple_files=False, multiple=False,
                        key=None, on_change=None, help=None, disabled=False,
                        label_visibility="visible",
-                       cls: str = "", style: str = "", **props):
+                       cls: str = "", style: str = "", bind=None, **props):
         """File upload widget
 
         Args:
@@ -999,10 +1035,9 @@ class InputWidgetsMixin:
             else: accept = type
         # Streamlit compat: accept_multiple_files
         if accept_multiple_files: multiple = True
-        cid = self._get_next_cid("file")
+        cid = self._resolve_widget_cid("file", key)
         
-        state_key = key or f"file:{label}"
-        s = self.state(None, key=state_key)
+        s = self._resolve_widget_state("file", label, None, key=key, bind=bind)
         
         def action(v):
             if v:
@@ -1144,7 +1179,7 @@ class InputWidgetsMixin:
 
     def toggle(self, label, value=False, key=None, on_change=None,
                disabled=False, label_visibility="visible", help=None,
-               cls: str = "", style: str = "", **props):
+               cls: str = "", style: str = "", bind=None, **props):
         """Toggle switch widget
 
         Args:
@@ -1152,11 +1187,10 @@ class InputWidgetsMixin:
             label_visibility: "visible", "hidden", or "collapsed"
             help: Tooltip / help text
         """
-        cid = self._get_next_cid("toggle")
+        cid = self._resolve_widget_cid("toggle", key)
         user_part_cls = props.pop("part_cls", None)
         
-        state_key = key or f"toggle:{label}"
-        s = self.state(value, key=state_key)
+        s = self._resolve_widget_state("toggle", label, value, key=key, bind=bind)
         
         def action(v):
             real_val = str(v).lower() == 'true'
@@ -1209,17 +1243,16 @@ class InputWidgetsMixin:
 
     def color_picker(self, label="Pick a color", value="#000000", key=None, on_change=None,
                       disabled=False, label_visibility="visible",
-                      cls: str = "", style: str = "", **props):
+                      cls: str = "", style: str = "", bind=None, **props):
         """Color picker widget
 
         Args:
             disabled: If True, widget is grayed out
             label_visibility: "visible", "hidden", or "collapsed"
         """
-        cid = self._get_next_cid("color")
+        cid = self._resolve_widget_cid("color", key)
         
-        state_key = key or f"color:{label}"
-        s = self.state(value, key=state_key)
+        s = self._resolve_widget_state("color", label, value, key=key, bind=bind)
         
         def action(v):
             s.set(v)
@@ -1246,14 +1279,12 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def date_input(self, label="Select date", value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
+    def date_input(self, label="Select date", value=None, key=None, on_change=None, cls: str = "", style: str = "", bind=None, **props):
         """Date picker widget"""
         import datetime
-        cid = self._get_next_cid("date")
-        
-        state_key = key or f"date:{label}"
+        cid = self._resolve_widget_cid("date", key)
         default_val = value if value else datetime.date.today().isoformat()
-        s = self.state(default_val, key=state_key)
+        s = self._resolve_widget_state("date", label, default_val, key=key, bind=bind)
         
         def action(v):
             s.set(v)
@@ -1285,14 +1316,12 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def time_input(self, label="Select time", value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
+    def time_input(self, label="Select time", value=None, key=None, on_change=None, cls: str = "", style: str = "", bind=None, **props):
         """Time picker widget"""
         import datetime
-        cid = self._get_next_cid("time")
-        
-        state_key = key or f"time:{label}"
+        cid = self._resolve_widget_cid("time", key)
         default_val = value if value else datetime.datetime.now().strftime("%H:%M")
-        s = self.state(default_val, key=state_key)
+        s = self._resolve_widget_state("time", label, default_val, key=key, bind=bind)
         
         def action(v):
             s.set(v)
@@ -1324,14 +1353,12 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def datetime_input(self, label="Select date and time", value=None, key=None, on_change=None, cls: str = "", style: str = "", **props):
+    def datetime_input(self, label="Select date and time", value=None, key=None, on_change=None, cls: str = "", style: str = "", bind=None, **props):
         """DateTime picker widget"""
         import datetime
-        cid = self._get_next_cid("datetime")
-        
-        state_key = key or f"datetime:{label}"
+        cid = self._resolve_widget_cid("datetime", key)
         default_val = value if value else datetime.datetime.now().strftime("%Y-%m-%dT%H:%M")
-        s = self.state(default_val, key=state_key)
+        s = self._resolve_widget_state("datetime", label, default_val, key=key, bind=bind)
         
         def action(v):
             s.set(v)
@@ -1363,13 +1390,12 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, on_submit=None, cls: str = "", style: str = "", live_update=False, label_visibility="visible", **props):
+    def _input_component(self, type_name, tag_name, label, value, on_change, key=None, on_submit=None, cls: str = "", style: str = "", live_update=False, label_visibility="visible", bind=None, **props):
         """Generic input component builder"""
-        cid = self._get_next_cid(type_name)
+        cid = self._resolve_widget_cid(type_name, key)
         user_part_cls = props.pop("part_cls", None)
         
-        state_key = key or f"{type_name}:{label}"
-        s = self.state(value, key=state_key)
+        s = self._resolve_widget_state(type_name, label, value, key=key, bind=bind)
         
         def action(v):
             payload = v
