@@ -10,10 +10,6 @@ from typing import Any, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-from _local_violit_bootstrap import bootstrap_local_violit
-
-bootstrap_local_violit()
-
 import violit as vl
 
 

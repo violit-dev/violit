@@ -2,10 +2,6 @@ import json
 import urllib.request
 from typing import cast
 
-from _local_violit_bootstrap import bootstrap_local_violit
-
-bootstrap_local_violit()
-
 import violit as vl
 
 
