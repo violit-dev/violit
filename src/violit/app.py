@@ -733,6 +733,7 @@ class App(
                 if curr_frag not in store['fragment_components']:
                     store['fragment_components'][curr_frag] = []
                 store['fragment_components'][curr_frag].append((cid, builder))
+                store.setdefault('fragment_parent', {})[cid] = curr_frag
         else:
             if sid is None:
                 # Static Root Registration
@@ -748,6 +749,7 @@ class App(
             else:
                 # Dynamic Root Registration
                 if action: store['actions'][cid] = action
+                store.setdefault('fragment_parent', {}).pop(cid, None)
                 current_order = store['sidebar_order'] if l_ctx == "sidebar" else store['order']
                 is_initial = initial_render_ctx.get(False)
                 is_action = action_ctx.get(False)
@@ -864,6 +866,53 @@ class App(
                 self._register_component(fid, fragment_builder)
         
         return wrapper
+
+    def _cleanup_runtime_component_subtree(self, store: Dict[str, Any], component_id: str) -> None:
+        tracker = store.get('tracker')
+        current_session_id = session_ctx.get()
+        current_view_id = view_ctx.get()
+        fragment_children = list(store.get('fragment_components', {}).get(component_id, []))
+
+        for child_id, _builder in fragment_children:
+            self._cleanup_runtime_component_subtree(store, child_id)
+
+        store.setdefault('_reactivity_children', {}).pop(component_id, None)
+        if tracker is not None:
+            tracker.unregister_component(component_id)
+        unregister_component_from_scoped_trackers(current_session_id, current_view_id, component_id)
+        store.get('builders', {}).pop(component_id, None)
+        store.get('actions', {}).pop(component_id, None)
+        store.get('fragment_components', {}).pop(component_id, None)
+        store.setdefault('fragment_parent', {}).pop(component_id, None)
+        store.setdefault('_reactivity_slot_counters', {}).pop(component_id, None)
+        store['order'] = [cid for cid in store.get('order', []) if cid != component_id]
+        store['sidebar_order'] = [cid for cid in store.get('sidebar_order', []) if cid != component_id]
+
+    def _cleanup_runtime_reactivity_children(self, store: Dict[str, Any], owner_id: str) -> None:
+        reactive_children = store.setdefault('_reactivity_children', {})
+        owned_ids = list(reactive_children.pop(owner_id, set()))
+        for child_id in owned_ids:
+            self._cleanup_runtime_component_subtree(store, child_id)
+
+    def _prepare_reactivity_scope(self, store: Dict[str, Any], fid: str) -> None:
+        self._cleanup_runtime_reactivity_children(store, fid)
+        store.setdefault('_reactivity_slot_counters', {})[fid] = 0
+        store['fragment_components'][fid] = []
+
+    def _allocate_reactivity_scope_id(self, store: Dict[str, Any]) -> tuple[str, bool]:
+        owner_id = rendering_ctx.get()
+        if session_ctx.get() is None or owner_id is None:
+            fid = f"reactivity_{self._fragment_count}"
+            self._fragment_count += 1
+            return fid, False
+
+        slot_counters = store.setdefault('_reactivity_slot_counters', {})
+        slot = slot_counters.get(owner_id, 0)
+        slot_counters[owner_id] = slot + 1
+
+        fid = f"reactivity_{owner_id}_{slot}"
+        store.setdefault('_reactivity_children', {}).setdefault(owner_id, set()).add(fid)
+        return fid, True
     
     def reactivity(self, func: Optional[Callable] = None):
         """Create a reactive scope for complex control flow
@@ -887,8 +936,8 @@ class App(
         if func is not None:
             # Decorator mode: wrap function as a reactive fragment
             # This enables PARTIAL RERUN of just this function
-            fid = f"reactivity_{self._fragment_count}"
-            self._fragment_count += 1
+            store = get_session_store()
+            fid, runtime_owned = self._allocate_reactivity_scope_id(store)
             
             # Track if already registered
             registered = [False]
@@ -897,7 +946,7 @@ class App(
                 token = fragment_ctx.set(fid)
                 render_token = rendering_ctx.set(fid)
                 store = get_session_store()
-                store['fragment_components'][fid] = []
+                self._prepare_reactivity_scope(store, fid)
                 
                 # [ID SYNC FIX] Reset component_count for this specific sub-render
                 # This ensures widgets created inside a builder get the SAME IDs as before.
@@ -921,9 +970,10 @@ class App(
                 inner = f'<div id="{fid}" class="fragment">{" ".join(htmls)}</div>'
                 return Component("div", id=f"{fid}_wrapper", content=inner)
             
-            # Store builder
-            self.static_builders[fid] = fragment_builder
-            self.static_fragments[fid] = func
+            if not runtime_owned:
+                # Store builder for static/top-level reactive scopes.
+                self.static_builders[fid] = fragment_builder
+                self.static_fragments[fid] = func
             
             def wrapper():
                 """Wrapper that registers fragment on first call"""
@@ -950,8 +1000,8 @@ class App(
                 
             def __enter__(ctx_self):
                 # Create a temporary fragment scope for component collection
-                ctx_self.fid = f"reactivity_{self._fragment_count}"
-                self._fragment_count += 1
+                store = get_session_store()
+                ctx_self.fid, _runtime_owned = self._allocate_reactivity_scope_id(store)
                 
                 # Set fragment context only (state access registers with parent)
                 ctx_self.fragment_token = fragment_ctx.set(ctx_self.fid)
@@ -963,8 +1013,7 @@ class App(
                 if p_ctx:
                      ctx_self.rendering_token = rendering_ctx.set(p_ctx)
                 
-                store = get_session_store()
-                store['fragment_components'][ctx_self.fid] = []
+                self._prepare_reactivity_scope(store, ctx_self.fid)
                 return ctx_self
                 
             def __exit__(ctx_self, exc_type, exc_val, exc_tb):
@@ -1221,10 +1270,34 @@ class App(
                 store['forced_dirty'] = set() # Clear after collection
                 
             store['dirty_states'] = set()
+
+            parent_map = store.get('fragment_parent', {})
+
+            def _depth(component_id: str) -> int:
+                depth = 0
+                ancestor = parent_map.get(component_id)
+                while ancestor is not None:
+                    depth += 1
+                    ancestor = parent_map.get(ancestor)
+                return depth
+
+            ordered_aff = sorted(aff, key=_depth)
+            filtered_aff = []
+            dirty_aff = set(ordered_aff)
+            for cid in ordered_aff:
+                ancestor = parent_map.get(cid)
+                skip_descendant = False
+                while ancestor is not None:
+                    if ancestor in dirty_aff:
+                        skip_descendant = True
+                        break
+                    ancestor = parent_map.get(ancestor)
+                if not skip_descendant:
+                    filtered_aff.append(cid)
             
             try:
                 res = []
-                for cid in aff:
+                for cid in filtered_aff:
                     builder = store['builders'].get(cid) or self.static_builders.get(cid)
                     if builder:
                         # Clear stale subscriptions before re-rendering so that:
