@@ -749,7 +749,11 @@ class App(
             else:
                 # Dynamic Root Registration
                 if action: store['actions'][cid] = action
-                store.setdefault('fragment_parent', {}).pop(cid, None)
+                owner_id = store.setdefault('_reactivity_owner', {}).get(cid)
+                if owner_id is not None:
+                    store.setdefault('fragment_parent', {})[cid] = owner_id
+                else:
+                    store.setdefault('fragment_parent', {}).pop(cid, None)
                 current_order = store['sidebar_order'] if l_ctx == "sidebar" else store['order']
                 is_initial = initial_render_ctx.get(False)
                 is_action = action_ctx.get(False)
@@ -884,6 +888,7 @@ class App(
         store.get('actions', {}).pop(component_id, None)
         store.get('fragment_components', {}).pop(component_id, None)
         store.setdefault('fragment_parent', {}).pop(component_id, None)
+        store.setdefault('_reactivity_owner', {}).pop(component_id, None)
         store.setdefault('_reactivity_slot_counters', {}).pop(component_id, None)
         store['order'] = [cid for cid in store.get('order', []) if cid != component_id]
         store['sidebar_order'] = [cid for cid in store.get('sidebar_order', []) if cid != component_id]
@@ -900,7 +905,7 @@ class App(
         store['fragment_components'][fid] = []
 
     def _allocate_reactivity_scope_id(self, store: Dict[str, Any]) -> tuple[str, bool]:
-        owner_id = rendering_ctx.get()
+        owner_id = rendering_ctx.get() or page_ctx.get()
         if session_ctx.get() is None or owner_id is None:
             fid = f"reactivity_{self._fragment_count}"
             self._fragment_count += 1
@@ -912,6 +917,7 @@ class App(
 
         fid = f"reactivity_{owner_id}_{slot}"
         store.setdefault('_reactivity_children', {}).setdefault(owner_id, set()).add(fid)
+        store.setdefault('_reactivity_owner', {})[fid] = owner_id
         return fid, True
     
     def reactivity(self, func: Optional[Callable] = None):
@@ -1943,6 +1949,8 @@ class App(
 
                             # Collect components from the page
                             store = get_session_store()
+                            self.app._cleanup_runtime_reactivity_children(store, cid)
+                            store.setdefault('_reactivity_slot_counters', {})[cid] = 0
                             # Clear previous dynamic order for this page render
                             previous_order = store['order'].copy()
                             previous_fragments = {k: v.copy() for k, v in store['fragment_components'].items()}
