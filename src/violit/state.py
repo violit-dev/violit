@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from typing import Any, Dict, Optional, Set, Tuple, cast
 from cachetools import TTLCache
@@ -116,6 +117,7 @@ def _create_runtime_store(base_count: int = 0) -> Dict[str, Any]:
     return {
         'states': {},
         'tracker': DependencyTracker(),
+        'render_lock': threading.RLock(),
         'builders': {},
         'actions': {},
         'submitted_values': {},

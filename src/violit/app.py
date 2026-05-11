@@ -678,13 +678,10 @@ class App(
         else:
             cid = f"{prefix}_{count}"
         
-        # [REACTIVE DRAG FIX]
-        # Only increment count if we are NOT in an action.
-        # This keeps IDs stable during rapid value changes (like dragging a slider).
-        # We do NOT increment here even if rendering_ctx is active, because 
-        # sub-renders (If/For) should rely on their own internal ID management
-        # or reuse existing IDs from the store.
-        if not is_action:
+        # Inside an active render scope we must keep advancing the per-view
+        # counter even during action-triggered updates. Reusing the same count
+        # within a dirty/full render pass can recreate identical auto IDs.
+        if not is_action or parent_ctx is not None:
             store['component_count'] = count + 1
         return cid
 
@@ -1163,113 +1160,116 @@ class App(
     def _render_all(self):
         """Render all components"""
         store = get_session_store()
-        registration_token = registration_pass_ctx.set(set())
-        
-        main_html = []
-        sidebar_html = []
+        with store['render_lock']:
+            registration_token = registration_pass_ctx.set(set())
+            
+            main_html = []
+            sidebar_html = []
 
-        def render_cids(cids, target_list):
-            for cid in cids:
-                builder = store['builders'].get(cid) or self.static_builders.get(cid)
-                if builder:
-                    token = rendering_ctx.set(cid)
-                    try:
-                        target_list.append(builder().render())
-                    except Exception as e:
-                        import logging
-                        logging.getLogger(__name__).error(
-                            f"[render] component '{cid}' failed: {e}"
-                        )
-                        target_list.append(
-                            f'<div id="{cid}" style="border:1px solid var(--vl-danger,red);'
-                            f'padding:0.75rem;border-radius:0.375rem;color:var(--vl-danger,red);'
-                            f'font-size:0.85rem;">'
-                            f'[Render error] <code>{cid}</code>: {e}'
-                            f'</div>'
-                        )
-                    finally:
-                        rendering_ctx.reset(token)
+            def render_cids(cids, target_list):
+                for cid in cids:
+                    builder = store['builders'].get(cid) or self.static_builders.get(cid)
+                    if builder:
+                        token = rendering_ctx.set(cid)
+                        try:
+                            target_list.append(builder().render())
+                        except Exception as e:
+                            import logging
+                            logging.getLogger(__name__).error(
+                                f"[render] component '{cid}' failed: {e}"
+                            )
+                            target_list.append(
+                                f'<div id="{cid}" style="border:1px solid var(--vl-danger,red);'
+                                f'padding:0.75rem;border-radius:0.375rem;color:var(--vl-danger,red);'
+                                f'font-size:0.85rem;">'
+                                f'[Render error] <code>{cid}</code>: {e}'
+                                f'</div>'
+                            )
+                        finally:
+                            rendering_ctx.reset(token)
 
-        try:
-            # Static Components
-            render_cids(self.static_order, main_html)
-            render_cids(self.static_sidebar_order, sidebar_html)
+            try:
+                # Static Components
+                render_cids(self.static_order, main_html)
+                render_cids(self.static_sidebar_order, sidebar_html)
 
-            # Dynamic Components
-            render_cids(store['order'], main_html)
-            render_cids(store['sidebar_order'], sidebar_html)
+                # Dynamic Components
+                render_cids(store['order'], main_html)
+                render_cids(store['sidebar_order'], sidebar_html)
 
-            return "".join(main_html), "".join(sidebar_html)
-        finally:
-            registration_pass_ctx.reset(registration_token)
+                return "".join(main_html), "".join(sidebar_html)
+            finally:
+                registration_pass_ctx.reset(registration_token)
 
     def _get_dirty_rendered(self):
         """Get components that need updating"""
         store = get_session_store()
-        registration_token = registration_pass_ctx.set(set())
-        tracker = store['tracker']
-        current_session_id = session_ctx.get()
-        current_view_id = view_ctx.get()
-        dirty_states = store.get('dirty_states', set())
-        aff = set()
-        for s in dirty_states: aff.update(tracker.get_dirty_components(s))
-        
-        # [NEW] Handle forced dirty components (async data loading)
-        forced = store.get('forced_dirty', set())
-        if forced:
-            aff.update(forced)
-            store['forced_dirty'] = set() # Clear after collection
+        with store['render_lock']:
+            registration_token = registration_pass_ctx.set(set())
+            tracker = store['tracker']
+            current_session_id = session_ctx.get()
+            current_view_id = view_ctx.get()
+            dirty_states = store.get('dirty_states', set())
+            aff = set()
+            for s in dirty_states:
+                aff.update(tracker.get_dirty_components(s))
             
-        store['dirty_states'] = set()
-        
-        try:
-            res = []
-            for cid in aff:
-                builder = store['builders'].get(cid) or self.static_builders.get(cid)
-                if builder:
-                    # Clear stale subscriptions before re-rendering so that:
-                    # 1. Dependencies that are no longer read get removed.
-                    # 2. The upcoming builder() call re-registers only current deps.
-                    tracker.unregister_component(cid)
-                    unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
+            # [NEW] Handle forced dirty components (async data loading)
+            forced = store.get('forced_dirty', set())
+            if forced:
+                aff.update(forced)
+                store['forced_dirty'] = set() # Clear after collection
+                
+            store['dirty_states'] = set()
+            
+            try:
+                res = []
+                for cid in aff:
+                    builder = store['builders'].get(cid) or self.static_builders.get(cid)
+                    if builder:
+                        # Clear stale subscriptions before re-rendering so that:
+                        # 1. Dependencies that are no longer read get removed.
+                        # 2. The upcoming builder() call re-registers only current deps.
+                        tracker.unregister_component(cid)
+                        unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
 
-                    # [FIX PHANTOM WIDGETS] Use a token to ensure widgets created 
-                    # inside a DIRTY re-render are correctly registered.
-                    # This ensures they are kids of the dirty component, not root level phantoms.
-                    token = rendering_ctx.set(cid)
+                        # [FIX PHANTOM WIDGETS] Use a token to ensure widgets created 
+                        # inside a DIRTY re-render are correctly registered.
+                        # This ensures they are kids of the dirty component, not root level phantoms.
+                        token = rendering_ctx.set(cid)
 
-                    # [ID SYNC FIX] Reset component_count for this specific sub-render
-                    # This ensures widgets created inside a builder get the SAME IDs as before.
-                    prev_count = store['component_count']
+                        # [ID SYNC FIX] Reset component_count for this specific sub-render
+                        # This ensures widgets created inside a builder get the SAME IDs as before.
+                        prev_count = store['component_count']
 
-                    try:
-                        res.append(builder())
-                    except Exception as e:
-                        import logging
-                        logging.getLogger(__name__).error(
-                            f"[render] dirty component '{cid}' failed: {e}"
-                        )
-                        from .component import Component
-                        res.append(Component(
-                            "div", id=cid,
-                            content=(
-                                f'<span style="color:var(--vl-danger,red);font-size:0.85rem;">'
-                                f'[Render error] <code>{cid}</code>: {e}</span>'
+                        try:
+                            res.append(builder())
+                        except Exception as e:
+                            import logging
+                            logging.getLogger(__name__).error(
+                                f"[render] dirty component '{cid}' failed: {e}"
                             )
-                        ))
-                    finally:
-                        rendering_ctx.reset(token)
-                        # Restore global count after sub-render
-                        store['component_count'] = prev_count
-                else:
-                    # Component is permanently gone (e.g. navigation page switch,
-                    # If-block condition flip).  Clean it from the tracker so it
-                    # never appears in future dirty sets.
-                    tracker.unregister_component(cid)
-                    unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
-            return res
-        finally:
-            registration_pass_ctx.reset(registration_token)
+                            from .component import Component
+                            res.append(Component(
+                                "div", id=cid,
+                                content=(
+                                    f'<span style="color:var(--vl-danger,red);font-size:0.85rem;">'
+                                    f'[Render error] <code>{cid}</code>: {e}</span>'
+                                )
+                            ))
+                        finally:
+                            rendering_ctx.reset(token)
+                            # Restore global count after sub-render
+                            store['component_count'] = prev_count
+                    else:
+                        # Component is permanently gone (e.g. navigation page switch,
+                        # If-block condition flip).  Clean it from the tracker so it
+                        # never appears in future dirty sets.
+                        tracker.unregister_component(cid)
+                        unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
+                return res
+            finally:
+                registration_pass_ctx.reset(registration_token)
 
     async def _flush_view_updates_async(self, session_id: str, current_view_id: str) -> None:
         if not session_id or not current_view_id:
