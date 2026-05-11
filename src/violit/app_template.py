@@ -297,6 +297,20 @@ HTML_TEMPLATE = r"""
         wa-button {
             margin-top: 0.25rem;
             margin-bottom: 0.5rem;
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        wa-button::part(base) {
+            max-width: 100%;
+            min-width: 0;
+            min-height: var(--wa-button-height, 2.5rem);
+            height: auto;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            text-align: center;
+            line-height: 1.25;
         }
         wa-divider, .divider {
             --color: var(--vl-border);
