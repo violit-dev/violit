@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "violit"
-version = "0.8.10"
+version = "0.8.11"
 description = "Violit: Faster than Light, Beautiful as Violet. Pure Python Web Framework. Streamlit simplicity, no reruns."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -73,3 +73,14 @@ Issues = "https://github.com/violit-dev/violit/issues"
 [tool.setuptools.packages.find]
 where = ["src"] 
 include = ["violit*"]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "private_tests",
+]
+norecursedirs = [
+    ".git",
+    ".pytest_cache",
+    "__pycache__",
+    "node_modules"
+]
