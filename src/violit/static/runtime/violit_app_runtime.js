@@ -2366,6 +2366,14 @@
                                             }
 
                                             if (canSmartUpdate) {
+                                                const currentConfigHash = currentGridRoot.getAttribute('data-vl-grid-config-hash') || '';
+                                                const nextConfigHash = nextGridRoot.getAttribute('data-vl-grid-config-hash') || '';
+                                                if (currentConfigHash !== nextConfigHash) {
+                                                    canSmartUpdate = false;
+                                                }
+                                            }
+
+                                            if (canSmartUpdate) {
                                                 try {
                                                     const nextData = JSON.parse(rowDataMatch[1]);
                                                     const currentColumnIds = typeof gridApi.getColumnState === 'function'

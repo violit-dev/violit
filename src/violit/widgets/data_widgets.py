@@ -133,92 +133,175 @@ class DataWidgetsMixin:
             "--ag-grid-size: 8px",
             "--ag-list-item-height: 36px",
         ])
-    
-    def dataframe(self, df: Union['pd.DataFrame', Callable, State], height=400, 
-                  column_defs=None, grid_options=None, on_cell_clicked=None,
-                  use_container_width=True, hide_index=False, column_order=None,
-                  theme: str = "auto", theme_colors: Optional[dict] = None,
-                  cls: str = "", style: str = "", **props):
-        """Display interactive dataframe with AG Grid"""
-        cid = self._get_next_cid("df")
-        
-        def action(v):
-            """Handle cell click events"""
-            if on_cell_clicked and callable(on_cell_clicked):
-                payload = v
-                if isinstance(v, str):
-                    stripped = v.strip()
-                    if stripped.startswith("{") or stripped.startswith("["):
-                        try:
-                            payload = json.loads(stripped)
-                        except Exception:
-                            payload = v
-                on_cell_clicked(payload)
-        
-        def builder():
-            import pandas as pd
-            # Handle Signal
-            token = rendering_ctx.set(cid)
-            try:
-                current_df = resolve_value(df)
-                current_height = resolve_value(height)
-                current_column_defs = resolve_value(column_defs)
-                current_grid_options = resolve_value(grid_options) or {}
-                current_use_container_width = bool(resolve_value(use_container_width))
-                current_hide_index = bool(resolve_value(hide_index))
-                current_column_order = resolve_value(column_order)
-                current_theme = resolve_value(theme)
-                current_theme_colors = resolve_value(theme_colors)
-            finally:
-                rendering_ctx.reset(token)
-                
-            if not isinstance(current_df, pd.DataFrame):
-                # Fallback or try to convert
-                try: current_df = pd.DataFrame(current_df)
-                except: return Component("div", id=cid, content="Invalid data format")
 
-            display_df = current_df.copy()
+    @staticmethod
+    def _resolve_ag_grid_width(width: Any, use_container_width: bool, content_width: str) -> str:
+        if width is None:
+            return "100%" if use_container_width else content_width
+        if isinstance(width, (int, float)):
+            return f"min(100%, {int(width)}px)"
+        width_text = str(width).strip()
+        if not width_text:
+            return "100%" if use_container_width else content_width
+        lowered = width_text.lower()
+        if lowered == "stretch":
+            return "100%"
+        if lowered == "content":
+            return content_width
+        return width_text
 
-            if not current_hide_index:
-                display_df = display_df.reset_index()
-            
-            # Apply column_order if specified
-            if current_column_order:
-                ordered = [c for c in current_column_order if c in display_df.columns]
-                if ordered:
-                    remaining = [c for c in display_df.columns if c not in ordered]
-                    display_df = display_df[ordered + remaining]
+    @staticmethod
+    def _normalize_ag_grid_column_config_entry(column_config: Any, column_name: str) -> Optional[dict[str, Any]]:
+        if not isinstance(column_config, dict) or column_name not in column_config:
+            return {}
+        raw_value = column_config.get(column_name)
+        if raw_value in (None, False):
+            return None
+        if isinstance(raw_value, str):
+            return {"headerName": raw_value}
+        if isinstance(raw_value, dict):
+            return dict(raw_value)
+        return {}
 
-            data = display_df.to_dict('records')
+    @staticmethod
+    def _normalize_ag_grid_toolbar(toolbar: Any, default_file_name: str) -> dict[str, Any]:
+        base = {
+            "enabled": False,
+            "search": False,
+            "export_csv": False,
+            "fullscreen": False,
+            "search_placeholder": "Search table",
+            "csv_file_name": default_file_name,
+        }
 
-            # Use custom column_defs or generate defaults
-            if current_column_defs:
-                cols = current_column_defs
-            else:
-                cols = [{"field": c, "sortable": True, "filter": True} for c in display_df.columns]
-            
-            # Merge grid_options
-            extra_options = current_grid_options
-            
-            # Add cell click handler if provided
-            cell_click_handler = ""
-            if on_cell_clicked:
-                cell_click_handler = f'''
-                onCellClicked: (params) => {{
-                    const cellData = {{
-                        value: params.value,
-                        field: params.colDef.field,
-                        rowData: params.data,
-                        rowIndex: params.rowIndex
-                    }};
-                    {f"window.sendAction('{cid}', cellData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(cellData)}}, swap: 'none'}});"}
-                }},
-                '''
-            
-            grid_style = self._build_ag_grid_theme_style(theme=current_theme, theme_colors=current_theme_colors)
-            container_width = "100%" if current_use_container_width else f"min(100%, {max(520, len(cols) * 132)}px)"
-            html = f'''
+        if toolbar in (None, False):
+            return base
+
+        if toolbar is True:
+            base.update({
+                "enabled": True,
+                "search": True,
+                "export_csv": True,
+                "fullscreen": True,
+            })
+            return base
+
+        if isinstance(toolbar, dict):
+            enabled = toolbar.get("enabled", True)
+            if not enabled:
+                return base
+            base.update({
+                "enabled": True,
+                "search": bool(toolbar.get("search", True)),
+                "export_csv": bool(toolbar.get("export_csv", toolbar.get("download", toolbar.get("csv", True)))),
+                "fullscreen": bool(toolbar.get("fullscreen", True)),
+                "search_placeholder": str(toolbar.get("search_placeholder", toolbar.get("placeholder", "Search table"))),
+                "csv_file_name": str(toolbar.get("csv_file_name", toolbar.get("file_name", default_file_name))),
+            })
+            return base
+
+        return base
+
+    def _build_ag_grid_surface_html(self, *, cid: str, height_css: str, width_css: str, grid_style: str,
+                                    script_body: str, toolbar_config: dict[str, Any],
+                                    toolbar_extra_actions_html: str = "", bottom_html: str = "",
+                                    grid_config_hash: str = "") -> str:
+        import html as html_lib
+
+        toolbar_html = ""
+        if toolbar_config.get("enabled"):
+            search_html = ""
+            if toolbar_config.get("search"):
+                search_html = (
+                    f'<input id="{cid}_toolbar_search" class="vl-ag-grid-toolbar__search" '
+                    f'type="search" placeholder="{html_lib.escape(str(toolbar_config.get("search_placeholder", "Search table")))}" />'
+                )
+
+            actions = []
+            if toolbar_config.get("export_csv"):
+                actions.append(
+                    f'<button type="button" id="{cid}_toolbar_csv" class="vl-ag-grid-toolbar__button">Export CSV</button>'
+                )
+            if toolbar_config.get("fullscreen"):
+                actions.append(
+                    f'<button type="button" id="{cid}_toolbar_fullscreen" class="vl-ag-grid-toolbar__button">Fullscreen</button>'
+                )
+            if toolbar_extra_actions_html:
+                actions.append(toolbar_extra_actions_html)
+
+            toolbar_html = f'''
+            <div id="{cid}_toolbar" class="vl-ag-grid-toolbar">
+                <div class="vl-ag-grid-toolbar__left">{search_html}</div>
+                <div class="vl-ag-grid-toolbar__right">{"".join(actions)}</div>
+            </div>
+            '''
+
+        return f'''
             <style>
+                #{cid}_surface {{
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.625rem;
+                    max-width: 100%;
+                }}
+
+                #{cid}_toolbar {{
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 0.75rem;
+                    flex-wrap: wrap;
+                    padding: 0.625rem 0.75rem;
+                    border: 1px solid var(--vl-border);
+                    border-radius: 0.875rem;
+                    background: color-mix(in srgb, var(--vl-bg-card), var(--vl-primary) 3%);
+                }}
+
+                #{cid}_toolbar .vl-ag-grid-toolbar__left {{
+                    flex: 1 1 16rem;
+                    min-width: 14rem;
+                }}
+
+                #{cid}_toolbar .vl-ag-grid-toolbar__right {{
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    flex-wrap: wrap;
+                }}
+
+                #{cid}_toolbar .vl-ag-grid-toolbar__search {{
+                    width: 100%;
+                    min-height: 38px;
+                    padding: 0.55rem 0.75rem;
+                    border: 1px solid var(--vl-border);
+                    border-radius: 0.7rem;
+                    background: var(--vl-bg-card);
+                    color: var(--vl-text);
+                    outline: none;
+                }}
+
+                #{cid}_toolbar .vl-ag-grid-toolbar__search:focus {{
+                    border-color: var(--vl-primary);
+                    box-shadow: 0 0 0 3px color-mix(in srgb, var(--vl-primary), transparent 82%);
+                }}
+
+                #{cid}_toolbar .vl-ag-grid-toolbar__button {{
+                    min-height: 38px;
+                    padding: 0.55rem 0.85rem;
+                    border: 1px solid var(--vl-border);
+                    border-radius: 0.7rem;
+                    background: var(--vl-bg-card);
+                    color: var(--vl-text);
+                    cursor: pointer;
+                    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+                }}
+
+                #{cid}_toolbar .vl-ag-grid-toolbar__button:hover {{
+                    border-color: var(--vl-primary);
+                    background: color-mix(in srgb, var(--vl-bg-card), var(--vl-primary) 8%);
+                    transform: translateY(-1px);
+                }}
+
                 #{cid}.vl-ag-grid .ag-body-viewport,
                 #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport {{
                     -ms-overflow-style: auto !important;
@@ -268,14 +351,240 @@ class DataWidgetsMixin:
                 #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb:hover {{
                     background: color-mix(in srgb, var(--vl-primary), transparent 20%);
                 }}
+
+                #{cid}_surface:fullscreen {{
+                    padding: 1rem;
+                    background: var(--vl-bg-card);
+                }}
+
+                #{cid}_surface:fullscreen #{cid} {{
+                    width: 100% !important;
+                    height: calc(100vh - 6rem) !important;
+                }}
             </style>
-            <div id="{cid}" style="height: {current_height}px; width: {container_width}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
+            <div id="{cid}_surface" class="vl-ag-grid-surface">
+                {toolbar_html}
+                <div id="{cid}" data-vl-grid-config-hash="{grid_config_hash}" style="height: {height_css}; width: {width_css}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
+                {bottom_html}
+            </div>
             <script>(function(){{
+                if (!window._vlBindAgGridSurface) {{
+                    window._vlBindAgGridSurface = function(cfg) {{
+                        const getApi = () => window[cfg.apiKey];
+
+                        if (cfg.searchInputId) {{
+                            const searchInput = document.getElementById(cfg.searchInputId);
+                            if (searchInput && !searchInput.dataset.vlBound) {{
+                                searchInput.dataset.vlBound = '1';
+                                const applyQuickFilter = function() {{
+                                    const api = getApi();
+                                    if (!api) {{
+                                        return;
+                                    }}
+                                    const nextValue = searchInput.value || '';
+                                    if (typeof api.setGridOption === 'function') {{
+                                        api.setGridOption('quickFilterText', nextValue);
+                                    }} else if (typeof api.updateGridOptions === 'function') {{
+                                        api.updateGridOptions({{ quickFilterText: nextValue }});
+                                    }} else if (typeof api.setQuickFilter === 'function') {{
+                                        api.setQuickFilter(nextValue);
+                                    }}
+                                }};
+                                searchInput.addEventListener('input', applyQuickFilter);
+                                requestAnimationFrame(applyQuickFilter);
+                            }}
+                        }}
+
+                        if (cfg.csvButtonId) {{
+                            const csvButton = document.getElementById(cfg.csvButtonId);
+                            if (csvButton && !csvButton.dataset.vlBound) {{
+                                csvButton.dataset.vlBound = '1';
+                                csvButton.addEventListener('click', function() {{
+                                    const api = getApi();
+                                    if (api && typeof api.exportDataAsCsv === 'function') {{
+                                        api.exportDataAsCsv({{ fileName: cfg.csvFileName || 'data.csv' }});
+                                    }}
+                                }});
+                            }}
+                        }}
+
+                        if (cfg.fullscreenButtonId) {{
+                            const fullscreenButton = document.getElementById(cfg.fullscreenButtonId);
+                            if (fullscreenButton && !fullscreenButton.dataset.vlBound) {{
+                                fullscreenButton.dataset.vlBound = '1';
+                                fullscreenButton.addEventListener('click', function() {{
+                                    const target = document.getElementById(cfg.fullscreenTargetId || cfg.surfaceId);
+                                    if (!target) {{
+                                        return;
+                                    }}
+                                    if (document.fullscreenElement === target) {{
+                                        if (document.exitFullscreen) {{
+                                            document.exitFullscreen().catch(() => {{}});
+                                        }}
+                                        return;
+                                    }}
+                                    if (target.requestFullscreen) {{
+                                        target.requestFullscreen().catch(() => {{}});
+                                    }}
+                                }});
+                            }}
+                        }}
+                    }};
+                }}
+                {script_body}
+            }})();</script>
+            '''
+    
+    def dataframe(self, df: Union['pd.DataFrame', Callable, State], height=400, 
+                  column_defs=None, grid_options=None, on_cell_clicked=None,
+                  use_container_width=True, hide_index=False, column_order=None,
+                  column_config=None, width=None, toolbar=True,
+                  theme: str = "auto", theme_colors: Optional[dict] = None,
+                  cls: str = "", style: str = "", **props):
+        """Display read-only interactive dataframe with AG Grid."""
+        cid = self._get_next_cid("df")
+        
+        def action(v):
+            """Handle cell click events"""
+            if on_cell_clicked and callable(on_cell_clicked):
+                payload = v
+                if isinstance(v, str):
+                    stripped = v.strip()
+                    if stripped.startswith("{") or stripped.startswith("["):
+                        try:
+                            payload = json.loads(stripped)
+                        except Exception:
+                            payload = v
+                on_cell_clicked(payload)
+        
+        def builder():
+            import pandas as pd
+            # Handle Signal
+            token = rendering_ctx.set(cid)
+            try:
+                current_df = resolve_value(df)
+                current_height = resolve_value(height)
+                current_column_defs = resolve_value(column_defs)
+                current_grid_options = resolve_value(grid_options)
+                current_use_container_width = bool(resolve_value(use_container_width))
+                current_hide_index = bool(resolve_value(hide_index))
+                current_column_order = resolve_value(column_order)
+                current_column_config = resolve_value(column_config)
+                current_width = resolve_value(width)
+                current_toolbar = resolve_value(toolbar)
+                current_theme = resolve_value(theme)
+                current_theme_colors = resolve_value(theme_colors)
+            finally:
+                rendering_ctx.reset(token)
+                
+            if not isinstance(current_df, pd.DataFrame):
+                # Fallback or try to convert
+                try: current_df = pd.DataFrame(current_df)
+                except: return Component("div", id=cid, content="Invalid data format")
+
+            display_df = current_df.copy()
+
+            if not current_hide_index:
+                display_df = display_df.reset_index()
+            
+            # Apply column_order if specified
+            if isinstance(current_column_order, (list, tuple)):
+                ordered = [c for c in current_column_order if c in display_df.columns]
+                if ordered:
+                    remaining = [c for c in display_df.columns if c not in ordered]
+                    display_df = display_df[ordered + remaining]
+
+            data = display_df.to_dict('records')
+
+            configured_columns = current_column_config if isinstance(current_column_config, dict) else {}
+            extra_options = current_grid_options if isinstance(current_grid_options, dict) else {}
+
+            # Use custom column_defs or generate defaults
+            if isinstance(current_column_defs, (list, tuple)) and current_column_defs:
+                cols = []
+                for current_col in current_column_defs:
+                    if not isinstance(current_col, dict):
+                        cols.append(current_col)
+                        continue
+                    normalized_col = dict(current_col)
+                    normalized_col["editable"] = False
+                    cols.append(normalized_col)
+            else:
+                cols = []
+                for column_name in display_df.columns:
+                    current_config = self._normalize_ag_grid_column_config_entry(configured_columns, column_name)
+                    if current_config is None:
+                        continue
+                    if current_config.pop("hide", False) or current_config.pop("hidden", False):
+                        continue
+                    label = current_config.pop("label", None)
+                    current_config.pop("editable", None)
+                    current_config.pop("readonly", None)
+                    column_def = {"field": column_name, "sortable": True, "filter": True, "editable": False}
+                    if label is not None and "headerName" not in current_config:
+                        column_def["headerName"] = str(label)
+                    column_def.update(current_config)
+                    column_def["editable"] = False
+                    cols.append(column_def)
+                if not cols:
+                    cols = [{"field": c, "sortable": True, "filter": True, "editable": False} for c in display_df.columns]
+            
+            # Add cell click handler if provided
+            cell_click_handler = ""
+            if on_cell_clicked:
+                cell_click_handler = f'''
+                onCellClicked: (params) => {{
+                    const cellData = {{
+                        value: params.value,
+                        field: params.colDef.field,
+                        rowData: params.data,
+                        rowIndex: params.rowIndex
+                    }};
+                    {f"window.sendAction('{cid}', cellData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(cellData)}}, swap: 'none'}});"}
+                }},
+                '''
+            
+            grid_style = self._build_ag_grid_theme_style(theme=current_theme, theme_colors=current_theme_colors)
+            content_width = f"min(100%, {max(520, max(1, len(cols)) * 132)}px)"
+            container_width = self._resolve_ag_grid_width(current_width, current_use_container_width, content_width)
+            resolved_height = f"{int(current_height)}px" if isinstance(current_height, (int, float)) else str(current_height)
+            toolbar_config = self._normalize_ag_grid_toolbar(current_toolbar, "dataframe.csv")
+            toolbar_bind_config = {
+                "apiKey": f"gridApi_{cid}",
+                "surfaceId": f"{cid}_surface",
+                "searchInputId": f"{cid}_toolbar_search" if toolbar_config.get("search") else None,
+                "csvButtonId": f"{cid}_toolbar_csv" if toolbar_config.get("export_csv") else None,
+                "fullscreenButtonId": f"{cid}_toolbar_fullscreen" if toolbar_config.get("fullscreen") else None,
+                "fullscreenTargetId": f"{cid}_surface",
+                "csvFileName": toolbar_config.get("csv_file_name", "dataframe.csv"),
+            }
+            grid_config_hash = hashlib.sha1(
+                json.dumps(
+                    {
+                        "cols": cols,
+                        "grid_options": extra_options,
+                        "toolbar": toolbar_config,
+                        "width": container_width,
+                        "height": resolved_height,
+                        "hide_index": current_hide_index,
+                    },
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest()
+            html = self._build_ag_grid_surface_html(
+                cid=cid,
+                height_css=resolved_height,
+                width_css=container_width,
+                grid_style=grid_style,
+                toolbar_config=toolbar_config,
+                grid_config_hash=grid_config_hash,
+                script_body=f'''
                 function initGrid() {{
                     const opt = {{ 
                         columnDefs: {json.dumps(cols, default=str)}, 
                         rowData: {json.dumps(data, default=str)},
-                        defaultColDef: {{flex: 1, minWidth: 100, resizable: true}},
+                        defaultColDef: {{flex: 1, minWidth: 100, resizable: true, editable: false}},
                         suppressScrollOnNewData: true,
                         {cell_click_handler}
                         ...{json.dumps(extra_options)}
@@ -284,10 +593,11 @@ class DataWidgetsMixin:
                     if (el && window.agGrid) {{ 
                         const gridApi = agGrid.createGrid(el, opt);
                         window['gridApi_{cid}'] = gridApi;
+                        window._vlBindAgGridSurface({json.dumps(toolbar_bind_config)});
                     }}
                     else {{ console.error("agGrid not found"); }}
                 }}
-                
+
                 window._vlLoadLib('agGrid', function() {{
                     if (document.readyState === 'loading') {{
                         document.addEventListener('DOMContentLoaded', initGrid);
@@ -295,8 +605,8 @@ class DataWidgetsMixin:
                         initGrid();
                     }}
                 }});
-            }})();</script>
-            '''
+                ''',
+            )
             _wd = self._get_widget_defaults("dataframe")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -366,7 +676,7 @@ class DataWidgetsMixin:
 
     def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None,
                     on_row_click=None, disabled=False, hide_index=False, column_order=None, use_container_width=True,
-                    column_config=None, validator=None, grid_options=None,
+                    width=None, toolbar=True, column_config=None, validator=None, grid_options=None,
                     theme: str = "auto", theme_colors: Optional[dict] = None,
                     cls: str = "", style: str = "", bind=None, **props):
         """Interactive data editor with optional column config and validation."""
@@ -484,23 +794,56 @@ class DataWidgetsMixin:
                 pass
         
         def builder():
-            # Subscribe to own state - client-side will handle smart updates
             token = rendering_ctx.set(cid)
-            data = self._coerce_editor_records(s.value)
-            rendering_ctx.reset(token)
+            try:
+                data = self._coerce_editor_records(s.value)
+                current_num_rows = resolve_value(num_rows)
+                current_height = resolve_value(height)
+                current_disabled = resolve_value(disabled)
+                current_column_order = resolve_value(column_order)
+                current_use_container_width = bool(resolve_value(use_container_width))
+                current_width = resolve_value(width)
+                current_toolbar = resolve_value(toolbar)
+                current_column_config = resolve_value(column_config)
+                current_grid_options = resolve_value(grid_options)
+                current_theme = resolve_value(theme)
+                current_theme_colors = resolve_value(theme_colors)
+            finally:
+                rendering_ctx.reset(token)
             
-            # Apply column_order and hide_index
             source_df = df if isinstance(df, pd.DataFrame) else pd.DataFrame(data)
             _cols_list = list(source_df.columns)
-            if column_order:
-                _cols_list = [c for c in column_order if c in _cols_list]
-            editable = not disabled
-            configured_columns = column_config or {}
+            if isinstance(current_column_order, (list, tuple)):
+                ordered = [c for c in current_column_order if c in _cols_list]
+                remaining = [c for c in _cols_list if c not in ordered]
+                _cols_list = ordered + remaining
+
+            if isinstance(current_disabled, bool):
+                editor_disabled = current_disabled
+                disabled_columns = set()
+            elif isinstance(current_disabled, (list, tuple, set)):
+                editor_disabled = False
+                disabled_columns = {str(item) for item in current_disabled}
+            else:
+                editor_disabled = bool(current_disabled)
+                disabled_columns = set()
+
+            editable = not editor_disabled
+            configured_columns = current_column_config if isinstance(current_column_config, dict) else {}
             cols = []
             for column_name in _cols_list:
-                current_config = dict(configured_columns.get(column_name, {}))
-                column_editable = current_config.pop("editable", editable)
+                current_config = self._normalize_ag_grid_column_config_entry(configured_columns, column_name)
+                if current_config is None:
+                    continue
+                if current_config.pop("hide", False) or current_config.pop("hidden", False):
+                    continue
+                label = current_config.pop("label", None)
+                column_editable = current_config.pop("editable", editable and column_name not in disabled_columns)
                 if current_config.pop("readonly", False):
+                    column_editable = False
+                if current_config.pop("disabled", False):
+                    column_editable = False
+                if column_name in disabled_columns:
                     column_editable = False
 
                 editor_type = current_config.pop("type", current_config.pop("editor", "text"))
@@ -519,29 +862,63 @@ class DataWidgetsMixin:
                     "__numberMax": number_max,
                     "__numberStep": number_step,
                 }
+                if label is not None and "headerName" not in current_config:
+                    column_def["headerName"] = str(label)
                 column_def.update(current_config)
                 cols.append(column_def)
 
             extra_options = {}
-            if grid_options:
-                extra_options.update(grid_options)
+            if isinstance(current_grid_options, dict):
+                extra_options.update(current_grid_options)
             if props:
                 extra_options.update(props)
 
-            add_row_btn = '' if num_rows == "fixed" else f'''
-            <wa-button size="small" appearance="outlined" with-start style="margin-top:0.5rem;" onclick="addDataRow_{cid}()">
-                <wa-icon slot="start" name="circle-plus"></wa-icon>
-                Add Row
-            </wa-button>
+            toolbar_config = self._normalize_ag_grid_toolbar(current_toolbar, "data_editor.csv")
+            add_row_button_html = '' if current_num_rows == "fixed" else f'''
+            <button type="button" id="{cid}_toolbar_add" class="vl-ag-grid-toolbar__button" onclick="window.addDataRow_{cid} && window.addDataRow_{cid}()">Add Row</button>
             '''
-            
-            grid_style = self._build_ag_grid_theme_style(theme=theme, theme_colors=theme_colors)
-            html = f'''
-            <div>
-                <div id="{cid}" style="height: {height}px; width: 100%; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
-                {add_row_btn}
-            </div>
-            <script>(function(){{
+            toolbar_extra_actions_html = add_row_button_html if toolbar_config.get("enabled") else ""
+            bottom_html = "" if toolbar_config.get("enabled") else add_row_button_html
+
+            grid_style = self._build_ag_grid_theme_style(theme=current_theme, theme_colors=current_theme_colors)
+            content_width = f"min(100%, {max(520, max(1, len(cols)) * 132)}px)"
+            container_width = self._resolve_ag_grid_width(current_width, current_use_container_width, content_width)
+            resolved_height = f"{int(current_height)}px" if isinstance(current_height, (int, float)) else str(current_height)
+            toolbar_bind_config = {
+                "apiKey": f"gridApi_{cid}",
+                "surfaceId": f"{cid}_surface",
+                "searchInputId": f"{cid}_toolbar_search" if toolbar_config.get("search") else None,
+                "csvButtonId": f"{cid}_toolbar_csv" if toolbar_config.get("export_csv") else None,
+                "fullscreenButtonId": f"{cid}_toolbar_fullscreen" if toolbar_config.get("fullscreen") else None,
+                "fullscreenTargetId": f"{cid}_surface",
+                "csvFileName": toolbar_config.get("csv_file_name", "data_editor.csv"),
+            }
+            grid_config_hash = hashlib.sha1(
+                json.dumps(
+                    {
+                        "cols": cols,
+                        "grid_options": extra_options,
+                        "toolbar": toolbar_config,
+                        "width": container_width,
+                        "height": resolved_height,
+                        "num_rows": current_num_rows,
+                        "disabled": editor_disabled,
+                        "disabled_columns": sorted(disabled_columns),
+                    },
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest()
+            html = self._build_ag_grid_surface_html(
+                cid=cid,
+                height_css=resolved_height,
+                width_css=container_width,
+                grid_style=grid_style,
+                toolbar_config=toolbar_config,
+                toolbar_extra_actions_html=toolbar_extra_actions_html,
+                bottom_html=bottom_html,
+                grid_config_hash=grid_config_hash,
+                script_body=f'''
                 const rawColumnDefs = {json.dumps(cols, default=str)};
                 const initialRowData = {json.dumps(data, default=str)};
                 const extraGridOptions = {json.dumps(extra_options, default=str)};
@@ -740,6 +1117,7 @@ class DataWidgetsMixin:
                     if (el && window.agGrid) {{
                         const gridApi = agGrid.createGrid(el, gridOptions);
                         window['gridApi_{cid}'] = gridApi;
+                        window._vlBindAgGridSurface({json.dumps(toolbar_bind_config)});
                     }}
                     
                     window.addDataRow_{cid} = function() {{
@@ -751,6 +1129,15 @@ class DataWidgetsMixin:
                             rawColumnDefs.forEach((col) => {{
                                 if (Object.prototype.hasOwnProperty.call(col, 'defaultValue')) {{
                                     newRow[col.field] = col.defaultValue;
+                                }} else if (col.__editorType === 'number') {{
+                                    if (col.__numberMin !== undefined && col.__numberMin !== null) {{
+                                        newRow[col.field] = Number(col.__numberMin);
+                                    }} else {{
+                                        newRow[col.field] = 0;
+                                    }}
+                                }} else if (col.__editorType === 'select') {{
+                                    const options = Array.isArray(col.__options) ? col.__options : [];
+                                    newRow[col.field] = options.length ? options[0] : '';
                                 }} else if (col.__editorType === 'checkbox' || col.__editorType === 'boolean') {{
                                     newRow[col.field] = false;
                                 }} else {{
@@ -774,59 +1161,8 @@ class DataWidgetsMixin:
                         initEditor();
                     }}
                 }});
-            }})();</script>
-            <style>
-                #{cid}.vl-ag-grid .ag-body-viewport,
-                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport {{
-                    -ms-overflow-style: auto !important;
-                    scrollbar-width: thin !important;
-                }}
-
-                #{cid}.vl-ag-grid .ag-center-cols-viewport {{
-                    -ms-overflow-style: none !important;
-                    scrollbar-width: none !important;
-                }}
-
-                #{cid}.vl-ag-grid .ag-body-vertical-scroll,
-                #{cid}.vl-ag-grid .ag-body-vertical-scroll-viewport,
-                #{cid}.vl-ag-grid .ag-body-vertical-scroll-container {{
-                    display: none !important;
-                    width: 0 !important;
-                    min-width: 0 !important;
-                    max-width: 0 !important;
-                    overflow: hidden !important;
-                }}
-
-                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar,
-                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar {{
-                    display: block !important;
-                    width: 10px !important;
-                    height: 10px !important;
-                }}
-
-                #{cid}.vl-ag-grid .ag-center-cols-viewport::-webkit-scrollbar {{
-                    display: none !important;
-                    width: 0 !important;
-                    height: 0 !important;
-                }}
-
-                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-track,
-                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-track {{
-                    background: transparent;
-                }}
-
-                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb,
-                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb {{
-                    background: color-mix(in srgb, var(--vl-text-muted), transparent 30%);
-                    border-radius: 999px;
-                }}
-
-                #{cid}.vl-ag-grid .ag-body-viewport::-webkit-scrollbar-thumb:hover,
-                #{cid}.vl-ag-grid .ag-body-horizontal-scroll-viewport::-webkit-scrollbar-thumb:hover {{
-                    background: color-mix(in srgb, var(--vl-primary), transparent 20%);
-                }}
-            </style>
-            '''
+                ''',
+            )
             _wd = self._get_widget_defaults("data_editor")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
