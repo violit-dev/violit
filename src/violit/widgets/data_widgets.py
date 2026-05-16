@@ -676,7 +676,8 @@ class DataWidgetsMixin:
 
     def data_editor(self, df: 'pd.DataFrame', num_rows="fixed", height=400, key=None, on_change=None,
                     on_row_click=None, disabled=False, hide_index=False, column_order=None, use_container_width=True,
-                    width=None, toolbar=True, column_config=None, validator=None, grid_options=None,
+                    width=None, toolbar=True, row_selection=None, delete_selected=False,
+                    column_config=None, validator=None, grid_options=None,
                     theme: str = "auto", theme_colors: Optional[dict] = None,
                     cls: str = "", style: str = "", bind=None, **props):
         """Interactive data editor with optional column config and validation."""
@@ -804,6 +805,8 @@ class DataWidgetsMixin:
                 current_use_container_width = bool(resolve_value(use_container_width))
                 current_width = resolve_value(width)
                 current_toolbar = resolve_value(toolbar)
+                current_row_selection = resolve_value(row_selection)
+                current_delete_selected = bool(resolve_value(delete_selected))
                 current_column_config = resolve_value(column_config)
                 current_grid_options = resolve_value(grid_options)
                 current_theme = resolve_value(theme)
@@ -867,6 +870,29 @@ class DataWidgetsMixin:
                 column_def.update(current_config)
                 cols.append(column_def)
 
+            selection_mode = None
+            if isinstance(current_row_selection, str):
+                normalized_selection_mode = current_row_selection.strip().lower()
+                if normalized_selection_mode in {"single", "multiple"}:
+                    selection_mode = normalized_selection_mode
+            elif current_row_selection is True:
+                selection_mode = "single"
+
+            if current_delete_selected:
+                selection_mode = "multiple"
+
+            show_delete_selected = bool(current_delete_selected and selection_mode == "multiple")
+
+            if selection_mode and cols:
+                first_col = dict(cols[0])
+                first_col.setdefault("checkboxSelection", True)
+                if selection_mode == "multiple":
+                    first_col.setdefault("headerCheckboxSelection", True)
+                    first_col.setdefault("headerCheckboxSelectionFilteredOnly", False)
+                first_col.setdefault("pinned", "left")
+                first_col.setdefault("minWidth", max(int(first_col.get("minWidth", 120)), 120))
+                cols[0] = first_col
+
             extra_options = {}
             if isinstance(current_grid_options, dict):
                 extra_options.update(current_grid_options)
@@ -877,8 +903,12 @@ class DataWidgetsMixin:
             add_row_button_html = '' if current_num_rows == "fixed" else f'''
             <button type="button" id="{cid}_toolbar_add" class="vl-ag-grid-toolbar__button" onclick="window.addDataRow_{cid} && window.addDataRow_{cid}()">Add Row</button>
             '''
-            toolbar_extra_actions_html = add_row_button_html if toolbar_config.get("enabled") else ""
-            bottom_html = "" if toolbar_config.get("enabled") else add_row_button_html
+            delete_selected_button_html = '' if not show_delete_selected else f'''
+            <button type="button" id="{cid}_toolbar_delete" class="vl-ag-grid-toolbar__button" onclick="window.deleteSelectedRows_{cid} && window.deleteSelectedRows_{cid}()">Delete Selected</button>
+            '''
+            action_buttons_html = f"{delete_selected_button_html}{add_row_button_html}"
+            toolbar_extra_actions_html = action_buttons_html if toolbar_config.get("enabled") else ""
+            bottom_html = "" if toolbar_config.get("enabled") else action_buttons_html
 
             grid_style = self._build_ag_grid_theme_style(theme=current_theme, theme_colors=current_theme_colors)
             content_width = f"min(100%, {max(520, max(1, len(cols)) * 132)}px)"
@@ -902,6 +932,8 @@ class DataWidgetsMixin:
                         "width": container_width,
                         "height": resolved_height,
                         "num_rows": current_num_rows,
+                        "row_selection": selection_mode,
+                        "delete_selected": show_delete_selected,
                         "disabled": editor_disabled,
                         "disabled_columns": sorted(disabled_columns),
                     },
@@ -1061,15 +1093,36 @@ class DataWidgetsMixin:
 
                 function initEditor() {{
                     const rowClickEnabled = {json.dumps(bool(on_row_click))};
+                    const selectionMode = {json.dumps(selection_mode)};
+                    const hasDeleteSelected = {json.dumps(show_delete_selected)};
                     const mergedGridOptions = {{ ...extraGridOptions }};
 
-                    if (rowClickEnabled) {{
+                    if (selectionMode) {{
+                        mergedGridOptions.rowSelection = selectionMode;
+                        if (selectionMode === 'multiple' && mergedGridOptions.suppressRowClickSelection === undefined) {{
+                            mergedGridOptions.suppressRowClickSelection = true;
+                        }}
+                    }} else if (rowClickEnabled) {{
                         if (mergedGridOptions.singleClickEdit === undefined) {{
                             mergedGridOptions.singleClickEdit = false;
                         }}
                         if (mergedGridOptions.rowSelection === undefined) {{
                             mergedGridOptions.rowSelection = 'single';
                         }}
+                    }}
+
+                    function syncDeleteSelectedButtonState() {{
+                        const deleteButton = document.getElementById('{cid}_toolbar_delete');
+                        if (!deleteButton || !hasDeleteSelected) {{
+                            return;
+                        }}
+                        const api = window['gridApi_{cid}'];
+                        const selectedCount = api && typeof api.getSelectedNodes === 'function'
+                            ? api.getSelectedNodes().filter(node => node && node.data).length
+                            : 0;
+                        const disabled = selectedCount === 0;
+                        deleteButton.disabled = disabled;
+                        deleteButton.setAttribute('aria-disabled', disabled ? 'true' : 'false');
                     }}
 
                     const gridOptions = {{
@@ -1107,9 +1160,13 @@ class DataWidgetsMixin:
                             }};
                             {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
                         }},
+                        onSelectionChanged: selectionMode ? () => {{
+                            syncDeleteSelectedButtonState();
+                        }} : undefined,
                         onGridReady: (params) => {{
                             // Store API when grid is ready
                             window['gridApi_{cid}'] = params.api;
+                            syncDeleteSelectedButtonState();
                         }},
                         ...mergedGridOptions
                     }};
@@ -1118,7 +1175,34 @@ class DataWidgetsMixin:
                         const gridApi = agGrid.createGrid(el, gridOptions);
                         window['gridApi_{cid}'] = gridApi;
                         window._vlBindAgGridSurface({json.dumps(toolbar_bind_config)});
+                        syncDeleteSelectedButtonState();
                     }}
+
+                    window.deleteSelectedRows_{cid} = function() {{
+                        const api = window['gridApi_{cid}'];
+                        if (!api || typeof api.getSelectedNodes !== 'function') {{
+                            return;
+                        }}
+
+                        const selectedNodes = api.getSelectedNodes().filter(node => node && node.data);
+                        if (!selectedNodes.length) {{
+                            syncDeleteSelectedButtonState();
+                            return;
+                        }}
+
+                        const selectedIndexSet = new Set(selectedNodes.map(node => Number(node.rowIndex)));
+                        const selectedRows = selectedNodes.map(node => node.data);
+                        const allData = [];
+                        api.forEachNode(node => allData.push(node.data));
+                        const remainingData = allData.filter((_row, index) => !selectedIndexSet.has(index));
+                        const payload = {{
+                            eventType: 'delete_selected',
+                            selectedRows,
+                            selectedRowIndexes: Array.from(selectedIndexSet.values()),
+                            allData: remainingData,
+                        }};
+                        {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
+                    }};
                     
                     window.addDataRow_{cid} = function() {{
                         // Access stored grid API
