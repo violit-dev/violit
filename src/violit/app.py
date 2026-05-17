@@ -455,6 +455,7 @@ class App(
         self._widget_defaults: Dict[str, Dict[str, Any]] = {}
         self._user_css: List[str] = []
         self._custom_widget_registry: Dict[str, Any] = {}
+        self._custom_widget_exposed_methods: Dict[str, str] = {}
 
         self._fragment_count = 0 # Used for  App.reactivity (with or decorator)
         
