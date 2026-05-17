@@ -560,11 +560,11 @@
             if (!element || !key) {
                 return false;
             }
-            const attrName = `data-vl-bound-${key}`;
-            if (element.hasAttribute(attrName)) {
+            const boundKeys = element._vlBoundKeys || (element._vlBoundKeys = Object.create(null));
+            if (boundKeys[key]) {
                 return true;
             }
-            element.setAttribute(attrName, 'true');
+            boundKeys[key] = true;
             return false;
         };
 
@@ -894,6 +894,11 @@
 
             const bindSubmitOnEnter = function(attempts) {
                 if (!submitOnEnter) return;
+                const hostBindingKey = `submit-enter-host-${config.cid}`;
+                const hostBoundKeys = element._vlBoundKeys || (element._vlBoundKeys = Object.create(null));
+                if (hostBoundKeys[hostBindingKey]) {
+                    return;
+                }
                 const target = violitRuntime.resolveControlTarget(element) || (attempts >= 10 ? element : null);
                 if (!target) {
                     setTimeout(function() { bindSubmitOnEnter(attempts + 1); }, 80);
@@ -930,6 +935,7 @@
                         });
                     }
                 });
+                hostBoundKeys[hostBindingKey] = true;
             };
 
             bindSubmitOnEnter(0);
