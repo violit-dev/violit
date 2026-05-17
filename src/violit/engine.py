@@ -98,6 +98,41 @@ class WsEngine:
             view_id=view_id,
         )
 
+    async def push_client_commands(self, sid: str, commands: List[dict], view_id: Optional[str] = None):
+        normalized = []
+        for command in commands or []:
+            if not isinstance(command, dict):
+                continue
+            name = command.get("name")
+            if not isinstance(name, str) or not name.strip():
+                continue
+            payload = command.get("payload")
+            normalized.append(
+                {
+                    "name": name.strip(),
+                    "payload": payload if isinstance(payload, dict) else {},
+                }
+            )
+
+        if not normalized:
+            return
+
+        await self._send_json_to_view(
+            sid,
+            {
+                "type": "client_commands",
+                "commands": normalized,
+            },
+            view_id=view_id,
+        )
+
+    async def push_client_command(self, sid: str, name: str, payload: Optional[dict] = None, view_id: Optional[str] = None):
+        await self.push_client_commands(
+            sid,
+            [{"name": name, "payload": payload or {}}],
+            view_id=view_id,
+        )
+
     async def push_eval(self, sid: str, code: str, view_id: Optional[str] = None):
         await self._send_json_to_view(sid, {"type": "eval", "code": code}, view_id=view_id)
 

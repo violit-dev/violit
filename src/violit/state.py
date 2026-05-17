@@ -128,6 +128,7 @@ def _create_runtime_store(base_count: int = 0) -> Dict[str, Any]:
         'theme': Theme(_initial_theme_name()),
         'dirty_states': set(),
         'forced_dirty': set(),
+        'client_command_queue': [],
         'eval_queue': [],
         '_vl_chart_requested': set(),
         'toasts': [],

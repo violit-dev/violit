@@ -2843,9 +2843,17 @@
                                 hljs.highlightElement(block);
                             });
                         }
+                    } else if (msg.type === 'client_commands') {
+                        const commands = Array.isArray(msg.commands) ? msg.commands : [];
+                        commands.forEach((command) => {
+                            if (typeof window._vlExecuteClientCommand === 'function') {
+                                window._vlExecuteClientCommand(command);
+                            }
+                        });
                     } else if (msg.type === 'eval') {
-                        const func = new Function(msg.code);
-                        func();
+                        if (!window._vlTryExecuteLegacyEval || !window._vlTryExecuteLegacyEval(msg.code)) {
+                            console.warn('[Violit Security] Ignored deprecated eval payload.');
+                        }
                     } else if (msg.type === 'interval_ctrl') {
                         // Server-initiated interval control (pause/resume/stop)
                         const ctrl = window._vlIntervals && window._vlIntervals[msg.id];
@@ -3077,6 +3085,195 @@
                 setTimeout(() => s.remove(), (duration + 5) * 1000);
             }
         }
+
+        function closeDialogById(dialogId) {
+            if (typeof dialogId !== 'string' || !dialogId) return;
+            const dialog = document.getElementById(dialogId);
+            if (!dialog) return;
+            if (typeof dialog.requestClose === 'function') {
+                dialog.requestClose();
+                return;
+            }
+            if (dialog.dialog && typeof dialog.dialog.close === 'function') {
+                dialog.dialog.close();
+                return;
+            }
+            if (typeof dialog.hide === 'function') {
+                dialog.hide();
+                return;
+            }
+            dialog.open = false;
+        }
+
+        function runNavigateCommand(payload) {
+            if (!payload || typeof payload !== 'object') return;
+            if (payload.mode === 'hash') {
+                const targetKey = typeof payload.targetKey === 'string' ? payload.targetKey : null;
+                const targetHash = typeof payload.targetHash === 'string' ? payload.targetHash : '';
+                window._pageScrollPositions = window._pageScrollPositions || {};
+                if (window._currentPageKey) {
+                    window._pageScrollPositions[window._currentPageKey] = window.scrollY;
+                }
+                if (targetKey) {
+                    window._pendingPageKey = targetKey;
+                    window._currentPageKey = targetKey;
+                }
+                window.location.hash = targetHash;
+                if (targetKey) {
+                    window.scrollTo(0, window._pageScrollPositions[targetKey] || 0);
+                }
+                return;
+            }
+
+            if (payload.mode === 'href' && typeof payload.url === 'string' && payload.url) {
+                window.location.href = payload.url;
+            }
+        }
+
+        function runDownloadCommand(payload) {
+            if (!payload || typeof payload !== 'object') return;
+            if (typeof payload.href !== 'string' || !payload.href) return;
+            const link = document.createElement('a');
+            link.href = payload.href;
+            if (typeof payload.fileName === 'string' && payload.fileName) {
+                link.download = payload.fileName;
+            }
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function executeClientCommand(command) {
+            if (!command || typeof command !== 'object') return false;
+            const name = typeof command.name === 'string' ? command.name : '';
+            const payload = command.payload && typeof command.payload === 'object' ? command.payload : {};
+
+            if (name === 'toast.show') {
+                createToast(String(payload.message || ''), String(payload.variant || 'primary'), String(payload.icon || 'circle-info'));
+                return true;
+            }
+
+            if (name === 'effect.play') {
+                if (payload.effect === 'balloons') {
+                    createBalloons();
+                    return true;
+                }
+                if (payload.effect === 'snow') {
+                    createSnow();
+                    return true;
+                }
+                return false;
+            }
+
+            if (name === 'interval.start') {
+                if (typeof payload.id !== 'string' || typeof payload.ms !== 'number') {
+                    return false;
+                }
+                window._vlCreateInterval(payload.id, payload.ms, !!payload.autostart);
+                return true;
+            }
+
+            if (name === 'dialog.close') {
+                closeDialogById(String(payload.id || ''));
+                return true;
+            }
+
+            if (name === 'navigate') {
+                runNavigateCommand(payload);
+                return true;
+            }
+
+            if (name === 'download.start') {
+                runDownloadCommand(payload);
+                return true;
+            }
+
+            return false;
+        }
+
+        function tryExecuteLegacyEval(code) {
+            if (typeof code !== 'string') return false;
+            const trimmed = code.trim();
+            if (!trimmed) return true;
+
+            if (trimmed === 'createBalloons()') {
+                return executeClientCommand({ name: 'effect.play', payload: { effect: 'balloons' } });
+            }
+            if (trimmed === 'createSnow()') {
+                return executeClientCommand({ name: 'effect.play', payload: { effect: 'snow' } });
+            }
+
+            let match = trimmed.match(/^createToast\((.*)\)$/s);
+            if (match) {
+                try {
+                    const args = JSON.parse(`[${match[1]}]`);
+                    return executeClientCommand({
+                        name: 'toast.show',
+                        payload: {
+                            message: String(args[0] || ''),
+                            variant: String(args[1] || 'primary'),
+                            icon: String(args[2] || 'circle-info'),
+                        },
+                    });
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            match = trimmed.match(/window\._vlCreateInterval\('([^']+)',\s*(\d+),\s*(true|false)\)/);
+            if (match) {
+                return executeClientCommand({
+                    name: 'interval.start',
+                    payload: {
+                        id: match[1],
+                        ms: Number(match[2]),
+                        autostart: match[3] === 'true',
+                    },
+                });
+            }
+
+            match = trimmed.match(/window\.location\.href\s*=\s*'([^']+)';?/);
+            if (match) {
+                return executeClientCommand({
+                    name: 'navigate',
+                    payload: { mode: 'href', url: match[1] },
+                });
+            }
+
+            const keyMatch = trimmed.match(/window\._currentPageKey='([^']+)';[\s\S]*window\.location\.hash='([^']*)';/);
+            if (keyMatch) {
+                const pendingMatch = trimmed.match(/window\._pendingPageKey='([^']+)';/);
+                return executeClientCommand({
+                    name: 'navigate',
+                    payload: {
+                        mode: 'hash',
+                        targetKey: pendingMatch ? pendingMatch[1] : keyMatch[1],
+                        targetHash: keyMatch[2],
+                    },
+                });
+            }
+
+            match = trimmed.match(/document\.getElementById\('([^']+)'\)/);
+            if (match && (trimmed.includes('requestClose') || trimmed.includes('.hide(') || trimmed.includes('.close(') || trimmed.includes('dialog.open = false'))) {
+                return executeClientCommand({
+                    name: 'dialog.close',
+                    payload: { id: match[1] },
+                });
+            }
+
+            match = trimmed.match(/a\.href = '([^']+)';[\s\S]*a\.download = '([^']+)';/);
+            if (match) {
+                return executeClientCommand({
+                    name: 'download.start',
+                    payload: { href: match[1], fileName: match[2] },
+                });
+            }
+
+            return false;
+        }
+
+        window._vlExecuteClientCommand = executeClientCommand;
+        window._vlTryExecuteLegacyEval = tryExecuteLegacyEval;
         
         // Restore state from URL Hash (or force Home if no hash)
         function restoreFromHash() {

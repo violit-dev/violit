@@ -365,6 +365,11 @@ class FormWidgetsMixin:
                 "window.scrollTo(0, window._pageScrollPositions[window._currentPageKey] || 0);"
                 "})();"
             )
+            command_payload = {
+                "mode": "hash",
+                "targetKey": target_key,
+                "targetHash": target_hash or "",
+            }
         else:
             final_url = target_url
             if final_url is None and target_hash is not None:
@@ -372,12 +377,13 @@ class FormWidgetsMixin:
             if final_url is None:
                 final_url = str(page)
             code = f"window.location.href = '{final_url}';"
+            command_payload = {
+                "mode": "href",
+                "url": final_url,
+            }
 
         if self.mode == 'ws':
-            store = get_session_store()
-            if 'eval_queue' not in store:
-                store['eval_queue'] = []
-            store['eval_queue'].append(code)
+            self._enqueue_client_command('navigate', command_payload)
         else:
             cid = self._get_next_cid("page_switch")
             def builder():
@@ -608,23 +614,14 @@ class FormWidgetsMixin:
             # Web Mode: JavaScript download
             import base64
             data_b64 = base64.b64encode(data_bytes).decode('utf-8')
-            
-            from ..state import get_session_store
-            store = get_session_store()
-            if 'eval_queue' not in store:
-                store['eval_queue'] = []
-            
-            js_code = f"""
-            (function() {{
-                const a = document.createElement('a');
-                a.href = 'data:{mime};base64,{data_b64}';
-                a.download = '{file_name}';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }})();
-            """
-            store['eval_queue'].append(js_code)
+            data_url = f"data:{mime};base64,{data_b64}"
+            self._enqueue_client_command(
+                'download.start',
+                {
+                    'href': data_url,
+                    'fileName': str(file_name),
+                },
+            )
             
             msg = toast_message or f"Downloading {file_name}"
             self.toast(msg, variant="success")

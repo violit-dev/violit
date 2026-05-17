@@ -791,27 +791,7 @@ class LayoutWidgetsMixin:
                 return Component("div", id=dialog_id, content=html)
 
             def close_dialog(*args, **kwargs):
-                self._enqueue_eval(
-                    f"""
-                    (() => {{
-                        const dialog = document.getElementById('{modal_id}');
-                        if (!dialog) return;
-                        if (typeof dialog.requestClose === 'function') {{
-                            dialog.requestClose();
-                            return;
-                        }}
-                        if (dialog.dialog && typeof dialog.dialog.close === 'function') {{
-                            dialog.dialog.close();
-                            return;
-                        }}
-                        if (typeof dialog.hide === 'function') {{
-                            dialog.hide();
-                            return;
-                        }}
-                        dialog.open = false;
-                    }})();
-                    """
-                )
+                self._enqueue_client_command('dialog.close', {'id': modal_id})
 
             def dialog_action(value=None):
                 if value == 'closed':

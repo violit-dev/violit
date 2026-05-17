@@ -1,8 +1,10 @@
 """Status Widgets Mixin for Violit"""
 
-from typing import Union, Callable, Optional
+import re
+import warnings
+from typing import Any, Callable, Optional, Union
 from ..component import Component
-from ..context import rendering_ctx
+from ..context import rendering_ctx, session_ctx, view_ctx
 from ..state import get_session_store, State
 from ..style_utils import merge_cls, merge_style, resolve_value
 
@@ -41,6 +43,117 @@ class StatusWidgetsMixin:
             normalized_icon = icon.strip()
             return normalized_icon or None
         return self._ALERT_DEFAULT_ICONS.get(variant, "circle-info")
+
+    def _enqueue_client_command(self, name: str, payload: Optional[dict[str, Any]] = None):
+        """Queue a framework-defined client command instead of arbitrary JavaScript."""
+        import asyncio
+
+        command = {
+            "name": str(name),
+            "payload": payload if isinstance(payload, dict) else {},
+        }
+        store = get_session_store()
+
+        if self.mode == 'ws':
+            sid = session_ctx.get()
+            current_view_id = view_ctx.get()
+            if sid and current_view_id and getattr(self, 'ws_engine', None) and self.ws_engine.has_socket(sid, current_view_id):
+                try:
+                    asyncio.get_running_loop()
+                    store.setdefault('client_command_queue', []).append(command)
+                except RuntimeError:
+                    _loop = asyncio.new_event_loop()
+                    try:
+                        _loop.run_until_complete(
+                            self.ws_engine.push_client_commands(sid, [command], view_id=current_view_id)
+                        )
+                    finally:
+                        _loop.close()
+            else:
+                store.setdefault('client_command_queue', []).append(command)
+        else:
+            if command['name'] == 'toast.show':
+                store.setdefault('toasts', []).append(dict(command['payload']))
+                return
+            if command['name'] == 'effect.play':
+                effect_name = command['payload'].get('effect')
+                if effect_name:
+                    store.setdefault('effects', []).append(str(effect_name))
+                return
+            store.setdefault('client_command_queue', []).append(command)
+
+    def _legacy_eval_to_command(self, code: Any, **lite_data) -> tuple[Optional[str], dict[str, Any]]:
+        if 'toast_data' in lite_data and isinstance(lite_data['toast_data'], dict):
+            return 'toast.show', dict(lite_data['toast_data'])
+
+        if 'effect' in lite_data:
+            return 'effect.play', {'effect': str(lite_data['effect'])}
+
+        if not isinstance(code, str):
+            return None, {}
+
+        stripped = code.strip()
+        if stripped == 'createBalloons()':
+            return 'effect.play', {'effect': 'balloons'}
+        if stripped == 'createSnow()':
+            return 'effect.play', {'effect': 'snow'}
+
+        toast_match = re.match(r'^createToast\((.*)\)$', stripped, flags=re.DOTALL)
+        if toast_match:
+            try:
+                import json
+
+                message, variant, icon = json.loads(f'[{toast_match.group(1)}]')
+                return 'toast.show', {
+                    'message': str(message),
+                    'variant': str(variant),
+                    'icon': str(icon),
+                }
+            except Exception:
+                return None, {}
+
+        interval_match = re.search(
+            r"window\._vlCreateInterval\('([^']+)',\s*(\d+),\s*(true|false)\)",
+            stripped,
+        )
+        if interval_match:
+            return 'interval.start', {
+                'id': interval_match.group(1),
+                'ms': int(interval_match.group(2)),
+                'autostart': interval_match.group(3) == 'true',
+            }
+
+        href_match = re.search(r"window\.location\.href\s*=\s*'([^']+)';?", stripped)
+        if href_match:
+            return 'navigate', {'mode': 'href', 'url': href_match.group(1)}
+
+        hash_match = re.search(
+            r"window\._currentPageKey='([^']+)';[\s\S]*window\.location\.hash='([^']*)';",
+            stripped,
+        )
+        if hash_match:
+            pending_match = re.search(r"window\._pendingPageKey='([^']+)';", stripped)
+            return 'navigate', {
+                'mode': 'hash',
+                'targetKey': pending_match.group(1) if pending_match else hash_match.group(1),
+                'targetHash': hash_match.group(2),
+            }
+
+        dialog_match = re.search(r"document\.getElementById\('([^']+)'\)", stripped)
+        if dialog_match and ('requestClose' in stripped or '.hide(' in stripped or '.close(' in stripped or 'dialog.open = false' in stripped):
+            return 'dialog.close', {'id': dialog_match.group(1)}
+
+        download_match = re.search(
+            r"a\.href = '([^']+)';[\s\S]*a\.download = '([^']+)';",
+            stripped,
+        )
+        if download_match:
+            return 'download.start', {
+                'href': download_match.group(1),
+                'fileName': download_match.group(2),
+            }
+
+        return None, {}
     
     def success(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
         """Display success alert"""
@@ -263,22 +376,18 @@ class StatusWidgetsMixin:
             self._register_component(cid, builder)
         else:
             message = " ".join(str(a) for a in args)
-            # XSS protection: safely escape with JSON.stringify
-            safe_message = json.dumps(str(message))
-            safe_variant = json.dumps(str(variant))
-            safe_icon = json.dumps(str(icon))
-            code = f"createToast({safe_message}, {safe_variant}, {safe_icon})"
-            self._enqueue_eval(code, toast_data={"message": str(message), "icon": str(icon), "variant": str(variant)})
+            self._enqueue_client_command(
+                'toast.show',
+                {"message": str(message), "icon": str(icon), "variant": str(variant)},
+            )
 
     def balloons(self):
         """Display balloons animation"""
-        code = "createBalloons()"
-        self._enqueue_eval(code, effect="balloons")
+        self._enqueue_client_command('effect.play', {'effect': 'balloons'})
 
     def snow(self):
         """Display snow animation"""
-        code = "createSnow()"
-        self._enqueue_eval(code, effect="snow")
+        self._enqueue_client_command('effect.play', {'effect': 'snow'})
 
     def exception(self, exception: Exception, cls: str = "", style: str = ""):
         """Display exception with traceback"""
@@ -308,39 +417,16 @@ class StatusWidgetsMixin:
         self._register_component(cid, builder)
 
     def _enqueue_eval(self, code, **lite_data):
-        """Internal helper to enqueue JS evaluation or store for lite mode"""
-        import asyncio
-        from ..context import session_ctx, view_ctx
-
-        if self.mode == 'ws':
-            sid = session_ctx.get()
-            current_view_id = view_ctx.get()
-            if sid and current_view_id and getattr(self, 'ws_engine', None) and self.ws_engine.has_socket(sid, current_view_id):
-                try:
-                    loop = asyncio.get_running_loop()
-                    store = get_session_store()
-                    if 'eval_queue' not in store: store['eval_queue'] = []
-                    store['eval_queue'].append(code)
-                except RuntimeError:
-                    # Sync context (e.g. background thread) -> push immediately
-                    _loop = asyncio.new_event_loop()
-                    try:
-                        _loop.run_until_complete(self.ws_engine.push_eval(sid, code, view_id=current_view_id))
-                    finally:
-                        _loop.close()
-            else:
-                store = get_session_store()
-                if 'eval_queue' not in store: store['eval_queue'] = []
-                store['eval_queue'].append(code)
-        else:
-            store = get_session_store()
-            if 'toasts' not in store: store['toasts'] = []
-            if 'effects' not in store: store['effects'] = []
-            
-            if 'toast_data' in lite_data:
-                store['toasts'].append(lite_data['toast_data'])
-            if 'effect' in lite_data:
-                store['effects'].append(lite_data['effect'])
+        """Deprecated compatibility wrapper for known legacy framework side effects."""
+        command_name, payload = self._legacy_eval_to_command(code, **lite_data)
+        if command_name is None:
+            warnings.warn(
+                "Arbitrary client-side JavaScript execution is disabled. Ignoring unsupported legacy eval payload.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return
+        self._enqueue_client_command(command_name, payload)
 
     def progress(self, value=0, *args, cls: str = "", style: str = ""):
         """Display progress bar with Signal support"""

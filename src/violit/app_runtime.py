@@ -152,6 +152,31 @@ class AppRuntimeMixin:
     def _drain_lite_side_effects(self, store) -> str:
         html = ""
 
+        client_commands = store.get('client_command_queue', [])
+        if client_commands:
+            import html as html_lib
+            commands_json = json.dumps(client_commands)
+            commands_escaped = html_lib.escape(commands_json)
+
+            html += f'''<div id="client-command-injector" hx-swap-oob="true" data-commands="{commands_escaped}">
+                    <script>
+                    (function() {{
+                        var container = document.getElementById('client-command-injector');
+                        if (!container) return;
+                        var commandsAttr = container.getAttribute('data-commands');
+                        if (!commandsAttr) return;
+                        var commands = JSON.parse(commandsAttr);
+                        commands.forEach(function(command) {{
+                            if (typeof window._vlExecuteClientCommand === 'function') {{
+                                window._vlExecuteClientCommand(command);
+                            }}
+                        }});
+                        container.removeAttribute('data-commands');
+                    }})();
+                    </script>
+                    </div>'''
+            store['client_command_queue'] = []
+
         toasts = store.get('toasts', [])
         if toasts:
             import html as html_lib
@@ -197,6 +222,16 @@ class AppRuntimeMixin:
             store['effects'] = []
 
         return html
+
+    async def _flush_client_command_queue(self, sid, current_view_id, store) -> None:
+        commands = list(store.get('client_command_queue', []) or [])
+        if not commands:
+            return
+
+        store['client_command_queue'] = []
+
+        if sid and current_view_id and self.ws_engine:
+            await self.ws_engine.push_client_commands(sid, commands, view_id=current_view_id)
 
     def _build_lite_oob_payload(self, components: Optional[List[Component]] = None) -> str:
         store = get_session_store()
@@ -338,6 +373,9 @@ class AppRuntimeMixin:
             forced_dirty = store.get('forced_dirty')
             if forced_dirty:
                 forced_dirty.clear()
+            client_command_queue = store.get('client_command_queue')
+            if client_command_queue:
+                client_command_queue.clear()
             eval_queue = store.get('eval_queue')
             if eval_queue:
                 eval_queue.clear()
@@ -566,7 +604,7 @@ class AppRuntimeMixin:
                         self.debug_print(f"ERROR: Action for {cid} is not callable. Got: {type(action_callback)} = {repr(action_callback)}")
                         return HTMLResponse("")
 
-                    store['eval_queue'] = []
+                    store['client_command_queue'] = []
 
                     action_token = action_ctx.set(True)
                     pending_token = pending_shared_views_ctx.set(set())
@@ -662,13 +700,11 @@ class AppRuntimeMixin:
                         if info and info['state'] == 'running':
                             condition = info.get('condition')
                             if condition is None or condition():
-                                store['eval_queue'] = []
+                                store['client_command_queue'] = []
                                 pending_token = pending_shared_views_ctx.set(set())
                                 try:
                                     info['callback']()
-                                    for code in store.get('eval_queue', []):
-                                        await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
-                                    store['eval_queue'] = []
+                                    await self._flush_client_command_queue(sid, current_view_id, store)
                                     dirty = self._get_dirty_rendered()
                                     if dirty:
                                         await self.ws_engine.push_updates(sid, dirty, view_id=current_view_id)
@@ -713,7 +749,7 @@ class AppRuntimeMixin:
                     is_navigation = cid.startswith('nav_menu')
 
                     if action_callback:
-                        store['eval_queue'] = []
+                        store['client_command_queue'] = []
                         self.debug_print(f"  Executing action for CID: {cid} (navigation={is_navigation})...")
 
                         action_token = action_ctx.set(True)
@@ -726,9 +762,7 @@ class AppRuntimeMixin:
                         try:
                             self.debug_print(f"  Action executed")
 
-                            for code in store.get('eval_queue', []):
-                                await self.ws_engine.push_eval(sid, code, view_id=current_view_id)
-                            store['eval_queue'] = []
+                            await self._flush_client_command_queue(sid, current_view_id, store)
 
                             dirty = self._get_dirty_rendered()
                             self.debug_print(f"  Dirty components: {len(dirty)} ({[c.id for c in dirty]})")

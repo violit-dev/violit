@@ -1794,16 +1794,18 @@ class App(
             f"_init();}})();"
         )
 
-        # [FIX] When called inside a button click handler (action_ctx=True),
-        # self.html() creates a new DOM element that doesn't exist on the client,
-        # so the script is silently dropped. Instead, use eval_queue to send
-        # the JS directly to the client as an 'eval' message.
+        # [FIX] When called inside an action handler, self.html() creates a new
+        # DOM element that doesn't exist on the client, so the script is silently
+        # dropped. Queue a structured client command instead.
         if action_ctx.get(False):
-            store = get_session_store()
-            if store is not None:
-                if 'eval_queue' not in store:
-                    store['eval_queue'] = []
-                store['eval_queue'].append(js_code)
+            self._enqueue_client_command(
+                'interval.start',
+                {
+                    'id': interval_id,
+                    'ms': ms,
+                    'autostart': autostart,
+                },
+            )
         else:
             self.html(f"<script>{js_code}</script>")
 
