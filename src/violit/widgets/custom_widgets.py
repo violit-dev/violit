@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import html
+import inspect
 import json
 import keyword
 import re
@@ -64,6 +65,18 @@ def _coerce_widget_payload(value: Any) -> Any:
 def _resolve_widget_prop_value(value: Any) -> Any:
     if isinstance(value, (State, ComputedState)):
         return value.value
+    if callable(value) and not inspect.isclass(value):
+        try:
+            signature = inspect.signature(value)
+        except (TypeError, ValueError):
+            signature = None
+
+        if signature is None or all(
+            parameter.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+            or parameter.default is not inspect.Parameter.empty
+            for parameter in signature.parameters.values()
+        ):
+            return _resolve_widget_prop_value(value())
     return value
 
 
