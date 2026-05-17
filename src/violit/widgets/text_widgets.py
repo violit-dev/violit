@@ -295,23 +295,33 @@ def _sanitize_html_fragment(html_text: str, *, allow_javascript: bool) -> str:
     return parser.get_html()
 
 
+def _read_html_body_file(path: Path) -> Optional[str]:
+    try:
+        if not path.is_file():
+            return None
+        file_text = path.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+    if path.suffix.lower() == ".css":
+        return f"<style>\n{file_text}\n</style>"
+    return file_text
+
+
 def _resolve_html_body_part(value: Any) -> str:
     if isinstance(value, os.PathLike):
         path = Path(value)
-        if path.is_file():
-            file_text = path.read_text(encoding="utf-8")
-            if path.suffix.lower() == ".css":
-                return f"<style>\n{file_text}\n</style>"
-            return file_text
+        resolved_file_text = _read_html_body_file(path)
+        if resolved_file_text is not None:
+            return resolved_file_text
         return str(path)
 
     if isinstance(value, str):
+        if "\n" in value or "\r" in value:
+            return value
         possible_path = Path(value)
-        if possible_path.is_file():
-            file_text = possible_path.read_text(encoding="utf-8")
-            if possible_path.suffix.lower() == ".css":
-                return f"<style>\n{file_text}\n</style>"
-            return file_text
+        resolved_file_text = _read_html_body_file(possible_path)
+        if resolved_file_text is not None:
+            return resolved_file_text
         return value
 
     repr_html = getattr(value, "_repr_html_", None)

@@ -464,6 +464,8 @@
                 syncSelectorText(currentHost, nextHost, '[data-range-start]');
                 syncSelectorText(currentHost, nextHost, '[data-range-end]');
                 syncSelectorText(currentHost, nextHost, '[data-range-span]');
+            } else if (currentInit.startsWith('cw-js-widget-')) {
+                // Preserve the mounted host element and let its controller update from refreshed data attrs.
             } else if (currentInit === 'cw-sortable-board') {
                 syncSelectorInnerHtml(currentHost, nextHost, '.cw-widget-header');
                 const currentList = currentHost.querySelector('[data-board-list]');

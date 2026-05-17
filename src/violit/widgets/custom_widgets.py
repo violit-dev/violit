@@ -67,6 +67,160 @@ def _resolve_widget_prop_value(value: Any) -> Any:
     return value
 
 
+def _normalize_external_asset_urls(value: Any) -> tuple[str, ...]:
+        if value is None:
+                return ()
+        if isinstance(value, str):
+                items = [value]
+        elif isinstance(value, Iterable):
+                items = [str(item) for item in value]
+        else:
+                items = [str(value)]
+        return tuple(item.strip() for item in items if str(item).strip())
+
+
+def _build_js_widget_assets(
+        initializer_name: str,
+        mount_js: str,
+        *,
+        js_urls: tuple[str, ...],
+        css_urls: tuple[str, ...],
+) -> str:
+        css_tags = "\n".join(
+                f'<link rel="stylesheet" href={json.dumps(url, ensure_ascii=False)} />' for url in css_urls
+        )
+        js_tags = "\n".join(
+                f'<script src={json.dumps(url, ensure_ascii=False)}></script>' for url in js_urls
+        )
+        initializer_literal = json.dumps(initializer_name, ensure_ascii=False)
+        mount_js_literal = json.dumps(mount_js, ensure_ascii=False)
+
+        script = f"""
+        <script>
+            (function() {{
+                if (!window.__vlRegisteredJsWidgets) {{
+                    window.__vlRegisteredJsWidgets = {{}};
+                }}
+
+                function destroyJsWidgetNode(node) {{
+                    if (!(node instanceof Element)) return;
+
+                    if (typeof node.__vlJsWidgetDestroy === 'function') {{
+                        try {{
+                            node.__vlJsWidgetDestroy();
+                        }} catch (error) {{
+                            console.error('register_js_widget destroy() failed', error);
+                        }}
+                    }}
+
+                    node.__vlJsWidgetDestroy = null;
+                    node.__vlJsWidgetController = null;
+
+                    node.querySelectorAll('*').forEach(function(child) {{
+                        if (typeof child.__vlJsWidgetDestroy === 'function') {{
+                            try {{
+                                child.__vlJsWidgetDestroy();
+                            }} catch (error) {{
+                                console.error('register_js_widget destroy() failed', error);
+                            }}
+                        }}
+                        child.__vlJsWidgetDestroy = null;
+                        child.__vlJsWidgetController = null;
+                    }});
+                }}
+
+                if (!window.__vlJsWidgetCleanupObserver) {{
+                    window.__vlJsWidgetCleanupObserver = new MutationObserver(function(records) {{
+                        records.forEach(function(record) {{
+                            record.removedNodes.forEach(destroyJsWidgetNode);
+                        }});
+                    }});
+                    window.__vlJsWidgetCleanupObserver.observe(document.documentElement, {{ childList: true, subtree: true }});
+                }}
+
+                function boot(attempts) {{
+                    if (!window.violitRuntime || typeof window.violitRuntime.registerInitializer !== 'function') {{
+                        if (attempts < 80) setTimeout(function() {{ boot(attempts + 1); }}, 50);
+                        return;
+                    }}
+
+                    const initializerName = {initializer_literal};
+                    if (window.__vlRegisteredJsWidgets[initializerName]) {{
+                        return;
+                    }}
+                    window.__vlRegisteredJsWidgets[initializerName] = true;
+
+                    const runtime = window.violitRuntime;
+                    const mount = new Function('element', 'props', 'emit', {mount_js_literal});
+
+                    runtime.registerInitializer(initializerName, function(element) {{
+                        const config = runtime.readJsonAttr(element, 'data-cw-js-widget-config', null);
+                        if (!config || typeof config !== 'object') {{
+                            return;
+                        }}
+
+                        const props = config.props || {{}};
+                        const events = config.events || {{}};
+                        const emit = function(eventName, value) {{
+                            const cid = events[eventName];
+                            if (!cid || !window.violitRuntime || typeof window.violitRuntime.emitAction !== 'function') {{
+                                return;
+                            }}
+                            window.violitRuntime.emitAction(cid, value);
+                        }};
+
+                        let controller = element.__vlJsWidgetController;
+                        if (!controller) {{
+                            try {{
+                                controller = mount(element, props, emit) || {{}};
+                            }} catch (error) {{
+                                console.error('register_js_widget mount() failed', error);
+                                return;
+                            }}
+                            element.__vlJsWidgetController = controller;
+                            element.__vlJsWidgetDestroy = controller && typeof controller.destroy === 'function' ? controller.destroy.bind(controller) : null;
+                            return;
+                        }}
+
+                        if (typeof controller.update === 'function') {{
+                            try {{
+                                controller.update(props);
+                            }} catch (error) {{
+                                console.error('register_js_widget update() failed', error);
+                            }}
+                            return;
+                        }}
+
+                        if (typeof element.__vlJsWidgetDestroy === 'function') {{
+                            try {{
+                                element.__vlJsWidgetDestroy();
+                            }} catch (error) {{
+                                console.error('register_js_widget destroy() failed', error);
+                            }}
+                        }}
+
+                        try {{
+                            controller = mount(element, props, emit) || {{}};
+                        }} catch (error) {{
+                            console.error('register_js_widget remount() failed', error);
+                            return;
+                        }}
+                        element.__vlJsWidgetController = controller;
+                        element.__vlJsWidgetDestroy = controller && typeof controller.destroy === 'function' ? controller.destroy.bind(controller) : null;
+                    }});
+
+                    document.querySelectorAll('[data-vl-init="' + initializerName + '"]').forEach(function(element) {{
+                        runtime.initElement(element);
+                    }});
+                }}
+
+                boot(0);
+            }})();
+        </script>
+        """.strip()
+        return "\n".join(part for part in (css_tags, js_tags, script) if part)
+
+
 @dataclass(slots=True)
 class CustomWidgetResult:
     content: str
@@ -118,6 +272,65 @@ def _normalize_custom_widget_result(value: Any) -> CustomWidgetResult:
 
 
 class CustomWidgetsMixin:
+    def register_js_widget(
+        self,
+        name: str,
+        *,
+        mount_js: str,
+        js: Optional[Any] = None,
+        css: Optional[Any] = None,
+        tag: str = "div",
+        events: Optional[Iterable[str]] = None,
+        expose_method: bool = True,
+    ):
+        """Register a JS-backed widget with a small declarative API.
+
+        The supplied mount_js runs in the browser with arguments:
+            element: host DOM element
+            props: JSON-serializable props passed from Python
+            emit: function(eventName, value)
+
+        The script may return an object with optional update(nextProps) and destroy() methods.
+        """
+        widget_tag = str(tag or "div").strip() or "div"
+        mount_source = str(mount_js or "").strip()
+        if not mount_source:
+            raise ValueError("register_js_widget() mount_js cannot be empty.")
+
+        initializer_name = f"cw-js-widget-{_sanitize_custom_widget_key(name)}"
+        js_urls = _normalize_external_asset_urls(js)
+        css_urls = _normalize_external_asset_urls(css)
+        normalized_events = ("change",) if events is None else tuple(events)
+
+        def render_js_widget(ctx: CustomWidgetContext, **props):
+            config = json.dumps(
+                {
+                    "props": props,
+                    "events": {event_name: ctx.event_cid(event_name) for event_name in normalized_events},
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            return CustomWidgetResult(
+                content="",
+                attrs={"data_cw_js_widget_config": config},
+                tag=widget_tag,
+            )
+
+        return self.register_widget(
+            name,
+            render_js_widget,
+            initializer=initializer_name,
+            events=normalized_events,
+            assets=_build_js_widget_assets(
+                initializer_name,
+                mount_source,
+                js_urls=js_urls,
+                css_urls=css_urls,
+            ),
+            expose_method=expose_method,
+        )
+
     def register_widget(
         self,
         name: str,
