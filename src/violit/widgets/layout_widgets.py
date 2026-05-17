@@ -7,7 +7,7 @@ from functools import wraps
 
 from typing import Any, Union, Callable, Optional, List, Sequence
 from ..component import Component
-from ..context import rendering_ctx, fragment_ctx, layout_ctx, session_ctx
+from ..context import rendering_ctx, fragment_ctx, layout_ctx, registration_pass_ctx, session_ctx
 from ..style_utils import merge_cls, merge_style
 
 
@@ -98,6 +98,10 @@ def _resolve_flex_alignment(value: Optional[str], axis: str) -> str:
         },
     }
     return maps.get(axis, {}).get(value, value)
+
+
+def _should_mark_placeholder_dirty() -> bool:
+    return session_ctx.get() is not None and registration_pass_ctx.get() is None
 
 
 class LayoutWidgetsMixin:
@@ -704,8 +708,8 @@ class LayoutWidgetsMixin:
                         from ..context import fragment_ctx, session_ctx
                         from ..state import get_session_store
                         fragment_ctx.reset(ctx_self._token)
-                        # Mark placeholder dirty so the WS update is sent
-                        if session_ctx.get():
+                        # Only force a follow-up dirty update when mutating outside an active render pass.
+                        if _should_mark_placeholder_dirty():
                             store = get_session_store()
                             store.setdefault('forced_dirty', set()).add(cid)
 
@@ -714,22 +718,20 @@ class LayoutWidgetsMixin:
             def empty(self_):
                 """Clear the placeholder content."""
                 from ..state import get_session_store
-                from ..context import session_ctx
                 store = get_session_store()
                 store['fragment_components'][cid] = []
-                if session_ctx.get():
+                if _should_mark_placeholder_dirty():
                     store.setdefault('forced_dirty', set()).add(cid)
 
             def write(self_, content):
                 """Replace placeholder content with a plain string."""
                 from ..state import get_session_store
-                from ..context import session_ctx
                 write_cid = f"{cid}_write"
                 def _write_builder():
                     return Component(None, id=write_cid, content=str(content))
                 store = get_session_store()
                 store['fragment_components'][cid] = [(write_cid, _write_builder)]
-                if session_ctx.get():
+                if _should_mark_placeholder_dirty():
                     store.setdefault('forced_dirty', set()).add(cid)
 
             def __getattr__(self_, name):
