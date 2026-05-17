@@ -451,6 +451,9 @@
                 return false;
             }
 
+            const preservedHostClass = currentHost.getAttribute('class') || '';
+            const preservedHostStyle = currentHost.getAttribute('style') || '';
+
             syncElementAttributes(currentRoot, nextRoot);
             syncElementAttributes(currentHost, nextHost);
 
@@ -465,7 +468,16 @@
                 syncSelectorText(currentHost, nextHost, '[data-range-end]');
                 syncSelectorText(currentHost, nextHost, '[data-range-span]');
             } else if (currentInit.startsWith('cw-js-widget-')) {
-                // Preserve the mounted host element and let its controller update from refreshed data attrs.
+                const nextHostClass = nextHost.getAttribute('class') || '';
+                const mergedHostClass = Array.from(new Set((nextHostClass + ' ' + preservedHostClass).split(/\s+/).filter(Boolean))).join(' ');
+                if (mergedHostClass) {
+                    currentHost.setAttribute('class', mergedHostClass);
+                }
+
+                const nextHostStyle = nextHost.getAttribute('style') || '';
+                if (!nextHostStyle && preservedHostStyle) {
+                    currentHost.setAttribute('style', preservedHostStyle);
+                }
             } else if (currentInit === 'cw-sortable-board') {
                 syncSelectorInnerHtml(currentHost, nextHost, '.cw-widget-header');
                 const currentList = currentHost.querySelector('[data-board-list]');
