@@ -137,12 +137,9 @@ HTML_TEMPLATE = r"""
             caret-color: transparent;
         }
         
-        .fragment { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; }
-        .page-container { display: flex; flex-direction: column; gap: %WIDGET_GAP%; width: 100%; }
-        .card { background: var(--vl-bg-card); border: 1px solid var(--vl-border); padding: 1.5rem; border-radius: var(--vl-radius); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 0.5rem; }
-        
-        /* Widget spacing - natural breathing room */
-        .page-container > div { margin-bottom: 0.5rem; }
+        .fragment { display: flex; flex-direction: column; gap: var(--vl-widget-gap, %WIDGET_GAP%); width: 100%; }
+        .page-container { display: flex; flex-direction: column; gap: var(--vl-widget-gap, %WIDGET_GAP%); width: 100%; }
+        .card { background: var(--vl-bg-card); border: 1px solid var(--vl-border); padding: 1.5rem; border-radius: var(--vl-radius); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 0; }
         
         /* Headings need more space above to separate sections */
         h1, h2, h3 { font-weight: 600; margin: 0; }
@@ -155,7 +152,7 @@ HTML_TEMPLATE = r"""
         /* Web Awesome component spacing */
         wa-input, wa-select, wa-textarea, wa-slider, wa-checkbox, wa-switch, wa-radio-group, wa-color-picker {
             display: block;
-            margin-bottom: 1rem;
+            margin-bottom: var(--vl-widget-gap, 1rem);
         }
         wa-select[data-vl-label-visibility="hidden"]::part(form-control-label) {
             visibility: hidden;
@@ -201,7 +198,7 @@ HTML_TEMPLATE = r"""
             box-sizing: border-box;
         }
         wa-callout {
-            margin-bottom: 1.25rem;
+            margin-bottom: var(--vl-widget-gap, 1rem);
         }
         wa-callout.vl-alert {
             --vl-alert-accent: var(--vl-primary);

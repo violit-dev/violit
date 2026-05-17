@@ -284,8 +284,8 @@ class InputWidgetsMixin:
             '''
             _wd = self._get_widget_defaults("select_slider")
             _fc = merge_cls(_wd.get("cls", ""), cls)
-            # Add default margin bottom
-            base_style = "margin-bottom:1rem;"
+            # Let the page/fragment stack own outer spacing.
+            base_style = ""
             _fs = merge_style(base_style, _wd.get("style", ""))
             _fs = merge_style(_fs, style)
             
@@ -1092,7 +1092,7 @@ class InputWidgetsMixin:
             help_html = f'<div style="font-size:0.75rem;color:var(--vl-text-muted);margin-top:0.25rem;">{help}</div>' if help else ""
             
             html = f'''
-            <div class="file-uploader" style="margin-bottom:1rem;">
+            <div class="file-uploader">
                 <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="file" id="{cid}_input" accept="{accept_str}" {'multiple' if multiple else ''} 
                        style="display:block;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.25rem;background:var(--vl-bg-card);color:var(--vl-text);width:100%;font-family:inherit;cursor:pointer;" />
@@ -1301,7 +1301,7 @@ class InputWidgetsMixin:
                 attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
             
             html = f'''
-            <div style="margin-bottom: 0.5rem;">
+            <div>
                 <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="date" id="{cid}_input" value="{cv}" 
                        style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
@@ -1338,7 +1338,7 @@ class InputWidgetsMixin:
                 attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
             
             html = f'''
-            <div style="margin-bottom: 0.5rem;">
+            <div>
                 <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="time" id="{cid}_input" value="{cv}" 
                        style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
@@ -1375,7 +1375,7 @@ class InputWidgetsMixin:
                 attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
             
             html = f'''
-            <div style="margin-bottom: 0.5rem;">
+            <div>
                 <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
                 <input type="datetime-local" id="{cid}_input" value="{cv}" 
                        style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"

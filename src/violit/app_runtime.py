@@ -397,7 +397,7 @@ class AppRuntimeMixin:
                 favicon_links=self._build_favicon_links(),
                 html_class=html_class,
                 body_class=body_class,
-                css_vars=theme.to_css_vars(),
+                css_vars=theme.to_css_vars() + "\n" + self._spacing_css_vars(),
                 splash_html=self._splash_html if self.show_splash else "",
                 container_max_width=self.container_max_width,
                 widget_gap=self.widget_gap,

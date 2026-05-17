@@ -440,7 +440,7 @@ class FormWidgetsMixin:
                     else:
                         enter_handler = 'onkeydown="if(event.key===\'Enter\')event.preventDefault()"'
                     html = f'''
-                    <form id="{self.form_id}_element" {enter_handler} onsubmit="return false;" style="display:flex;flex-direction:column;gap:1rem;padding:1rem;{border_style}border-radius:0.5rem;background:var(--vl-bg-card);">
+                    <form id="{self.form_id}_element" {enter_handler} onsubmit="return false;" style="display:flex;flex-direction:column;gap:var(--vl-widget-compound-gap, 1rem);padding:1rem;{border_style}border-radius:0.5rem;background:var(--vl-bg-card);">
                         {inner_html}
                     </form>
                     '''

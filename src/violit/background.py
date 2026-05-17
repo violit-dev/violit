@@ -167,8 +167,7 @@ class BackgroundTask:
         """
         if self._state == "running":
             self._cancel_event.set()
-            self._state = "cancelled"
-            logger.debug("[background] Task marked as cancelled")
+            logger.debug("[background] Cancellation requested")
 
     def check_cancelled(self):
         """Check if cancel was requested and raise CancelledError if so.
@@ -207,7 +206,6 @@ class BackgroundTask:
 
             # Skip completion if cancelled during execution
             if self._cancel_event.is_set():
-                self._state = "cancelled"
                 logger.debug("[background] Task cancelled during execution")
                 if self._on_cancel:
                     try:
@@ -216,10 +214,8 @@ class BackgroundTask:
                     except Exception:
                         pass
                 self._push_dirty_to_session(sid, current_view_id)
+                self._state = "cancelled"
                 return
-
-            self._state = "completed"
-            logger.debug("[background] Task completed successfully")
 
             # Final flush to ensure last state changes are pushed
             self._push_dirty_to_session(sid, current_view_id)
@@ -230,8 +226,10 @@ class BackgroundTask:
                 # on_complete may have triggered more state changes (e.g. toast)
                 self._push_dirty_to_session(sid, current_view_id)
 
+            self._state = "completed"
+            logger.debug("[background] Task completed successfully")
+
         except CancelledError:
-            self._state = "cancelled"
             logger.debug("[background] Task cancelled via check_cancelled()")
             if self._on_cancel:
                 try:
@@ -240,10 +238,10 @@ class BackgroundTask:
                 except Exception:
                     pass
             self._push_dirty_to_session(sid, current_view_id)
+            self._state = "cancelled"
 
         except Exception as e:
             self._error = e
-            self._state = "failed"
             logger.error(f"[background] Task failed: {e}")
 
             # on_error callback
@@ -253,6 +251,8 @@ class BackgroundTask:
                     self._push_dirty_to_session(sid, current_view_id)
                 except Exception:
                     pass
+
+            self._state = "failed"
 
         finally:
             stop_flusher.set()

@@ -787,6 +787,11 @@
         }
 
         function extractAgGridRowDataLiteral(source) {
+            const legacyInitialRowDataPattern = /const initialRowData =\s*(\[.*?\]);/;
+            const legacyMatch = source.match(legacyInitialRowDataPattern);
+            if (legacyMatch && legacyMatch[1]) {
+                return legacyMatch[1];
+            }
             return extractArrayLiteralAfter(source, 'const initialRowData =') || extractArrayLiteralAfter(source, 'rowData:');
         }
 

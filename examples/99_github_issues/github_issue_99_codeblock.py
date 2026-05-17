@@ -3,7 +3,11 @@ import sys
 import violit as vl
 
 
-app = vl.App(title="GitHub Issue 99 - Code Block copy, theme, and syntax highlight", theme="ocean")
+app = vl.App(
+    title="GitHub Issue 99 - Code Block copy, theme, and syntax highlight",
+    theme="ocean",
+    spacing="compact",
+)
 
 
 PYTHON_SAMPLE = '''from dataclasses import dataclass

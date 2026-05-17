@@ -203,7 +203,8 @@ class LayoutWidgetsMixin:
 
     def container(self, border=False, height=None, cls: str = "", style: str = "",
                   fill_height: bool = False, align: Optional[str] = None,
-                  justify: Optional[str] = None, **kwargs):
+                  justify: Optional[str] = None, spacing: Any = None,
+                  widget_gap: Any = None, **kwargs):
         """
         Create a container for grouping elements
         
@@ -213,6 +214,8 @@ class LayoutWidgetsMixin:
             fill_height: Whether the container should stretch to fill its parent height.
             align: Cross-axis alignment for children when using flex layout.
             justify: Main-axis alignment for children when using flex layout.
+            spacing: Optional local spacing preset override for this container subtree.
+            widget_gap: Optional explicit local widget gap override for this container subtree.
             **kwargs: Additional HTML attributes (e.g., data_post_id="123", style="...")
         
         Example:
@@ -224,7 +227,7 @@ class LayoutWidgetsMixin:
         
         class ContainerContext:
             def __init__(self, app, container_id, border, height, user_cls, user_style,
-                         fill_height, align, justify, attrs):
+                         fill_height, align, justify, spacing, widget_gap, attrs):
                 self.app = app
                 self.container_id = container_id
                 self.border = border
@@ -234,6 +237,8 @@ class LayoutWidgetsMixin:
                 self.fill_height = fill_height
                 self.align = align
                 self.justify = justify
+                self.spacing = spacing
+                self.widget_gap = widget_gap
                 self.attrs = attrs
                 
             def __enter__(self):
@@ -271,9 +276,21 @@ class LayoutWidgetsMixin:
                         layout_styles.append(f"align-items: {align_value};")
                     if justify_value:
                         layout_styles.append(f"justify-content: {justify_value};")
+
+                    current_spacing = _resolve_dynamic_layout_value(self.spacing)
+                    current_widget_gap = _resolve_dynamic_layout_value(self.widget_gap)
+                    _, runtime_profile, runtime_widget_gap = self.app._get_spacing_runtime_values()
+                    effective_profile = runtime_profile
+                    effective_widget_gap = runtime_widget_gap
+                    if current_spacing is not None:
+                        _, effective_profile, effective_widget_gap = self.app._resolve_spacing_values(current_spacing, None)
+                    normalized_local_widget_gap = self.app._normalize_spacing_widget_gap(current_widget_gap)
+                    if normalized_local_widget_gap is not None:
+                        effective_widget_gap = normalized_local_widget_gap
+                    layout_styles.append(self.app._build_spacing_css_vars(effective_profile, effective_widget_gap))
                     
                     _wd = self.app._get_widget_defaults("container")
-                    _fc = merge_cls(_wd.get("cls", ""), border_class, self.user_cls)
+                    _fc = merge_cls(_wd.get("cls", ""), "fragment", border_class, self.user_cls)
                     _fs = merge_style(_wd.get("style", ""), " ".join(layout_styles), self.user_style)
                     # Pass kwargs to Component
                     return Component("div", id=self.container_id, content=inner_html, class_=_fc or None, style=_fs or None, **self.attrs)
@@ -293,7 +310,7 @@ class LayoutWidgetsMixin:
             def __getattr__(self, name):
                 return getattr(self.app, name)
         
-        return ContainerContext(self, cid, border, height, cls, style, fill_height, align, justify, kwargs)
+        return ContainerContext(self, cid, border, height, cls, style, fill_height, align, justify, spacing, widget_gap, kwargs)
 
     def expander(self, label, expanded=False, icon=None, cls: str = "", style: str = ""):
         """Create an expandable/collapsible section
@@ -389,6 +406,33 @@ class LayoutWidgetsMixin:
                             }}
                         }};
 
+                        const armPersistenceFromSummaryInteraction = function(event) {{
+                            const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+                            const fromSummary = path.some(function(node) {{
+                                return !!(node && typeof node.getAttribute === 'function' && node.getAttribute('slot') === 'summary');
+                            }});
+
+                            if (!fromSummary) return;
+                            if (event.type === 'keydown') {{
+                                const key = event.key || '';
+                                if (key !== 'Enter' && key !== ' ') return;
+                            }}
+
+                            details.dataset.vlExpanderPersistArmed = 'true';
+                        }};
+
+                        const shouldPersistToggle = function() {{
+                            return (
+                                details.dataset.vlExpanderPersistArmed === 'true' &&
+                                details.isConnected &&
+                                document.getElementById(details.id) === details
+                            );
+                        }};
+
+                        const clearPersistArm = function() {{
+                            delete details.dataset.vlExpanderPersistArmed;
+                        }};
+
                         applyOpen(initialOpen);
                         requestAnimationFrame(function() {{
                             applyOpen(initialOpen);
@@ -396,18 +440,30 @@ class LayoutWidgetsMixin:
 
                         if (!details.dataset.vlExpanderPersistenceBound) {{
                             details.dataset.vlExpanderPersistenceBound = 'true';
+                            details.addEventListener('click', armPersistenceFromSummaryInteraction, true);
+                            details.addEventListener('keydown', armPersistenceFromSummaryInteraction, true);
                             details.addEventListener('wa-show', function() {{
-                                sessionStorage.setItem(storageKey, 'true');
+                                requestAnimationFrame(function() {{
+                                    if (shouldPersistToggle()) {{
+                                        sessionStorage.setItem(storageKey, 'true');
+                                    }}
+                                    clearPersistArm();
+                                }});
                             }});
                             details.addEventListener('wa-hide', function() {{
-                                sessionStorage.setItem(storageKey, 'false');
+                                requestAnimationFrame(function() {{
+                                    if (shouldPersistToggle()) {{
+                                        sessionStorage.setItem(storageKey, 'false');
+                                    }}
+                                    clearPersistArm();
+                                }});
                             }});
                         }}
                     }})();
                     </script>
                     '''
                     html = f'''
-                    <wa-details id="{details_cid}" {open_attr} style="margin-bottom:1rem;">
+                    <wa-details id="{details_cid}" {open_attr}>
                         {summary_html}
                         <div style="padding:0.5rem 0; display:flex; flex-direction:column; width:100%; min-width:0;">{inner_html}</div>
                     </wa-details>

@@ -217,7 +217,7 @@ class CardWidgetsMixin:
             header=header,
             footer=footer,
             cls=cls,
-            style=merge_style("margin-bottom: 1rem; width: 100%;", style),
+            style=merge_style("width: 100%;", style),
             **kwargs
         )
     
@@ -460,7 +460,7 @@ class CardWidgetsMixin:
         data_attr = f' data-post-id="{data_id}"' if data_id else ''
         
         # Arrange card + action area using flexbox layout
-        html_content = f'''<div{data_attr} style="display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem;">
+        html_content = f'''<div{data_attr} style="display: flex; gap: var(--vl-widget-compound-gap, 1rem); align-items: flex-start;">
     <div style="flex: 1;">
         <wa-card style="width: 100%;">
             {header_html}
@@ -492,7 +492,7 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=merge_style("margin-bottom: 1rem;", style)
+            style=style
         )
     
     def success_card(self, content, title=None, cls: str = "", style: str = ""):
@@ -514,7 +514,7 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=merge_style("margin-bottom: 1rem;", style)
+            style=style
         )
     
     def warning_card(self, content, title=None, cls: str = "", style: str = ""):
@@ -536,7 +536,7 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=merge_style("margin-bottom: 1rem;", style)
+            style=style
         )
     
     def danger_card(self, content, title=None, cls: str = "", style: str = ""):
@@ -558,7 +558,7 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=merge_style("margin-bottom: 1rem;", style)
+            style=style
         )
 
 

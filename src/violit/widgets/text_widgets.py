@@ -726,12 +726,12 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=content, class_=_fc or None, style=_fs or None, **props)
         self._register_component(cid, builder)
 
-    def code(self, code: Union[str, Callable], language: Optional[str] = None,
-             showcase: bool = False, title: Optional[str] = None,
-             copy_button: bool = True, line_numbers: bool = False,
-             wrap_lines: bool = False,
-               theme: str = "auto",
-               syntax_highlighting: Optional[bool] = None,
+    def code(self, code: Any, language: Any = None,
+             showcase: Any = False, title: Any = None,
+             copy_button: Any = True, line_numbers: Any = False,
+             wrap_lines: Any = False,
+             theme: Any = "auto",
+             syntax_highlighting: Any = None,
              cls: str = "", style: str = "", **props):
         """Display code block with syntax highlighting
 

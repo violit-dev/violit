@@ -295,7 +295,7 @@ class StatusWidgetsMixin:
             escaped_tb = html_lib.escape(tb)
             
             html_output = f'''
-            <wa-callout variant="danger" appearance="filled-outlined" style="margin-bottom:1rem;">
+            <wa-callout variant="danger" appearance="filled-outlined">
                 <wa-icon slot="icon" name="circle-exclamation"></wa-icon>
                 <strong>{escaped_name}:</strong> {escaped_msg}
                 <pre style="margin-top:0.5rem;padding:0.5rem;background:rgba(0,0,0,0.1);border-radius:0.25rem;overflow-x:auto;font-size:0.85rem;">{escaped_tb}</pre>
@@ -381,7 +381,7 @@ class StatusWidgetsMixin:
             escaped_text = html_lib.escape(str(progress_text))
             
             html_output = f'''
-            <div style="margin-bottom:0.5rem;">
+            <div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem;">
                     <span style="font-size:0.875rem;color:var(--vl-text);">{escaped_text}</span>
                     <span style="font-size:0.875rem;color:var(--vl-text-muted);">{val_num}%</span>
@@ -422,7 +422,7 @@ class StatusWidgetsMixin:
             escaped_text = html_lib.escape(str(text))
             
             html_output = f'''
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
                 <wa-spinner style="font-size:1.5rem;"></wa-spinner>
                 <span style="color:var(--vl-text-muted);font-size:0.875rem;">{escaped_text}</span>
             </div>
@@ -485,7 +485,7 @@ class StatusWidgetsMixin:
                     
                     # Build status container
                     html_output = f'''
-                    <wa-details {"open" if self.expanded else ""} style="margin-bottom:1rem;">
+                    <wa-details {"open" if self.expanded else ""}>
                         <div slot="summary" style="display:flex;align-items:center;gap:0.5rem;font-weight:600;">
                             {icon}
                             <span>{escaped_label}</span>

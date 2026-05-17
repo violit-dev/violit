@@ -35,6 +35,27 @@ import asyncio
 
 REACTIVE_PARENT_PREFIXES = ('if_', 'for_', 'reactivity_', 'page_renderer')
 
+SPACING_PRESETS = {
+    'compact': {
+        'widget_gap': '0.55rem',
+        'compound_gap': '0.75rem',
+        'chat_meta_gap': '0.65rem',
+        'chat_message_gap': '0.9rem',
+    },
+    'normal': {
+        'widget_gap': '1rem',
+        'compound_gap': '1rem',
+        'chat_meta_gap': '0.85rem',
+        'chat_message_gap': '1.125rem',
+    },
+    'relaxed': {
+        'widget_gap': '1.35rem',
+        'compound_gap': '1.15rem',
+        'chat_meta_gap': '1.05rem',
+        'chat_message_gap': '1.35rem',
+    },
+}
+
 # Import all widget mixins
 from .widgets import (
     TextWidgetsMixin,
@@ -68,7 +89,7 @@ class App(
 ):
     """Main Violit App class"""
     
-    def __init__(self, mode: Optional[str] = None, title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap='1rem', use_cdn=False, use_cdn_fontawesome_only=False, disconnect_timeout=0, root_path: str = "", db: Optional[str] = None, migrate='auto'):
+    def __init__(self, mode: Optional[str] = None, title="Violit App", theme='violit_light_jewel', allow_selection=True, animation_mode='soft', icon: Optional[str] = None, favicon: Optional[str] = None, width=1024, height=768, on_top=False, container_width='800px', widget_gap=None, spacing='normal', use_cdn=False, use_cdn_fontawesome_only=False, disconnect_timeout=0, root_path: str = "", db: Optional[str] = None, migrate='auto'):
         self._mode_is_explicit = mode is not None
         self.mode = (mode or 'ws').strip().lower()
         self.use_cdn = use_cdn
@@ -349,11 +370,11 @@ class App(
         else:
             self.container_max_width = container_width
 
+        self.spacing = self._normalize_spacing_preset(spacing)
+        self._spacing_profile = SPACING_PRESETS[self.spacing]
+
         # Widget gap: controls spacing between widgets in page-container
-        if isinstance(widget_gap, (int, float)):
-            self.widget_gap = f'{widget_gap}rem'
-        else:
-            self.widget_gap = widget_gap
+        self.widget_gap = self._resolve_spacing_values(self.spacing, widget_gap)[2]
 
         self._sidebar_width = self._normalize_css_size('300px', fallback='300px')
         self._sidebar_min_width = self._normalize_css_size('220px', fallback='220px')
@@ -378,6 +399,7 @@ class App(
         self.static_fragment_components: Dict[str, List[Any]] = {} # For children components of container widgets.
         
         self.state_count = 0
+
         self._fragments: Dict[str, Callable] = {} # Deprecated. It was used for dynamci fragment, but fragment_components in session store is used now.
         
         # Styling System: configure_widget defaults + user CSS
@@ -399,6 +421,7 @@ class App(
         
         # Internal theme/settings state
         self._theme_state = self.state(self.theme_manager.mode)
+        self._spacing_state = self.state(f"{self.spacing}:{self.widget_gap}")
         self._selection_state = self.state(allow_selection)
         self._animation_state = self.state(animation_mode)
         
@@ -409,10 +432,66 @@ class App(
         self._main_loop: asyncio.AbstractEventLoop | None = None
         # Register core fragments/updaters
         self._theme_updater()
+        self._spacing_updater()
         self._selection_updater()
         self._animation_updater()
         
         self._setup_routes()
+
+    @staticmethod
+    def _normalize_spacing_preset(spacing: Optional[str]) -> str:
+        normalized = str(spacing or 'normal').strip().lower()
+        alias_map = {
+            'default': 'normal',
+            'comfortable': 'relaxed',
+            'tight': 'compact',
+        }
+        normalized = alias_map.get(normalized, normalized)
+        if normalized not in SPACING_PRESETS:
+            valid = ", ".join(sorted(SPACING_PRESETS))
+            raise ValueError(f"Invalid spacing preset '{spacing}'. Expected one of: {valid}")
+        return normalized
+
+    def _spacing_css_vars(self) -> str:
+        profile = self._spacing_profile
+        return "\n".join([
+            f"--vl-widget-gap: {self.widget_gap};",
+            f"--vl-widget-compound-gap: {profile['compound_gap']};",
+            f"--vl-chat-meta-spacing: {profile['chat_meta_gap']};",
+            f"--vl-chat-message-spacing: {profile['chat_message_gap']};",
+        ])
+
+    @staticmethod
+    def _normalize_spacing_widget_gap(widget_gap) -> str | None:
+        if widget_gap is None:
+            return None
+        if isinstance(widget_gap, (int, float)):
+            return f'{widget_gap}rem'
+        normalized = str(widget_gap).strip()
+        return normalized or None
+
+    def _resolve_spacing_values(self, spacing: Optional[str] = None, widget_gap=None) -> tuple[str, dict[str, str], str]:
+        normalized_spacing = self._normalize_spacing_preset(spacing if spacing is not None else self.spacing)
+        profile = SPACING_PRESETS[normalized_spacing]
+        normalized_widget_gap = self._normalize_spacing_widget_gap(widget_gap)
+        if normalized_widget_gap is None:
+            normalized_widget_gap = profile['widget_gap']
+        return normalized_spacing, profile, normalized_widget_gap
+
+    def _get_spacing_runtime_values(self) -> tuple[str, dict[str, str], str]:
+        store = get_session_store()
+        spacing_pref = store.get('spacing_pref') or {}
+        spacing = spacing_pref.get('spacing', self.spacing)
+        widget_gap = spacing_pref.get('widget_gap', self.widget_gap)
+        return self._resolve_spacing_values(spacing, widget_gap)
+
+    def _build_spacing_css_vars(self, profile: dict[str, str], widget_gap: str) -> str:
+        return "\n".join([
+            f"--vl-widget-gap: {widget_gap};",
+            f"--vl-widget-compound-gap: {profile['compound_gap']};",
+            f"--vl-chat-meta-spacing: {profile['chat_meta_gap']};",
+            f"--vl-chat-message-spacing: {profile['chat_message_gap']};",
+        ])
 
     @property
     def sidebar(self):
@@ -1472,6 +1551,30 @@ class App(
             # Use timestamp to force dirty even if same theme selected twice
             self._theme_state.set(f"{p}_{time.time()}")
 
+    def set_spacing(self, spacing: Optional[str] = None, *, widget_gap=None):
+        """Set spacing preset and/or explicit widget gap.
+
+        During an active runtime session, the change applies to the current
+        view session only. Outside runtime, it updates the app defaults.
+        """
+        import time
+
+        normalized_spacing, profile, normalized_widget_gap = self._resolve_spacing_values(spacing, widget_gap)
+
+        if session_ctx.get() is None or view_ctx.get() is None:
+            self.spacing = normalized_spacing
+            self._spacing_profile = profile
+            self.widget_gap = normalized_widget_gap
+        else:
+            store = get_session_store()
+            store['spacing_pref'] = {
+                'spacing': normalized_spacing,
+                'widget_gap': normalized_widget_gap,
+            }
+
+        if self._spacing_state:
+            self._spacing_state.set(f"{normalized_spacing}:{normalized_widget_gap}:{time.time()}")
+
     def set_selection_mode(self, enabled: bool):
         """Enable/disable text selection"""
         if self._selection_state:
@@ -1552,6 +1655,36 @@ class App(
             
             script = f"<script>document.body.classList.remove('anim-soft', 'anim-hard'); document.body.classList.add('anim-{mode}');</script>"
             return Component("div", id=cid, style="display:none", content=script)
+        self._register_component(cid, builder)
+
+    def _spacing_updater(self):
+        """Update spacing CSS variables"""
+        cid = "__spacing_updater__"
+        def builder():
+            token = rendering_ctx.set(cid)
+            _ = self._spacing_state.value
+            rendering_ctx.reset(token)
+
+            _, profile, widget_gap = self._get_spacing_runtime_values()
+            vars_str = self._build_spacing_css_vars(profile, widget_gap)
+
+            script_content = f'''
+                <script>
+                    (function() {{
+                        const root = document.documentElement;
+                        const vars = `{vars_str}`.split('\n');
+                        vars.forEach(v => {{
+                            const parts = v.split(':');
+                            if(parts.length === 2) {{
+                                const key = parts[0].trim();
+                                const val = parts[1].replace(';', '').trim();
+                                root.style.setProperty(key, val);
+                            }}
+                        }});
+                    }})();
+                </script>
+            '''
+            return Component("div", id=cid, style="display:none", content=script_content)
         self._register_component(cid, builder)
 
     def _theme_updater(self):

@@ -761,7 +761,7 @@ def _render_agent_status_html(status_text: str, phase: str) -> str:
         spinner_html = '<wa-spinner style="font-size:0.78rem; --indicator-color: currentColor;"></wa-spinner>'
 
     return f'''
-    <div class="vl-agent-status vl-chat-meta-card vl-chat-meta-card--status vl-chat-meta-card--{normalized_phase}" data-chat-part="agent-status" data-agent-phase="{html_lib.escape(normalized_phase, quote=True)}" style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.8rem;padding:0.75rem 0.85rem;border-radius:14px;background:color-mix(in srgb, var(--vl-bg-card) 88%, var(--vl-bg) 12%);border:1px solid {card_border};box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 12%, transparent);">
+    <div class="vl-agent-status vl-chat-meta-card vl-chat-meta-card--status vl-chat-meta-card--{normalized_phase}" data-chat-part="agent-status" data-agent-phase="{html_lib.escape(normalized_phase, quote=True)}" style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:var(--vl-chat-meta-spacing, 0.85rem);padding:0.75rem 0.85rem;border-radius:14px;background:color-mix(in srgb, var(--vl-bg-card) 88%, var(--vl-bg) 12%);border:1px solid {card_border};box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 12%, transparent);">
         <div class="vl-agent-status__icon" data-chat-part="agent-status-icon" style="flex-shrink:0;display:flex;align-items:center;justify-content:center;color:{badge_color};min-height:1.1rem;">{spinner_html}</div>
         <div class="vl-agent-status__body" data-chat-part="agent-status-body" style="min-width:0;flex:1;">
             <div class="vl-agent-status__badge" data-chat-part="agent-status-badge" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.48rem;border-radius:999px;background:{badge_bg};color:{badge_color};font-size:0.72rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;">{html_lib.escape(badge_label)}</div>
@@ -778,7 +778,7 @@ def _render_agent_summary_html(summary: str) -> str:
 
     safe_text = html_lib.escape(text).replace("\n", "<br>")
     return f'''
-    <div class="vl-agent-summary vl-chat-meta-card vl-chat-meta-card--summary" data-chat-part="agent-summary" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:linear-gradient(180deg, color-mix(in srgb, var(--vl-bg-card) 94%, white 6%), color-mix(in srgb, var(--vl-bg-card) 86%, var(--vl-bg) 14%));border:1px solid color-mix(in srgb, var(--vl-border) 88%, var(--vl-primary) 12%);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent);">
+    <div class="vl-agent-summary vl-chat-meta-card vl-chat-meta-card--summary" data-chat-part="agent-summary" style="margin-bottom:var(--vl-chat-meta-spacing, 0.85rem);padding:0.8rem 0.9rem;border-radius:14px;background:linear-gradient(180deg, color-mix(in srgb, var(--vl-bg-card) 94%, white 6%), color-mix(in srgb, var(--vl-bg-card) 86%, var(--vl-bg) 14%));border:1px solid color-mix(in srgb, var(--vl-border) 88%, var(--vl-primary) 12%);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-border) 10%, transparent);">
         <div class="vl-agent-summary__label" data-chat-part="agent-summary-label" style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--vl-text-muted, #64748b);margin-bottom:0.35rem;">Summary</div>
         <div class="vl-agent-summary__text" data-chat-part="agent-summary-text" style="color:var(--vl-text);font-size:0.95rem;line-height:1.55;">{safe_text}</div>
     </div>
@@ -793,7 +793,7 @@ def _render_agent_error_html(error_text: str) -> str:
     safe_text = html_lib.escape(text).replace("\n", "<br>")
     error_bg, error_border = _theme_tone("var(--vl-danger)", bg_weight=14, border_weight=28)
     return f'''
-    <div class="vl-agent-error vl-chat-meta-card vl-chat-meta-card--error" data-chat-part="agent-error" style="margin-bottom:0.85rem;padding:0.8rem 0.9rem;border-radius:14px;background:{error_bg};border:1px solid {error_border};color:color-mix(in srgb, var(--vl-danger) 82%, var(--vl-text) 18%);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-danger) 10%, transparent);">
+    <div class="vl-agent-error vl-chat-meta-card vl-chat-meta-card--error" data-chat-part="agent-error" style="margin-bottom:var(--vl-chat-meta-spacing, 0.85rem);padding:0.8rem 0.9rem;border-radius:14px;background:{error_bg};border:1px solid {error_border};color:color-mix(in srgb, var(--vl-danger) 82%, var(--vl-text) 18%);box-shadow:0 10px 24px color-mix(in srgb, var(--vl-danger) 10%, transparent);">
         <div class="vl-agent-error__label" data-chat-part="agent-error-label" style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:0.35rem;">Error</div>
         <div class="vl-agent-error__text" data-chat-part="agent-error-text" style="font-size:0.94rem;line-height:1.55;">{safe_text}</div>
     </div>
@@ -848,7 +848,7 @@ def _render_agent_trace_html(trace: Any, collapsed: bool = True) -> str:
 
     open_attr = "" if collapsed else "open"
     return f'''
-    <wa-details class="vl-agent-trace" data-chat-part="agent-trace" {open_attr} style="margin-bottom:0.85rem;border-radius:14px;--summary-icon-color: var(--vl-text-muted);">
+    <wa-details class="vl-agent-trace" data-chat-part="agent-trace" {open_attr} style="margin-bottom:var(--vl-chat-meta-spacing, 0.85rem);border-radius:14px;--summary-icon-color: var(--vl-text-muted);">
         <span slot="summary" class="vl-agent-trace__summary" data-chat-part="agent-trace-summary" style="font-weight:650;color:var(--vl-text);">Trace <span class="vl-agent-trace__count" data-chat-part="agent-trace-count" style="margin-left:0.35rem;color:var(--vl-text-muted, #64748b);font-size:0.84rem;">{len(rows)} steps</span></span>
         <div class="vl-agent-trace__content" data-chat-part="agent-trace-content" style="padding:0.2rem 0.1rem 0.1rem;">
             {''.join(rows)}
