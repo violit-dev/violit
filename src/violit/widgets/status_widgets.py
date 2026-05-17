@@ -161,7 +161,7 @@ class StatusWidgetsMixin:
             "title_color": "#991b1b", "text_color": "#7f1d1d",
         },
         "danger": {
-            "icon": "octagon-exclamation",
+            "icon": "circle-exclamation",
             "bg": "#fef2f2", "border": "#fecaca", "accent": "#dc2626",
             "title_color": "#991b1b", "text_color": "#7f1d1d",
         },

@@ -251,6 +251,113 @@
 
             return true;
         }
+
+        function getCustomInitializerHost(root) {
+            if (!(root instanceof Element)) return null;
+            if (root.hasAttribute('data-vl-init')) {
+                return root;
+            }
+            return root.querySelector('[data-vl-init]');
+        }
+
+        function syncSelectorInnerHtml(currentRoot, nextRoot, selector) {
+            const currentNode = currentRoot ? currentRoot.querySelector(selector) : null;
+            const nextNode = nextRoot ? nextRoot.querySelector(selector) : null;
+            if (!currentNode || !nextNode) return;
+            currentNode.innerHTML = nextNode.innerHTML;
+        }
+
+        function syncSelectorText(currentRoot, nextRoot, selector) {
+            const currentNode = currentRoot ? currentRoot.querySelector(selector) : null;
+            const nextNode = nextRoot ? nextRoot.querySelector(selector) : null;
+            if (!currentNode || !nextNode) return;
+            currentNode.textContent = nextNode.textContent;
+        }
+
+        function syncKeyedChildrenOrder(currentContainer, nextContainer, keyAttr) {
+            if (!currentContainer || !nextContainer) return;
+
+            const currentByKey = new Map();
+            Array.from(currentContainer.children).forEach((child) => {
+                const key = child.getAttribute ? child.getAttribute(keyAttr) : null;
+                if (key) {
+                    currentByKey.set(key, child);
+                }
+            });
+
+            Array.from(nextContainer.children).forEach((nextChild) => {
+                const key = nextChild.getAttribute ? nextChild.getAttribute(keyAttr) : null;
+                if (!key) return;
+
+                const currentChild = currentByKey.get(key);
+                if (currentChild) {
+                    syncElementAttributes(currentChild, nextChild);
+                    currentChild.innerHTML = nextChild.innerHTML;
+                    currentContainer.appendChild(currentChild);
+                    currentByKey.delete(key);
+                    return;
+                }
+
+                currentContainer.appendChild(nextChild.cloneNode(true));
+            });
+
+            currentByKey.forEach((child) => {
+                child.remove();
+            });
+        }
+
+        function trySmartUpdateCustomWidgetWrapper(currentRoot, incomingMarkupOrRoot) {
+            if (!(currentRoot instanceof Element)) return false;
+
+            let nextRoot = null;
+            if (typeof incomingMarkupOrRoot === 'string') {
+                const temp = document.createElement('div');
+                temp.innerHTML = incomingMarkupOrRoot;
+                nextRoot = temp.firstElementChild;
+            } else if (incomingMarkupOrRoot instanceof Element) {
+                nextRoot = incomingMarkupOrRoot;
+            }
+
+            if (!(nextRoot instanceof Element)) return false;
+
+            const currentHost = getCustomInitializerHost(currentRoot);
+            const nextHost = getCustomInitializerHost(nextRoot);
+            if (!currentHost || !nextHost) return false;
+
+            const currentInit = currentHost.getAttribute('data-vl-init') || '';
+            const nextInit = nextHost.getAttribute('data-vl-init') || '';
+            if (!currentInit || currentInit !== nextInit || !currentInit.startsWith('cw-')) {
+                return false;
+            }
+
+            syncElementAttributes(currentRoot, nextRoot);
+            syncElementAttributes(currentHost, nextHost);
+
+            if (currentInit === 'cw-theme-picker') {
+                currentHost.innerHTML = nextHost.innerHTML;
+            } else if (currentInit === 'cw-dual-range') {
+                syncSelectorInnerHtml(currentHost, nextHost, '.cw-widget-header');
+                syncSelectorInnerHtml(currentHost, nextHost, '.cw-range-summary');
+                syncSelectorInnerHtml(currentHost, nextHost, '.cw-range-copy');
+                syncSelectorInnerHtml(currentHost, nextHost, '.cw-range-pillbar');
+                syncSelectorText(currentHost, nextHost, '[data-range-start]');
+                syncSelectorText(currentHost, nextHost, '[data-range-end]');
+                syncSelectorText(currentHost, nextHost, '[data-range-span]');
+            } else if (currentInit === 'cw-sortable-board') {
+                syncSelectorInnerHtml(currentHost, nextHost, '.cw-widget-header');
+                const currentList = currentHost.querySelector('[data-board-list]');
+                const nextList = nextHost.querySelector('[data-board-list]');
+                syncKeyedChildrenOrder(currentList, nextList, 'data-item-id');
+            } else {
+                return false;
+            }
+
+            if (window.violitRuntime && typeof window.violitRuntime.initElement === 'function') {
+                window.violitRuntime.initElement(currentHost);
+            }
+
+            return true;
+        }
         window._vlLastHiddenAt = document.visibilityState === 'hidden' ? Date.now() : 0;
         window._vlResumeCheckTimers = [];
         
@@ -570,32 +677,84 @@
             }
 
             const readCurrentValue = () => violitRuntime.readControlValue(element, valueProp);
+            const controlTargets = (() => {
+                const resolvedTarget = violitRuntime.resolveControlTarget(element);
+                const targets = [element];
+                if (resolvedTarget && resolvedTarget !== element) {
+                    targets.push(resolvedTarget);
+                }
+                return targets;
+            })();
             const shouldSkipEcho = function() {
                 if (!Object.prototype.hasOwnProperty.call(element, '_vlSkipNextInputEventValue')) return false;
                 const skipValue = element._vlSkipNextInputEventValue;
                 delete element._vlSkipNextInputEventValue;
                 return violitRuntime.normalizeControlValue(valueProp, readCurrentValue()) === String(skipValue);
             };
+            const scheduleControlDispatch = function(key, emit) {
+                const pendingKey = `_vlPendingDispatch_${key}`;
+                if (element[pendingKey]) {
+                    return;
+                }
+                element[pendingKey] = true;
 
-            if (transport === 'ws' && !violitRuntime.markBound(element, `ws-listener-${config.cid}-${eventName}`)) {
-                element.addEventListener(eventName, function() {
-                    if (shouldSkipEcho()) return;
-                    window.sendAction(config.cid, readCurrentValue());
+                const flush = function() {
+                    element[pendingKey] = false;
+                    emit(readCurrentValue());
+                };
+
+                const scheduleFrame = function() {
+                    requestAnimationFrame(flush);
+                };
+
+                if (element.updateComplete && typeof element.updateComplete.then === 'function') {
+                    element.updateComplete.then(scheduleFrame).catch(scheduleFrame);
+                    return;
+                }
+                scheduleFrame();
+            };
+
+            if (transport === 'ws') {
+                controlTargets.forEach(function(target, index) {
+                    const listenerKey = `ws-listener-${config.cid}-${eventName}-${index}`;
+                    if (violitRuntime.markBound(target, listenerKey)) {
+                        return;
+                    }
+                    target.addEventListener(eventName, function() {
+                        scheduleControlDispatch(`ws_${config.cid}_${eventName}`, function(nextValue) {
+                            if (shouldSkipEcho()) return;
+                            window.sendAction(config.cid, nextValue);
+                        });
+                    });
                 });
             }
 
-            if (transport === 'lite-direct' && !violitRuntime.markBound(element, `lite-direct-${config.cid}-${eventName}`)) {
-                element.addEventListener(eventName, function() {
-                    violitRuntime.postLiteAction(config.cid, readCurrentValue());
+            if (transport === 'lite-direct') {
+                controlTargets.forEach(function(target, index) {
+                    const listenerKey = `lite-direct-${config.cid}-${eventName}-${index}`;
+                    if (violitRuntime.markBound(target, listenerKey)) {
+                        return;
+                    }
+                    target.addEventListener(eventName, function() {
+                        scheduleControlDispatch(`lite_${config.cid}_${eventName}`, function(nextValue) {
+                            violitRuntime.postLiteAction(config.cid, nextValue);
+                        });
+                    });
                 });
             }
 
-            if (transport === 'lite-hx' && config.useEchoGuard !== false && !violitRuntime.markBound(element, `lite-echo-${config.cid}-${eventName}`)) {
-                element.addEventListener(eventName, function(event) {
-                    if (!shouldSkipEcho()) return;
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                }, true);
+            if (transport === 'lite-hx' && config.useEchoGuard !== false) {
+                controlTargets.forEach(function(target, index) {
+                    const listenerKey = `lite-echo-${config.cid}-${eventName}-${index}`;
+                    if (violitRuntime.markBound(target, listenerKey)) {
+                        return;
+                    }
+                    target.addEventListener(eventName, function(event) {
+                        if (!shouldSkipEcho()) return;
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                    }, true);
+                });
             }
 
             const bindSubmitOnEnter = function(attempts) {
@@ -1528,17 +1687,113 @@
         function copyElementAttributes(target, source) {
             if (!target || !source) return;
 
+            const preserve = new Set(['id', 'data-vl-ag-grid-mounted']);
+
             Array.from(target.getAttributeNames()).forEach((name) => {
-                if (name !== 'id') {
+                if (!preserve.has(name)) {
                     target.removeAttribute(name);
                 }
             });
 
             Array.from(source.getAttributeNames()).forEach((name) => {
-                if (name !== 'id') {
+                if (!preserve.has(name)) {
                     target.setAttribute(name, source.getAttribute(name));
                 }
             });
+        }
+
+        if (typeof window._vlFindAgGridViewport !== 'function') {
+            window._vlFindAgGridViewport = (root) => {
+                const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+                const candidates = Array.from(scope.querySelectorAll('.ag-center-cols-viewport, .ag-body-viewport'));
+                if (!candidates.length) {
+                    return null;
+                }
+                return candidates.find((candidate) => {
+                    return candidate.scrollTop > 0 || candidate.scrollLeft > 0 || candidate.scrollHeight > candidate.clientHeight || candidate.scrollWidth > candidate.clientWidth;
+                }) || candidates[0];
+            };
+        }
+
+        if (typeof window._vlCaptureAgGridScroll !== 'function') {
+            window._vlCaptureAgGridScroll = (root) => {
+                const viewport = window._vlFindAgGridViewport(root);
+                if (!viewport) {
+                    return null;
+                }
+                return {
+                    top: viewport.scrollTop || 0,
+                    left: viewport.scrollLeft || 0
+                };
+            };
+        }
+
+        if (typeof window._vlHideAgGridDuringScrollRestore !== 'function') {
+            window._vlHideAgGridDuringScrollRestore = (root, state) => {
+                if (!root || !state || ((state.top || 0) === 0 && (state.left || 0) === 0)) {
+                    return () => {};
+                }
+
+                return () => {};
+            };
+        }
+
+        if (typeof window._vlRestoreAgGridScroll !== 'function') {
+            window._vlRestoreAgGridScroll = (root, state, onDone) => {
+                if (!state) {
+                    if (typeof onDone === 'function') {
+                        onDone();
+                    }
+                    return;
+                }
+
+                let attempts = 0;
+                const maxAttempts = 12;
+                let finished = false;
+
+                const finish = () => {
+                    if (finished) {
+                        return;
+                    }
+                    finished = true;
+                    if (typeof onDone === 'function') {
+                        onDone();
+                    }
+                };
+
+                const restore = () => {
+                    const viewport = window._vlFindAgGridViewport(root);
+                    if (!viewport) {
+                        if (attempts < maxAttempts) {
+                            attempts += 1;
+                            requestAnimationFrame(restore);
+                        } else {
+                            finish();
+                        }
+                        return;
+                    }
+
+                    viewport.scrollTop = state.top || 0;
+                    viewport.scrollLeft = state.left || 0;
+
+                    if (attempts < 2) {
+                        attempts += 1;
+                        requestAnimationFrame(restore);
+                        return;
+                    }
+
+                    setTimeout(() => {
+                        const finalViewport = window._vlFindAgGridViewport(root);
+                        if (finalViewport) {
+                            finalViewport.scrollTop = state.top || 0;
+                            finalViewport.scrollLeft = state.left || 0;
+                        }
+                        finish();
+                    }, 80);
+                };
+
+                restore();
+            };
         }
 
         function getSingleAgGridMount(root) {
@@ -2653,15 +2908,25 @@
             mo.observe(document.body, { childList: true, subtree: true });
         }
 
-        // Initialize Resizer
-        document.addEventListener('DOMContentLoaded', function() {
-            syncSidebarWidthFromStorage();
-            setupSidebarResizer();
-            window._vlLoadLib('Plotly', setupPlotlyResizer);
+        const scheduleDocumentScopeInit = function() {
             if (window.violitRuntime && typeof window.violitRuntime.scheduleScopeInit === 'function') {
                 window.violitRuntime.scheduleScopeInit(document);
             }
-        });
+        };
+
+        const initializeDomReadyRuntime = function() {
+            syncSidebarWidthFromStorage();
+            setupSidebarResizer();
+            window._vlLoadLib('Plotly', setupPlotlyResizer);
+            scheduleDocumentScopeInit();
+        };
+
+        // Initialize Resizer and custom element bindings once the DOM exists.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeDomReadyRuntime, { once: true });
+        } else {
+            initializeDomReadyRuntime();
+        }
 
         if (mode === 'ws') {
             // Interval infrastructure
@@ -3364,6 +3629,10 @@
                                         smartUpdated = trySmartUpdateTextLikeWidget(el, item.html);
                                     }
 
+                                    if (!smartUpdated) {
+                                        smartUpdated = trySmartUpdateCustomWidgetWrapper(el, item.html);
+                                    }
+
                                     if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('[data-chat-thread="true"]')) {
                                         smartUpdated = trySmartUpdateChatThreadWrapper(el, item.html);
                                     }
@@ -3700,14 +3969,24 @@
             }
         } else {
              // Lite Mode (HTMX) specifics
-            document.addEventListener('DOMContentLoaded', () => {
+            const initializeLiteModeRuntime = () => {
                 connectLiteStream();
 
-                document.body.addEventListener('htmx:beforeSwap', function(evt) {
-                    if (evt.detail.target) {
-                        purgePlotly(evt.detail.target);
-                    }
-                });
+                if (document.body && document.body.dataset.vlLiteRuntimeBound !== 'true') {
+                    document.body.dataset.vlLiteRuntimeBound = 'true';
+
+                    document.body.addEventListener('htmx:beforeSwap', function(evt) {
+                        if (evt.detail.target) {
+                            purgePlotly(evt.detail.target);
+                        }
+                    });
+
+                    // HTMX swaps can inject whole page/widget trees in lite mode.
+                    // Re-run custom initializers so input-control bindings exist on the new DOM.
+                    document.body.addEventListener('htmx:afterSettle', function() {
+                        scheduleDocumentScopeInit();
+                    });
+                }
                 
                 // Hot reload support for lite mode: poll server health
                 let serverAlive = true;
@@ -3743,7 +4022,13 @@
                         });
                 };
                 setInterval(checkServerHealth, 2000);
-            });
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeLiteModeRuntime, { once: true });
+            } else {
+                initializeLiteModeRuntime();
+            }
         }
         
         function toggleSidebar() {

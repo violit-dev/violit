@@ -361,7 +361,21 @@ LOCAL_VENDOR_RESOURCES = """
         const fallbackIconUrl = '/static/vendor/fontawesome/regular/circle-question.svg';
         const originalDefaultIconLibrary = getIconLibrary('default');
         const localIconManifestPromise = fetch('/static/vendor/fontawesome/manifest.json')
-            .then((response) => response.ok ? response.json() : { solid: [], regular: ['circle-question'], brands: [] })
+            .then(async (response) => {
+                if (!response.ok) {
+                    return { solid: [], regular: ['circle-question'], brands: [] };
+                }
+
+                const rawText = await response.text();
+                const normalizedText = rawText.replace(/^\uFEFF/, '');
+
+                try {
+                    return JSON.parse(normalizedText);
+                } catch (error) {
+                    console.warn('[violit] failed to parse local Font Awesome manifest', error);
+                    return { solid: [], regular: ['circle-question'], brands: [] };
+                }
+            })
             .catch(() => ({ solid: [], regular: ['circle-question'], brands: [] }))
             .then((manifest) => ({
                 solid: new Set(manifest.solid || []),

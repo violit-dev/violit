@@ -73,6 +73,39 @@ class DataWidgetsMixin:
         return isinstance(current_value, pd.DataFrame) or isinstance(seed_value, pd.DataFrame)
 
     @staticmethod
+    def _infer_data_editor_column_type(series: Any) -> Optional[str]:
+        try:
+            import pandas as pd  # type: ignore
+        except Exception:
+            pd = None
+
+        dtype = getattr(series, "dtype", None)
+        if pd is not None:
+            try:
+                if pd.api.types.is_bool_dtype(dtype):
+                    return "boolean"
+                if pd.api.types.is_numeric_dtype(dtype):
+                    return "number"
+                if pd.api.types.is_datetime64_any_dtype(dtype):
+                    return "date"
+            except Exception:
+                pass
+
+        sample_values = []
+        if hasattr(series, "dropna"):
+            try:
+                non_null = series.dropna()
+                sample_values = list(non_null.head(5)) if hasattr(non_null, "head") else list(non_null)[:5]
+            except Exception:
+                sample_values = []
+
+        if sample_values and all(isinstance(value, bool) for value in sample_values):
+            return "boolean"
+        if sample_values and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in sample_values):
+            return "number"
+        return None
+
+    @staticmethod
     def _build_ag_grid_theme_style(theme: str = "auto", theme_colors: Optional[dict] = None) -> str:
         mode = (theme or "auto").lower()
         if mode == "dark":
@@ -487,7 +520,7 @@ class DataWidgetsMixin:
                         rowData: params.data,
                         rowIndex: params.rowIndex
                     }};
-                    {f"window.sendAction('{cid}', cellData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(cellData)}}, swap: 'none'}});"}
+                    {f"window.sendAction('{cid}', cellData);" if self.mode == 'ws' else f"if (window.violitRuntime && typeof window.violitRuntime.postLiteAction === 'function') {{ window.violitRuntime.postLiteAction('{cid}', cellData); }} else if (window.htmx && typeof window.htmx.ajax === 'function') {{ htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(cellData), _csrf_token: window._csrf_token || '', _vl_view_id: window._vlViewId || ''}}, swap: 'none'}}); }}"}
                 }},
                 '''
             
@@ -815,7 +848,9 @@ class DataWidgetsMixin:
                 if column_name in disabled_columns:
                     column_editable = False
 
-                editor_type = current_config.pop("type", current_config.pop("editor", "text"))
+                explicit_editor_type = current_config.pop("type", current_config.pop("editor", None))
+                inferred_editor_type = self._infer_data_editor_column_type(source_df[column_name]) if column_name in source_df.columns else None
+                editor_type = explicit_editor_type or inferred_editor_type or "text"
                 editor_options = current_config.pop("options", current_config.pop("values", None))
                 number_min = current_config.pop("min", None)
                 number_max = current_config.pop("max", None)
@@ -920,6 +955,19 @@ class DataWidgetsMixin:
                 const rawColumnDefs = {json.dumps(cols, default=str)};
                 const initialRowData = {json.dumps(data, default=str)};
                 const extraGridOptions = {json.dumps(extra_options, default=str)};
+
+                function postEditorAction(payload) {{
+                    if (window.violitRuntime && typeof window.violitRuntime.postLiteAction === 'function') {{
+                        window.violitRuntime.postLiteAction('{cid}', payload, {{ skipClicked: false }});
+                        return;
+                    }}
+                    if (window.htmx && typeof window.htmx.ajax === 'function') {{
+                        htmx.ajax('POST', '/action/{cid}', {{
+                            values: {{ value: JSON.stringify(payload) }},
+                            swap: 'none'
+                        }});
+                    }}
+                }}
 
                 function moveCaretToEnd(input) {{
                     if (!input) {{
@@ -1107,7 +1155,7 @@ class DataWidgetsMixin:
                                 rowData: params.data,
                                 allData
                             }};
-                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
+                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else "postEditorAction(payload);"}
                         }} : undefined,
                         onCellValueChanged: (params) => {{
                             if (params.oldValue === params.newValue) {{
@@ -1124,7 +1172,7 @@ class DataWidgetsMixin:
                                 rowData: params.data,
                                 allData
                             }};
-                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
+                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else "postEditorAction(payload);"}
                         }},
                         onSelectionChanged: selectionMode ? () => {{
                             syncDeleteSelectedButtonState();
@@ -1173,7 +1221,7 @@ class DataWidgetsMixin:
                             selectedRowIndexes: Array.from(selectedIndexSet.values()),
                             allData: remainingData,
                         }};
-                        {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
+                        {f"sendAction('{cid}', payload);" if self.mode == 'ws' else "postEditorAction(payload);"}
                     }};
                     
                     window.addDataRow_{cid} = function() {{
@@ -1205,7 +1253,7 @@ class DataWidgetsMixin:
                             const allData = [];
                             api.forEachNode(node => allData.push(node.data));
                             const payload = {{ eventType: 'row_added', rowData: newRow, allData }};
-                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(payload)}} , swap: 'none'}});"}
+                            {f"sendAction('{cid}', payload);" if self.mode == 'ws' else "postEditorAction(payload);"}
                         }}
                     }};
                 }}
