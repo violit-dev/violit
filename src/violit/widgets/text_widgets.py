@@ -2,8 +2,11 @@
 
 import base64
 import html as html_lib
+import os
 import re
 import time
+from html.parser import HTMLParser
+from pathlib import Path
 from typing import Union, Callable, Optional, Any
 from urllib.parse import urlparse
 
@@ -15,6 +18,51 @@ except ImportError:  # pragma: no cover - dependency should be installed with vi
 from ..component import Component
 from ..context import rendering_ctx
 from ..style_utils import merge_cls, merge_style
+
+
+_HTML_VOID_TAGS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
+
+_HTML_BLOCKED_TAGS = {
+    "base",
+    "embed",
+    "iframe",
+    "link",
+    "meta",
+    "object",
+}
+
+_HTML_URL_ATTRS = {"href", "src", "poster", "action", "formaction", "xlink:href"}
+
+_SAFE_HTML_DATA_MIME_PREFIXES = (
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/webm",
+    "audio/ogg",
+    "video/mp4",
+    "video/webm",
+    "video/ogg",
+)
 
 
 def _sanitize_text_key(value: Any) -> str:
@@ -51,6 +99,248 @@ def _sanitize_markdown_src(raw_src: str) -> str | None:
         allowed_schemes={"http", "https"},
         allow_relative=False,
     )
+
+
+def _is_safe_html_data_url(url: str) -> bool:
+    lowered = url.lower()
+    if not lowered.startswith("data:"):
+        return False
+    header = lowered[5:].split(",", 1)[0].strip()
+    mime = header.split(";", 1)[0].strip()
+    return any(mime.startswith(prefix) for prefix in _SAFE_HTML_DATA_MIME_PREFIXES)
+
+
+def _sanitize_html_url(raw_url: str, *, attr_name: str) -> str | None:
+    url = html_lib.unescape(raw_url).strip()
+    if not url or url.startswith("//"):
+        return None
+
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    if scheme:
+        if scheme == "data" and attr_name in {"src", "poster"} and _is_safe_html_data_url(url):
+            return html_lib.escape(url, quote=True)
+        if scheme not in {"http", "https", "mailto", "tel", "blob"}:
+            return None
+
+    return html_lib.escape(url, quote=True)
+
+
+def _sanitize_css_text(css_text: str) -> str:
+    sanitized = css_text
+    sanitized = re.sub(r"(?is)expression\s*\([^)]*\)", "", sanitized)
+    sanitized = re.sub(r"(?is)-moz-binding\s*:[^;{}]+;?", "", sanitized)
+    sanitized = re.sub(r"(?is)behavior\s*:[^;{}]+;?", "", sanitized)
+    sanitized = re.sub(r"(?is)url\s*\(\s*(['\"]?)\s*javascript:[^)]*\)", "", sanitized)
+    return sanitized.strip()
+
+
+def _sanitize_html_style(raw_style: str) -> str:
+    return _sanitize_css_text(html_lib.unescape(raw_style))
+
+
+def _merge_anchor_rel(attrs: list[tuple[str, Optional[str]]]) -> list[tuple[str, Optional[str]]]:
+    rel_index = next((index for index, (name, _) in enumerate(attrs) if name.lower() == "rel"), None)
+    existing_tokens: list[str] = []
+    if rel_index is not None and attrs[rel_index][1]:
+        existing_tokens = str(attrs[rel_index][1]).split()
+    merged_tokens = []
+    for token in [*existing_tokens, "noopener", "noreferrer"]:
+        if token and token not in merged_tokens:
+            merged_tokens.append(token)
+    if rel_index is None:
+        attrs.append(("rel", " ".join(merged_tokens)))
+    else:
+        attrs[rel_index] = ("rel", " ".join(merged_tokens))
+    return attrs
+
+
+def _sanitize_html_attrs(tag: str, attrs: list[tuple[str, Optional[str]]]) -> list[tuple[str, Optional[str]]]:
+    cleaned: list[tuple[str, Optional[str]]] = []
+    target_blank = False
+
+    for raw_name, raw_value in attrs:
+        if not raw_name:
+            continue
+        name = raw_name.strip()
+        if not re.fullmatch(r"[A-Za-z_:][-A-Za-z0-9_:.]*", name):
+            continue
+
+        lower_name = name.lower()
+        if lower_name.startswith("on") or lower_name == "srcdoc":
+            continue
+
+        if lower_name == "style":
+            if raw_value is None:
+                continue
+            safe_style = _sanitize_html_style(str(raw_value))
+            if safe_style:
+                cleaned.append((name, safe_style))
+            continue
+
+        if lower_name in _HTML_URL_ATTRS:
+            if raw_value is None:
+                continue
+            safe_url = _sanitize_html_url(str(raw_value), attr_name=lower_name)
+            if safe_url is not None:
+                cleaned.append((name, html_lib.unescape(safe_url)))
+            continue
+
+        if lower_name == "target" and raw_value is not None:
+            target_value = str(raw_value).strip()
+            if target_value:
+                cleaned.append((name, target_value))
+                if target_value.lower() == "_blank":
+                    target_blank = True
+            continue
+
+        if raw_value is None:
+            cleaned.append((name, None))
+        else:
+            cleaned.append((name, html_lib.unescape(str(raw_value))))
+
+    if tag == "a" and target_blank:
+        cleaned = _merge_anchor_rel(cleaned)
+
+    return cleaned
+
+
+def _serialize_html_attrs(attrs: list[tuple[str, Optional[str]]]) -> str:
+    parts = []
+    for name, value in attrs:
+        lower_name = name.lower()
+        if value is None:
+            parts.append(lower_name)
+        else:
+            parts.append(f'{lower_name}="{html_lib.escape(str(value), quote=True)}"')
+    return " ".join(parts)
+
+
+class _SafeHtmlParser(HTMLParser):
+    def __init__(self, *, allow_javascript: bool):
+        super().__init__(convert_charrefs=False)
+        self.allow_javascript = allow_javascript
+        self.parts: list[str] = []
+        self._blocked_stack: list[str] = []
+        self._open_tags: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]):
+        lower_tag = tag.lower()
+        if lower_tag in _HTML_BLOCKED_TAGS or (lower_tag == "script" and not self.allow_javascript):
+            self._blocked_stack.append(lower_tag)
+            return
+        if self._blocked_stack:
+            return
+
+        serialized_attrs = _serialize_html_attrs(_sanitize_html_attrs(lower_tag, attrs))
+        attr_suffix = f" {serialized_attrs}" if serialized_attrs else ""
+        self.parts.append(f"<{lower_tag}{attr_suffix}>")
+        if lower_tag not in _HTML_VOID_TAGS:
+            self._open_tags.append(lower_tag)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, Optional[str]]]):
+        lower_tag = tag.lower()
+        if lower_tag in _HTML_BLOCKED_TAGS or (lower_tag == "script" and not self.allow_javascript):
+            return
+        if self._blocked_stack:
+            return
+
+        serialized_attrs = _serialize_html_attrs(_sanitize_html_attrs(lower_tag, attrs))
+        attr_suffix = f" {serialized_attrs}" if serialized_attrs else ""
+        self.parts.append(f"<{lower_tag}{attr_suffix} />")
+
+    def handle_endtag(self, tag: str):
+        lower_tag = tag.lower()
+        if self._blocked_stack:
+            if lower_tag == self._blocked_stack[-1]:
+                self._blocked_stack.pop()
+            return
+        if lower_tag in _HTML_VOID_TAGS:
+            return
+        self.parts.append(f"</{lower_tag}>")
+        if self._open_tags:
+            for index in range(len(self._open_tags) - 1, -1, -1):
+                if self._open_tags[index] == lower_tag:
+                    del self._open_tags[index]
+                    break
+
+    def handle_data(self, data: str):
+        if self._blocked_stack:
+            return
+        if self._open_tags and self._open_tags[-1] == "style":
+            self.parts.append(_sanitize_css_text(data))
+            return
+        self.parts.append(data)
+
+    def handle_entityref(self, name: str):
+        if not self._blocked_stack:
+            self.parts.append(f"&{name};")
+
+    def handle_charref(self, name: str):
+        if not self._blocked_stack:
+            self.parts.append(f"&#{name};")
+
+    def handle_comment(self, data: str):
+        if not self._blocked_stack:
+            self.parts.append(f"<!--{data}-->")
+
+    def get_html(self) -> str:
+        return "".join(self.parts)
+
+
+def _sanitize_html_fragment(html_text: str, *, allow_javascript: bool) -> str:
+    parser = _SafeHtmlParser(allow_javascript=allow_javascript)
+    parser.feed(html_text)
+    parser.close()
+    return parser.get_html()
+
+
+def _resolve_html_body_part(value: Any) -> str:
+    if isinstance(value, os.PathLike):
+        path = Path(value)
+        if path.is_file():
+            file_text = path.read_text(encoding="utf-8")
+            if path.suffix.lower() == ".css":
+                return f"<style>\n{file_text}\n</style>"
+            return file_text
+        return str(path)
+
+    if isinstance(value, str):
+        possible_path = Path(value)
+        if possible_path.is_file():
+            file_text = possible_path.read_text(encoding="utf-8")
+            if possible_path.suffix.lower() == ".css":
+                return f"<style>\n{file_text}\n</style>"
+            return file_text
+        return value
+
+    repr_html = getattr(value, "_repr_html_", None)
+    if callable(repr_html):
+        rendered = repr_html()
+        if rendered is not None:
+            return str(rendered)
+
+    return str(value)
+
+
+def _resolve_html_body(*parts: Any) -> str:
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return _resolve_html_body_part(parts[0])
+    return " ".join(_resolve_html_body_part(part) for part in parts)
+
+
+def _resolve_html_width_style(width: Union[str, int]) -> str:
+    if width == "stretch":
+        return "display:block; width:100%;"
+    if width == "content":
+        return "display:inline-block; width:max-content; max-width:100%;"
+    if isinstance(width, int) and not isinstance(width, bool):
+        if width <= 0:
+            raise ValueError("html() width must be a positive integer.")
+        return f"display:block; width:min({width}px, 100%); max-width:100%;"
+    raise ValueError("html() width must be 'stretch', 'content', or a positive integer.")
 
 
 def _inject_style_attr(opening_tag: str, style: str, *, extra_attrs: list[str] | None = None) -> str:
@@ -656,7 +946,7 @@ class TextWidgetsMixin:
             help: Tooltip text
         """
         if unsafe_allow_html:
-            self.html(*args, key=key, cls=f"text-small text-muted {cls}", style=style)
+            self.unsafe_html(*args, key=key, cls=f"text-small text-muted {cls}", style=style)
         else:
             self.text(*args, size="small", muted=True, key=key, cls=cls, style=style)
 
@@ -695,34 +985,86 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=html, class_=_fc, style=_fs or None, **props)
         self._register_component(cid, builder)
     
-    def html(self, *args, key: Optional[Union[str, int]] = None, cls: str = "", style: str = "", **props):
-        """Display raw HTML content
-        
-        Use this when you need to render HTML directly without markdown processing.
-        For markdown formatting, use app.markdown() instead.
-        
-        Example:
-            app.html('<div class="custom">', count, '</div>')
+    def html(
+        self,
+        body: Any,
+        *extra_body: Any,
+        width: Union[str, int] = "stretch",
+        unsafe_allow_javascript: bool = False,
+        key: Optional[Union[str, int]] = None,
+        cls: str = "",
+        style: str = "",
+        **props,
+    ):
+        """Insert HTML into the app.
+
+        This follows Streamlit's st.html closely: HTML is sanitized by default,
+        JavaScript is ignored unless unsafe_allow_javascript=True, and true raw
+        passthrough is available separately via unsafe_html().
         """
+        if "unsafe_allow_html" in props:
+            raise TypeError("html() no longer accepts unsafe_allow_html. Use unsafe_html().")
+
         cid = f"html_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("html")
         def builder():
             from ..state import State, ComputedState
             token = rendering_ctx.set(cid)
             
             parts = []
-            for arg in args:
+            for arg in (body, *extra_body):
                 if isinstance(arg, (State, ComputedState)):
-                    parts.append(str(arg.value))
+                    parts.append(arg.value)
                 elif callable(arg):
-                    parts.append(str(arg()))
+                    parts.append(arg())
                 else:
-                    parts.append(str(arg))
-            
-            content = " ".join(parts)
+                    parts.append(arg)
+
+            content = _resolve_html_body(*parts)
             rendering_ctx.reset(token)
+            if not content.strip():
+                raise ValueError("html() body cannot be empty.")
             _wd = self._get_widget_defaults("html")
             _fc = merge_cls(_wd.get("cls", ""), cls)
-            _fs = merge_style(_wd.get("style", ""), style)
+            _fs = merge_style(_wd.get("style", ""), style, _resolve_html_width_style(width))
+            safe_content = _sanitize_html_fragment(content, allow_javascript=unsafe_allow_javascript)
+            return Component("div", id=cid, content=safe_content, class_=_fc or None, style=_fs or None, **props)
+        self._register_component(cid, builder)
+
+    def unsafe_html(
+        self,
+        body: Any,
+        *extra_body: Any,
+        width: Union[str, int] = "stretch",
+        key: Optional[Union[str, int]] = None,
+        cls: str = "",
+        style: str = "",
+        **props,
+    ):
+        """Render raw HTML without sanitization.
+
+        This is the truly dangerous HTML API. Never pass untrusted input here.
+        """
+        cid = f"html_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("html")
+        def builder():
+            from ..state import State, ComputedState
+            token = rendering_ctx.set(cid)
+
+            parts = []
+            for arg in (body, *extra_body):
+                if isinstance(arg, (State, ComputedState)):
+                    parts.append(arg.value)
+                elif callable(arg):
+                    parts.append(arg())
+                else:
+                    parts.append(arg)
+
+            content = _resolve_html_body(*parts)
+            rendering_ctx.reset(token)
+            if not content.strip():
+                raise ValueError("unsafe_html() body cannot be empty.")
+            _wd = self._get_widget_defaults("html")
+            _fc = merge_cls(_wd.get("cls", ""), cls)
+            _fs = merge_style(_wd.get("style", ""), style, _resolve_html_width_style(width))
             return Component("div", id=cid, content=content, class_=_fc or None, style=_fs or None, **props)
         self._register_component(cid, builder)
 

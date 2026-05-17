@@ -1807,7 +1807,7 @@ class App(
                 },
             )
         else:
-            self.html(f"<script>{js_code}</script>")
+            self.unsafe_html(f"<script>{js_code}</script>")
 
         return IntervalHandle(interval_id, self)
 

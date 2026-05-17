@@ -1379,7 +1379,7 @@ class ChatWidgetsMixin:
 
             def __enter__(self):
                 self._entered = self.wrapped_ctx.__enter__()
-                self.app.html(
+                self.app.unsafe_html(
                     f"""
                     <script>
                     (function() {{
@@ -1444,8 +1444,7 @@ class ChatWidgetsMixin:
                         setTimeout(scheduleScrollToLatest, 320);
                     }})();
                     </script>
-                    """,
-                    unsafe_allow_html=True,
+                    """
                 )
                 return self._entered
 
