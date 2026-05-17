@@ -9,7 +9,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.websockets import WebSocketState
 
 from .app_assets import get_preconnect_links, get_vendor_resources
@@ -518,6 +518,42 @@ class AppRuntimeMixin:
                 return Response(
                     content=file_bytes,
                     media_type=media_type,
+                    headers={
+                        "Cache-Control": "private, max-age=3600, immutable",
+                        "Content-Disposition": f'inline; filename="{safe_file_name}"',
+                    },
+                )
+            finally:
+                self._reset_runtime_context(session_token, view_token)
+
+        @self.fastapi.get("/__violit_media/{media_id}")
+        async def widget_media(request: Request, media_id: str):
+            sid = request.cookies.get("ss_sid")
+            if not sid:
+                return Response(status_code=404)
+
+            current_view_id = self._resolve_http_view_id(request, sid, generate=False)
+            session_token, view_token = self._set_runtime_context(sid, current_view_id)
+            try:
+                import os
+
+                store = get_session_store()
+                registry = store.get("_vl_media_sources") or {}
+                payload = registry.get(media_id)
+                if not isinstance(payload, dict):
+                    return Response(status_code=404)
+
+                media_path = str(payload.get("path") or "").strip()
+                if not media_path or not os.path.exists(media_path) or not os.path.isfile(media_path):
+                    return Response(status_code=404)
+
+                media_type = str(payload.get("media_type") or "application/octet-stream")
+                file_name = str(payload.get("name") or os.path.basename(media_path) or "media")
+                safe_file_name = file_name.replace('"', "")
+                return FileResponse(
+                    path=media_path,
+                    media_type=media_type,
+                    filename=safe_file_name,
                     headers={
                         "Cache-Control": "private, max-age=3600, immutable",
                         "Content-Disposition": f'inline; filename="{safe_file_name}"',

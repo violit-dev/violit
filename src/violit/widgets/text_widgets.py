@@ -1235,38 +1235,11 @@ class TextWidgetsMixin:
                     <pre class="violit-code-pre"><code class="{code_classes}" data-vl-syntax-highlighting="{'true' if should_highlight else 'false'}">{escaped_code}</code></pre>
                 </div>
             </div>
-            <script>
-            (function() {{
-                function highlight() {{
-                    var el = document.getElementById('{cid}');
-                    if (el && typeof hljs !== 'undefined') {{
-                        el.querySelectorAll('pre code').forEach(function(block) {{
-                            if (block.dataset.vlSyntaxHighlighting !== 'true') {{
-                                block.classList.add('nohighlight');
-                                return;
-                            }}
-                            if (block.dataset.highlighted) {{
-                                delete block.dataset.highlighted;
-                            }}
-                            hljs.highlightElement(block);
-                        }});
-                    }}
-                }}
-                
-                window._vlLoadLib('hljs', function() {{
-                    if (document.readyState === 'loading') {{
-                        document.addEventListener('DOMContentLoaded', highlight);
-                    }} else {{
-                        highlight();
-                    }}
-                }});
-            }})();
-            </script>
             '''
             _wd = self._get_widget_defaults("code")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
-            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None, **props)
+            return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None, data_vl_init="code-highlight", **props)
         self._register_component(cid, builder)
 
     def divider(self, cls: str = "", style: str = ""):
@@ -1313,29 +1286,12 @@ class TextWidgetsMixin:
             rendering_ctx.reset(token)
 
             formula_js = _json.dumps(val)
+            katex_config = html_lib.escape(_json.dumps({"formula": val, "displayMode": True}), quote=True)
             _wd = self._get_widget_defaults("latex")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style("padding:0.5rem 0; text-align:center; font-size:1.1rem;", _wd.get("style", ""), style)
 
-            html = f'''<div id="{cid}" class="{_fc}" style="{_fs}"></div>
-            <script>
-            (function() {{
-                if (!document.getElementById('_vl_katex_css')) {{
-                    var lnk = document.createElement('link');
-                    lnk.id = '_vl_katex_css'; lnk.rel = 'stylesheet';
-                    lnk.href = '/static/vendor/katex/katex.min.css';
-                    document.head.appendChild(lnk);
-                }}
-                window._vlLoadLib('katex', function() {{
-                    var el = document.getElementById('{cid}');
-                    if (el) {{
-                        try {{
-                            katex.render({formula_js}, el, {{throwOnError: false, displayMode: true}});
-                        }} catch(e) {{ el.textContent = {formula_js}; }}
-                    }}
-                }});
-            }})();
-            </script>'''
+            html = f'''<div id="{cid}" class="{_fc}" style="{_fs}" data-vl-init="katex-render" data-vl-katex-config="{katex_config}"></div>'''
             return Component(None, id=cid, content=html)
         self._register_component(cid, builder)
 

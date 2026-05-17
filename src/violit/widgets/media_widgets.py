@@ -2,9 +2,62 @@
 
 from typing import Union, Optional
 import base64
+import mimetypes
+import os
+import urllib.parse
+import uuid
 from ..component import Component
-from ..context import rendering_ctx
+from ..context import rendering_ctx, session_ctx, view_ctx
+from ..state import get_session_store
 from ..style_utils import merge_cls, merge_style
+
+
+def _media_data_url(file_bytes: bytes, media_type: str) -> str:
+    if not file_bytes:
+        return ""
+    encoded = base64.b64encode(file_bytes).decode("utf-8")
+    return f"data:{media_type};base64,{encoded}"
+
+
+def _guess_media_type(path: str, fallback: str) -> str:
+    guessed, _ = mimetypes.guess_type(path)
+    return guessed or fallback
+
+
+def _media_public_url(app, path: str, media_type: str) -> str:
+    if session_ctx.get() is None:
+        try:
+            with open(path, "rb") as handle:
+                return _media_data_url(handle.read(), media_type)
+        except Exception:
+            return path
+
+    resolved_path = os.path.abspath(path)
+    store = get_session_store()
+    registry = store.setdefault("_vl_media_sources", {})
+    media_id = uuid.uuid4().hex
+    registry[media_id] = {
+        "path": resolved_path,
+        "media_type": media_type,
+        "name": os.path.basename(resolved_path) or "media",
+    }
+    url = app._public_path(f"/__violit_media/{media_id}")
+    current_view_id = str(view_ctx.get() or "").strip()
+    if not current_view_id:
+        return url
+
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}_vl_view_id={urllib.parse.quote(current_view_id, safe='')}"
+
+
+def _resolve_local_media_src(app, source: str, fallback_media_type: str) -> str:
+    if source.startswith(("http://", "https://", "data:", "blob:")):
+        return source
+    if not os.path.exists(source):
+        return source
+
+    media_type = _guess_media_type(source, fallback_media_type)
+    return _media_public_url(app, source, media_type)
 
 
 class MediaWidgetsMixin:
@@ -19,29 +72,11 @@ class MediaWidgetsMixin:
             img_src = ""
             
             if isinstance(image, str):
-                # URL or file path
-                if image.startswith(('http://', 'https://')):
-                    img_src = image
-                else:
-                    # Local file - read and convert to base64
-                    try:
-                        import os
-                        if os.path.exists(image):
-                            with open(image, 'rb') as f:
-                                img_data = f.read()
-                                img_base64 = base64.b64encode(img_data).decode('utf-8')
-                                # Detect image type
-                                ext = os.path.splitext(image)[1].lower()
-                                mime_types = {'.jpg': 'jpeg', '.jpeg': 'jpeg', '.png': 'png', '.gif': 'gif', '.webp': 'webp'}
-                                mime = mime_types.get(ext, 'png')
-                                img_src = f"data:image/{mime};base64,{img_base64}"
-                    except Exception:
-                        img_src = image  # Fallback to treating as URL
+                img_src = _resolve_local_media_src(self, image, "image/png")
             elif hasattr(image, 'read'):
                 # File-like object
                 img_data = image.read()
-                img_base64 = base64.b64encode(img_data).decode('utf-8')
-                img_src = f"data:image/png;base64,{img_base64}"
+                img_src = _media_data_url(img_data, "image/png")
             else:
                 # Try numpy array (PIL Image, etc.)
                 try:
@@ -57,8 +92,7 @@ class MediaWidgetsMixin:
                     buf = io.BytesIO()
                     pil_img.save(buf, format='PNG')
                     buf.seek(0)
-                    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-                    img_src = f"data:image/png;base64,{img_base64}"
+                    img_src = _media_data_url(buf.read(), "image/png")
                 except Exception:
                     img_src = str(image)
             
@@ -167,23 +201,10 @@ class MediaWidgetsMixin:
             audio_src = ""
             
             if isinstance(audio, str):
-                if audio.startswith(('http://', 'https://')):
-                    audio_src = audio
-                else:
-                    # Local file - read and convert to base64
-                    try:
-                        import os
-                        if os.path.exists(audio):
-                            with open(audio, 'rb') as f:
-                                audio_data = f.read()
-                                audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-                                audio_src = f"data:{format};base64,{audio_base64}"
-                    except Exception:
-                        audio_src = audio
+                audio_src = _resolve_local_media_src(self, audio, format)
             elif hasattr(audio, 'read'):
                 audio_data = audio.read()
-                audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-                audio_src = f"data:{format};base64,{audio_base64}"
+                audio_src = _media_data_url(audio_data, format)
             else:
                 # Numpy array (audio waveform)
                 try:
@@ -194,8 +215,7 @@ class MediaWidgetsMixin:
                     buf = io.BytesIO()
                     wavfile.write(buf, 44100, audio)
                     buf.seek(0)
-                    audio_base64 = base64.b64encode(buf.read()).decode('utf-8')
-                    audio_src = f"data:audio/wav;base64,{audio_base64}"
+                    audio_src = _media_data_url(buf.read(), "audio/wav")
                 except Exception:
                     audio_src = str(audio)
             
@@ -226,23 +246,10 @@ class MediaWidgetsMixin:
             video_src = ""
             
             if isinstance(video, str):
-                if video.startswith(('http://', 'https://')):
-                    video_src = video
-                else:
-                    # Local file - read and convert to base64
-                    try:
-                        import os
-                        if os.path.exists(video):
-                            with open(video, 'rb') as f:
-                                video_data = f.read()
-                                video_base64 = base64.b64encode(video_data).decode('utf-8')
-                                video_src = f"data:{format};base64,{video_base64}"
-                    except Exception:
-                        video_src = video
+                video_src = _resolve_local_media_src(self, video, format)
             elif hasattr(video, 'read'):
                 video_data = video.read()
-                video_base64 = base64.b64encode(video_data).decode('utf-8')
-                video_src = f"data:{format};base64,{video_base64}"
+                video_src = _media_data_url(video_data, format)
             else:
                 video_src = str(video)
             

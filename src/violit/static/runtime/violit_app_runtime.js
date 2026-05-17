@@ -985,6 +985,63 @@
             violitRuntime.bindAgGridSurface(config);
         });
 
+        function applyCodeHighlight(root) {
+            if (!root) {
+                return;
+            }
+            root.querySelectorAll('pre code').forEach(function(block) {
+                if (block.dataset.vlSyntaxHighlighting !== 'true') {
+                    block.classList.add('nohighlight');
+                    return;
+                }
+                if (block.dataset.highlighted) {
+                    delete block.dataset.highlighted;
+                }
+                if (typeof hljs !== 'undefined') {
+                    hljs.highlightElement(block);
+                }
+            });
+        }
+
+        function ensureKatexStylesheet() {
+            if (document.getElementById('_vl_katex_css')) {
+                return;
+            }
+            const link = document.createElement('link');
+            link.id = '_vl_katex_css';
+            link.rel = 'stylesheet';
+            link.href = '/static/vendor/katex/katex.min.css';
+            document.head.appendChild(link);
+        }
+
+        violitRuntime.registerInitializer('code-highlight', function(element) {
+            if (!element || violitRuntime.markBound(element, `code-highlight-${element.id}`)) {
+                return;
+            }
+            window._vlLoadLib('hljs', function() {
+                applyCodeHighlight(element);
+            });
+        });
+
+        violitRuntime.registerInitializer('katex-render', function(element) {
+            const config = violitRuntime.readJsonAttr(element, 'data-vl-katex-config', null);
+            if (!element || !config || typeof config.formula !== 'string') {
+                return;
+            }
+
+            ensureKatexStylesheet();
+            window._vlLoadLib('katex', function() {
+                try {
+                    katex.render(config.formula, element, {
+                        throwOnError: false,
+                        displayMode: config.displayMode !== false,
+                    });
+                } catch (error) {
+                    element.textContent = config.formula;
+                }
+            });
+        });
+
         window._vlHandleLiteSelectChange = async (element, cid) => {
             if (mode !== 'lite' || !element || !cid || typeof window.fetch !== 'function') {
                 return;
