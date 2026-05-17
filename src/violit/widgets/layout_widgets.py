@@ -305,6 +305,7 @@ class LayoutWidgetsMixin:
         """
         cid = self._get_next_cid("expander")
         summary_cid = f"{cid}__summary"
+        details_cid = f"{cid}__details"
         
         class ExpanderContext:
             def __init__(self, app, expander_id, label, expanded, icon=None, user_cls="", user_style=""):
@@ -371,11 +372,46 @@ class LayoutWidgetsMixin:
                     inner_html = "".join(htmls)
                     open_attr = "open" if self.expanded else ""
                     summary_html = summary_builder().render()
+                    restore_script = f'''
+                    <script>
+                    (function() {{
+                        const details = document.getElementById({details_cid!r});
+                        if (!details) return;
+
+                        const storageKey = {'vl_expander_open:' + self.expander_id!r};
+                        const storedOpen = sessionStorage.getItem(storageKey);
+                        const serverOpen = {str(bool(self.expanded)).lower()};
+                        const initialOpen = storedOpen === null ? serverOpen : storedOpen === 'true';
+
+                        const applyOpen = function(nextOpen) {{
+                            if (details.open !== nextOpen) {{
+                                details.open = nextOpen;
+                            }}
+                        }};
+
+                        applyOpen(initialOpen);
+                        requestAnimationFrame(function() {{
+                            applyOpen(initialOpen);
+                        }});
+
+                        if (!details.dataset.vlExpanderPersistenceBound) {{
+                            details.dataset.vlExpanderPersistenceBound = 'true';
+                            details.addEventListener('wa-show', function() {{
+                                sessionStorage.setItem(storageKey, 'true');
+                            }});
+                            details.addEventListener('wa-hide', function() {{
+                                sessionStorage.setItem(storageKey, 'false');
+                            }});
+                        }}
+                    }})();
+                    </script>
+                    '''
                     html = f'''
-                    <wa-details {open_attr} style="margin-bottom:1rem;">
+                    <wa-details id="{details_cid}" {open_attr} style="margin-bottom:1rem;">
                         {summary_html}
                         <div style="padding:0.5rem 0; display:flex; flex-direction:column; width:100%; min-width:0;">{inner_html}</div>
                     </wa-details>
+                    {restore_script}
                     '''
                     _wd = self.app._get_widget_defaults("expander")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
