@@ -78,6 +78,7 @@ class App(
         self.boot_id = uuid.uuid4().hex
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
+        app_instance_ref[0] = self
 
         # ── Initialize ORM / DB ──────────────────────────────────────────────
         self.db = None
@@ -406,8 +407,6 @@ class App(
         self._lite_stream_queues: Dict[tuple[str, str], queue.Queue] = {}
         self._lite_stream_lock = threading.Lock()
         self._main_loop: asyncio.AbstractEventLoop | None = None
-        app_instance_ref[0] = self
-        
         # Register core fragments/updaters
         self._theme_updater()
         self._selection_updater()
