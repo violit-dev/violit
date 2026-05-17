@@ -7,7 +7,7 @@ import inspect
 import json
 import re
 from ..component import Component
-from ..context import rendering_ctx
+from ..context import initial_render_ctx, rendering_ctx
 from ..state import State
 from ..style_utils import merge_cls, merge_style, resolve_value
 
@@ -405,6 +405,7 @@ class DataWidgetsMixin:
         
         def builder():
             import pandas as pd
+            defer_grid_init = bool(initial_render_ctx.get(False))
             # Handle Signal
             token = rendering_ctx.set(cid)
             try:
@@ -537,6 +538,10 @@ class DataWidgetsMixin:
                     }};
                     const el = document.querySelector('#{cid}');
                     if (el && window.agGrid) {{ 
+                        if (el.dataset.vlAgGridMounted === 'true') {{
+                            return;
+                        }}
+                        el.dataset.vlAgGridMounted = 'true';
                         const gridApi = agGrid.createGrid(el, opt);
                         window['gridApi_{cid}'] = gridApi;
                         if (window.violitRuntime && typeof window.violitRuntime.bindAgGridSurface === 'function') {{
@@ -546,11 +551,23 @@ class DataWidgetsMixin:
                     else {{ console.error("agGrid not found"); }}
                 }}
 
+                function startGrid() {{
+                    const surface = document.getElementById('{cid}_surface') || document.getElementById('{cid}');
+                    if ({str(defer_grid_init).lower()} && window.violitRuntime && typeof window.violitRuntime.deferHydration === 'function') {{
+                        window.violitRuntime.deferHydration(surface, function() {{ initGrid(); }}, {{
+                            afterInitialRender: true,
+                            viewportOffsetPx: 180,
+                        }});
+                        return;
+                    }}
+                    initGrid();
+                }}
+
                 window._vlLoadLib('agGrid', function() {{
                     if (document.readyState === 'loading') {{
-                        document.addEventListener('DOMContentLoaded', initGrid);
+                        document.addEventListener('DOMContentLoaded', startGrid);
                     }} else {{
-                        initGrid();
+                        startGrid();
                     }}
                 }});
                 ''',
@@ -743,6 +760,7 @@ class DataWidgetsMixin:
                 pass
         
         def builder():
+            defer_grid_init = bool(initial_render_ctx.get(False))
             token = rendering_ctx.set(cid)
             try:
                 data = self._coerce_editor_records(s.value)
@@ -1120,6 +1138,10 @@ class DataWidgetsMixin:
                     }};
                     const el = document.querySelector('#{cid}');
                     if (el && window.agGrid) {{
+                        if (el.dataset.vlAgGridMounted === 'true') {{
+                            return;
+                        }}
+                        el.dataset.vlAgGridMounted = 'true';
                         const gridApi = agGrid.createGrid(el, gridOptions);
                         window['gridApi_{cid}'] = gridApi;
                         if (window.violitRuntime && typeof window.violitRuntime.bindAgGridSurface === 'function') {{
@@ -1188,11 +1210,23 @@ class DataWidgetsMixin:
                     }};
                 }}
 
+                function startEditor() {{
+                    const surface = document.getElementById('{cid}_surface') || document.getElementById('{cid}');
+                    if ({str(defer_grid_init).lower()} && window.violitRuntime && typeof window.violitRuntime.deferHydration === 'function') {{
+                        window.violitRuntime.deferHydration(surface, function() {{ initEditor(); }}, {{
+                            afterInitialRender: true,
+                            viewportOffsetPx: 180,
+                        }});
+                        return;
+                    }}
+                    initEditor();
+                }}
+
                 window._vlLoadLib('agGrid', function() {{
                     if (document.readyState === 'loading') {{
-                        document.addEventListener('DOMContentLoaded', initEditor);
+                        document.addEventListener('DOMContentLoaded', startEditor);
                     }} else {{
-                        initEditor();
+                        startEditor();
                     }}
                 }});
                 ''',

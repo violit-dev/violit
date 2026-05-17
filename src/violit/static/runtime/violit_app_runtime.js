@@ -840,6 +840,86 @@
             }
         };
 
+        violitRuntime.deferHydration = function(target, hydrate, options = {}) {
+            if (typeof hydrate !== 'function') {
+                return;
+            }
+
+            const viewportOffsetPx = Number.isFinite(Number(options.viewportOffsetPx))
+                ? Math.max(0, Number(options.viewportOffsetPx))
+                : 180;
+            const afterInitialRender = options.afterInitialRender === true;
+            let hydrated = false;
+
+            const resolveTarget = function() {
+                if (typeof target === 'function') {
+                    return target();
+                }
+                return target;
+            };
+
+            const isNearViewport = function(element) {
+                if (!element || typeof element.getBoundingClientRect !== 'function') {
+                    return true;
+                }
+                const rect = element.getBoundingClientRect();
+                return rect.bottom >= -viewportOffsetPx && rect.top <= window.innerHeight + viewportOffsetPx;
+            };
+
+            const finish = function(element) {
+                if (hydrated) {
+                    return;
+                }
+                hydrated = true;
+                hydrate(element);
+            };
+
+            const observe = function() {
+                const element = resolveTarget();
+                if (!element) {
+                    setTimeout(observe, 50);
+                    return;
+                }
+
+                if (isNearViewport(element)) {
+                    finish(element);
+                    return;
+                }
+
+                if (!('IntersectionObserver' in window)) {
+                    finish(element);
+                    return;
+                }
+
+                const io = new IntersectionObserver(function(entries) {
+                    const entry = entries && entries[0];
+                    if (!entry) {
+                        return;
+                    }
+                    if (entry.isIntersecting || entry.boundingClientRect.top < window.innerHeight + viewportOffsetPx) {
+                        io.disconnect();
+                        finish(resolveTarget() || element);
+                    }
+                }, {
+                    rootMargin: `${viewportOffsetPx}px 0px ${viewportOffsetPx + 80}px 0px`,
+                });
+
+                io.observe(element);
+            };
+
+            if (afterInitialRender && !window.__vlInitialRenderMetrics) {
+                const existing = resolveTarget();
+                if (existing && isNearViewport(existing)) {
+                    observe();
+                    return;
+                }
+                window.addEventListener('violit:initial-render-ready', observe, { once: true });
+                return;
+            }
+
+            observe();
+        };
+
         violitRuntime.registerInitializer('deferred-chart', function(element) {
             const config = violitRuntime.readJsonAttr(element, 'data-vl-deferred-chart-config', null);
             const chartId = config && typeof config.cid === 'string' ? config.cid : element.id;
@@ -856,6 +936,10 @@
                 : '__REQUEST_DATA__';
             const preloadLib = config && typeof config.preloadLib === 'string' ? config.preloadLib : 'Plotly';
             const trigger = config && typeof config.trigger === 'string' ? config.trigger : 'visible';
+            const afterInitialRender = config && config.afterInitialRender === true;
+            const viewportOffsetPx = Number.isFinite(Number(config && config.viewportOffsetPx))
+                ? Math.max(0, Number(config.viewportOffsetPx))
+                : 180;
 
             const requestHydration = function() {
                 if (window._vlDeferredChartsRequested.has(chartId)) return;
@@ -879,30 +963,22 @@
                     return;
                 }
 
-                if (preloadLib && typeof window._vlPreloadLib === 'function') {
-                    window._vlPreloadLib(preloadLib);
-                }
-
                 if (trigger === 'immediate') {
                     requestHydration();
                     return;
                 }
 
-                if (!('IntersectionObserver' in window)) {
-                    requestHydration();
+                if (typeof violitRuntime.deferHydration === 'function') {
+                    violitRuntime.deferHydration(function() {
+                        return document.getElementById(chartId);
+                    }, requestHydration, {
+                        afterInitialRender: afterInitialRender,
+                        viewportOffsetPx: viewportOffsetPx,
+                    });
                     return;
                 }
 
-                const io = new IntersectionObserver(function(entries) {
-                    const entry = entries && entries[0];
-                    if (!entry) return;
-                    if (entry.isIntersecting || entry.boundingClientRect.top < window.innerHeight + 240) {
-                        io.disconnect();
-                        requestHydration();
-                    }
-                }, { rootMargin: '240px 0px 320px 0px' });
-
-                io.observe(liveElement);
+                requestHydration();
             };
 
             if (document.readyState === 'loading') {

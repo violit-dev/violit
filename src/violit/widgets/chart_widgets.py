@@ -445,12 +445,16 @@ class ChartWidgetsMixin:
 
     def _chart_placeholder_component(self, cid, widget_name, height, use_container_width, cls, style, message):
         width_style = "width: 100%;" if use_container_width else ""
-        deferred_config = html_lib.escape(json.dumps({
+        deferred_config_payload = {
             "cid": cid,
             "preloadLib": "Plotly",
             "requestValue": "__REQUEST_DATA__",
             "trigger": "visible",
-        }, ensure_ascii=False, separators=(",", ":")), quote=True)
+        }
+        if initial_render_ctx.get(False) and getattr(self, 'mode', None) == 'ws':
+            deferred_config_payload["afterInitialRender"] = True
+            deferred_config_payload["viewportOffsetPx"] = 180
+        deferred_config = html_lib.escape(json.dumps(deferred_config_payload, ensure_ascii=False, separators=(",", ":")), quote=True)
         html = f'''
         <div id="{cid}" class="js-plotly-plot" data-vl-deferred-chart="true" data-vl-init="deferred-chart" data-vl-deferred-chart-config="{deferred_config}" style="{width_style} height: {height}px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
             <div style="text-align: center;">
@@ -515,12 +519,16 @@ class ChartWidgetsMixin:
             # This ensures the first HTML response is small and the splash screen appears instantly.
             if initial_render_ctx.get() and data_points > _ASYNC_CHART_THRESHOLD:
                 width_style = "width: 100%;" if use_container_width else ""
-                deferred_config = html_lib.escape(json.dumps({
+                deferred_config_payload = {
                     "cid": cid,
                     "preloadLib": "Plotly",
                     "requestValue": "__REQUEST_DATA__",
                     "trigger": "immediate",
-                }, ensure_ascii=False, separators=(",", ":")), quote=True)
+                }
+                if getattr(self, 'mode', None) == 'ws':
+                    deferred_config_payload["afterInitialRender"] = True
+                    deferred_config_payload["viewportOffsetPx"] = 180
+                deferred_config = html_lib.escape(json.dumps(deferred_config_payload, ensure_ascii=False, separators=(",", ":")), quote=True)
                 html = f'''
                 <div id="{cid}" class="js-plotly-plot" data-vl-init="deferred-chart" data-vl-deferred-chart-config="{deferred_config}" style="{width_style} height: 500px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
                     <div style="text-align: center;">
