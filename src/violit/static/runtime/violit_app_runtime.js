@@ -170,6 +170,127 @@
             });
         }
 
+        function collectPersistedExpanderDetails(root) {
+            if (!(root instanceof Element)) return [];
+            const matches = [];
+            const ownInit = root.getAttribute ? (root.getAttribute('data-vl-init') || '') : '';
+            if (
+                root.tagName
+                && root.tagName.toLowerCase() === 'wa-details'
+                && ownInit.split(/\s+/).includes('expander-persistence')
+            ) {
+                matches.push(root);
+            }
+            root.querySelectorAll('wa-details[data-vl-init~="expander-persistence"]').forEach(function(details) {
+                if (!matches.includes(details)) {
+                    matches.push(details);
+                }
+            });
+            return matches;
+        }
+
+        function readPersistedExpanderConfig(details) {
+            if (!(details instanceof Element)) return null;
+            const rawConfig = details.getAttribute('data-vl-expander-config');
+            if (!rawConfig) return null;
+            try {
+                return JSON.parse(rawConfig);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function preserveIncomingExpanderOpenState(currentRoot, nextRoot) {
+            if (!(currentRoot instanceof Element) || !(nextRoot instanceof Element)) {
+                return false;
+            }
+
+            const currentDetails = collectPersistedExpanderDetails(currentRoot);
+            const nextDetails = collectPersistedExpanderDetails(nextRoot);
+            if (!currentDetails.length || !nextDetails.length) {
+                return false;
+            }
+
+            const currentByStorageKey = new Map();
+            currentDetails.forEach(function(details) {
+                const config = readPersistedExpanderConfig(details);
+                if (config && config.storageKey) {
+                    currentByStorageKey.set(config.storageKey, { details, config });
+                }
+            });
+
+            let mutated = false;
+            nextDetails.forEach(function(details) {
+                const nextConfig = readPersistedExpanderConfig(details);
+                if (!nextConfig || !nextConfig.storageKey) {
+                    return;
+                }
+                const currentMatch = currentByStorageKey.get(nextConfig.storageKey);
+                if (!currentMatch) {
+                    return;
+                }
+
+                const storedOpen = sessionStorage.getItem(nextConfig.storageKey);
+                const preservedOpen = storedOpen === null ? currentMatch.details.open === true : storedOpen === 'true';
+
+                if (preservedOpen) {
+                    details.setAttribute('open', '');
+                } else {
+                    details.removeAttribute('open');
+                }
+
+                nextConfig.serverOpen = preservedOpen;
+                details.setAttribute('data-vl-expander-config', JSON.stringify(nextConfig));
+                mutated = true;
+            });
+
+            return mutated;
+        }
+
+        function preserveIncomingExpanderStatesInHtml(html) {
+            if (typeof html !== 'string' || html.indexOf('expander-persistence') === -1) {
+                return html;
+            }
+
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            Array.from(temp.children).forEach(function(nextRoot) {
+                if (!(nextRoot instanceof Element) || !nextRoot.id) {
+                    return;
+                }
+                const currentRoot = document.getElementById(nextRoot.id);
+                if (currentRoot) {
+                    preserveIncomingExpanderOpenState(currentRoot, nextRoot);
+                }
+            });
+            return temp.innerHTML;
+        }
+
+        function blurFocusedWaButtonHost() {
+            const activeElement = document.activeElement;
+            if (!(activeElement instanceof Element)) {
+                return;
+            }
+
+            const buttonHost = activeElement.closest('wa-button');
+            if (!(buttonHost instanceof HTMLElement)) {
+                return;
+            }
+
+            const shadowActive = buttonHost.shadowRoot ? buttonHost.shadowRoot.activeElement : null;
+            if (shadowActive && typeof shadowActive.blur === 'function') {
+                try {
+                    shadowActive.blur();
+                } catch (error) {}
+            }
+
+            if (typeof buttonHost.blur === 'function') {
+                try {
+                    buttonHost.blur();
+                } catch (error) {}
+            }
+        }
+
         function trySmartUpdateTextLikeWidget(currentRoot, incomingMarkupOrRoot) {
             const currentHost = getTextLikeHost(currentRoot);
             if (!currentHost) return false;
@@ -495,6 +616,20 @@
                 restoreViewportScroll(scrollRestore);
             }
             return { response, html };
+        };
+
+        violitRuntime.emitAction = function(cid, value, options = {}) {
+            if (!cid) {
+                return null;
+            }
+            if (typeof window.sendAction === 'function') {
+                window.sendAction(cid, value);
+                return null;
+            }
+            if (typeof violitRuntime.postLiteAction === 'function') {
+                return violitRuntime.postLiteAction(cid, value, options);
+            }
+            return null;
         };
 
         violitRuntime.initElement = function(element) {
@@ -844,7 +979,14 @@
             const armPersistenceFromSummaryInteraction = function(event) {
                 const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
                 const fromSummary = path.some(function(node) {
-                    return !!(node && typeof node.getAttribute === 'function' && node.getAttribute('slot') === 'summary');
+                    if (!node) return false;
+                    if (node.tagName === 'SUMMARY') return true;
+                    if (typeof node.getAttribute !== 'function') return false;
+                    if (node.getAttribute('slot') === 'summary') return true;
+                    const partAttr = node.getAttribute('part') || '';
+                    if (!partAttr) return false;
+                    const parts = partAttr.split(/\s+/);
+                    return parts.includes('header') || parts.includes('summary');
                 });
 
                 if (!fromSummary) return;
@@ -990,13 +1132,7 @@
                 window._vlQueueDeferredAction(cid, value);
                 return;
             }
-            if (typeof window.sendAction === 'function') {
-                window.sendAction(cid, value);
-                return;
-            }
-            if (mode === 'lite') {
-                violitRuntime.postLiteAction(cid, value);
-            }
+            violitRuntime.emitAction(cid, value);
         };
 
         violitRuntime.deferHydration = function(target, hydrate, options = {}) {
@@ -1332,6 +1468,7 @@
                             const agGridScrollState = window._vlCaptureAgGridScroll
                                 ? window._vlCaptureAgGridScroll(currentRoot)
                                 : null;
+                            preserveIncomingExpanderOpenState(currentRoot, incomingRoot);
                             purgePlotly(currentRoot);
                             currentRoot.outerHTML = incomingRoot.outerHTML;
                             updatedRoot = document.getElementById(targetId);
@@ -3790,16 +3927,20 @@
                                     // Default: Full DOM replacement
                                     if (!smartUpdated) {
                                         const agGridScrollState = window._vlCaptureAgGridScroll(el);
+                                        const temp = document.createElement('div');
+                                        temp.innerHTML = item.html;
+                                        const nextRoot = temp.firstElementChild;
+                                        if (nextRoot) {
+                                            preserveIncomingExpanderOpenState(el, nextRoot);
+                                        }
                                         purgePlotly(el);
-                                        el.outerHTML = item.html;
+                                        el.outerHTML = nextRoot ? temp.innerHTML : item.html;
                                         
                                         const newEl = document.getElementById(item.id);
                                         const revealGrid = window._vlHideAgGridDuringScrollRestore(newEl, agGridScrollState);
                                         window._vlRestoreAgGridScroll(newEl, agGridScrollState, revealGrid);
                                         
                                         // Execute scripts
-                                        const temp = document.createElement('div');
-                                        temp.innerHTML = item.html;
                                         executeInlineScripts(temp);
 
                                         if (isNavigation && newEl && newEl.classList.contains('page-container')) {
@@ -3976,8 +4117,12 @@
                     document.body.dataset.vlLiteRuntimeBound = 'true';
 
                     document.body.addEventListener('htmx:beforeSwap', function(evt) {
+                        blurFocusedWaButtonHost();
                         if (evt.detail.target) {
                             purgePlotly(evt.detail.target);
+                        }
+                        if (typeof evt.detail.serverResponse === 'string' && evt.detail.serverResponse) {
+                            evt.detail.serverResponse = preserveIncomingExpanderStatesInHtml(evt.detail.serverResponse);
                         }
                     });
 

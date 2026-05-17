@@ -71,6 +71,7 @@ from .widgets import (
     ChatWidgetsMixin,
     CardWidgetsMixin,
     ListWidgetsMixin,
+    CustomWidgetsMixin,
 )
 
 
@@ -115,6 +116,7 @@ class App(
     ChatWidgetsMixin,
     CardWidgetsMixin,
     ListWidgetsMixin,
+    CustomWidgetsMixin,
 ):
     """Main Violit App class"""
     
@@ -452,6 +454,7 @@ class App(
         # Styling System: configure_widget defaults + user CSS
         self._widget_defaults: Dict[str, Dict[str, Any]] = {}
         self._user_css: List[str] = []
+        self._custom_widget_registry: Dict[str, Any] = {}
 
         self._fragment_count = 0 # Used for  App.reactivity (with or decorator)
         
