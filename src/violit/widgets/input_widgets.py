@@ -7,7 +7,7 @@ import html as html_lib
 import io
 import json
 import re
-from ..component import Component
+from ..component import Component, normalize_public_component_props, serialize_public_component_attrs
 from ..context import rendering_ctx, layout_ctx
 from ..state import State
 from ..style_utils import auto_split_widget_cls, merge_cls, merge_style, merge_part_cls, serialize_part_cls, wrap_html
@@ -38,6 +38,14 @@ class UploadedFile(io.BytesIO):
 
 
 class InputWidgetsMixin:
+
+    @staticmethod
+    def _normalize_public_widget_props(props: dict[str, Any]) -> dict[str, Any]:
+        return normalize_public_component_props(props)
+
+    @staticmethod
+    def _serialize_widget_attrs(attrs: dict[str, Any], *, allow_event_handlers: bool = False) -> str:
+        return serialize_public_component_attrs(attrs, allow_event_handlers=allow_event_handlers)
 
     @staticmethod
     def _sanitize_widget_key(value: Any) -> str:
@@ -199,6 +207,7 @@ class InputWidgetsMixin:
             return None
 
         cid = self._resolve_widget_cid("select_slider", key)
+        safe_props = self._normalize_public_widget_props(dict(props))
         default_val = value if value is not None else options[0]
         s = self._resolve_widget_state("select_slider", label, default_val, key=key, bind=bind)
         options_str = [str(o) for o in options]
@@ -250,7 +259,7 @@ class InputWidgetsMixin:
                 </script>
                 '''
 
-            props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
+            props_str = self._serialize_widget_attrs(safe_props)
 
             # 5. Position labels precisely using relative/absolute positioning
             # A standard Web Awesome slider thumb is typically 15px-16px.
@@ -305,6 +314,7 @@ class InputWidgetsMixin:
         """
         cid = self._resolve_widget_cid("checkbox", key)
         user_part_cls = props.pop("part_cls", None)
+        safe_props = self._normalize_public_widget_props(dict(props))
         
         s = self._resolve_widget_state("checkbox", label, value, key=key, bind=bind)
         
@@ -320,7 +330,7 @@ class InputWidgetsMixin:
             rendering_ctx.reset(token)
             
             checked_attr = 'checked' if cv else ''
-            props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
+            props_str = self._serialize_widget_attrs(safe_props)
             
             if self.mode == 'lite':
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
@@ -372,6 +382,7 @@ class InputWidgetsMixin:
         """
         cid = self._resolve_widget_cid("radio_group", key)
         user_part_cls = props.pop("part_cls", None)
+        safe_props = self._normalize_public_widget_props(dict(props))
         
         default_val = options[index] if options else None
         s = self._resolve_widget_state("radio", label, default_val, key=key, bind=bind)
@@ -428,15 +439,16 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
+            props_str = self._serialize_widget_attrs(safe_props)
             escaped_cv = html_lib.escape(str(cv), quote=True)
             disabled_attr = 'disabled' if disabled else ''
             help_attr = f'hint="{html_lib.escape(str(help), quote=True)}"' if help else ''
+            escaped_label = html_lib.escape(str(label), quote=True)
             # Keep the default layout vertical and only opt into horizontal rows when requested.
             options_layout_style = 'display:flex;flex-direction:column;gap:0.5rem;'
             if horizontal:
                 options_layout_style = 'display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;align-items:center;'
-            html = f'<wa-radio-group id="{cid}" label="{label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div style="{options_layout_style}">{opts_html}</div></wa-radio-group>{listener_script}{part_bridge_script}'
+            html = f'<wa-radio-group id="{cid}" label="{escaped_label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div style="{options_layout_style}">{opts_html}</div></wa-radio-group>{listener_script}{part_bridge_script}'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
             
         self._register_component(cid, builder, action=action)
@@ -478,6 +490,7 @@ class InputWidgetsMixin:
         """
         cid = self._resolve_widget_cid("select", key)
         user_part_cls = props.pop("part_cls", None)
+        safe_props = self._normalize_public_widget_props(dict(props))
         label_position = self._normalize_label_position(label_position)
         
         default_val = options[index] if options else None
@@ -553,12 +566,10 @@ class InputWidgetsMixin:
             if placeholder: extra_attrs['placeholder'] = placeholder
             if disabled: extra_attrs['disabled'] = True
             if help: extra_attrs['hint'] = help
-            for k, v in {**attrs, **label_attrs, **extra_attrs, **props}.items():
-                if v is True:
-                    select_html += f' {k}'
-                elif v is not False and v is not None:
-                    escaped_attr = html_lib.escape(str(v), quote=True)
-                    select_html += f' {k}="{escaped_attr}"'
+            merged_attrs = {**attrs, **label_attrs, **extra_attrs, **safe_props}
+            serialized_attrs = self._serialize_widget_attrs(merged_attrs, allow_event_handlers=True)
+            if serialized_attrs:
+                select_html += f' {serialized_attrs}'
             select_html += f'>{opts_html}</wa-select>{listener_script}'
             
             _wd = self._get_widget_defaults("selectbox")
@@ -773,6 +784,7 @@ class InputWidgetsMixin:
         """
         cid = self._resolve_widget_cid("textarea", key)
         user_part_cls = props.pop("part_cls", None)
+        local_props = self._normalize_public_widget_props(dict(props))
         
         s = self._resolve_widget_state("textarea", label, value, key=key, bind=bind)
         
@@ -901,10 +913,12 @@ class InputWidgetsMixin:
             if placeholder: textarea_props["placeholder"] = placeholder
             if disabled: textarea_props["disabled"] = True
             if help: textarea_props["hint"] = help
-            html = f'<wa-textarea id="{cid}" label="{label}" value="{cv}" appearance="outlined"'
-            for k, v in {**attrs, **textarea_props, **local_props}.items():
-                if v is True: html += f' {k}'
-                elif v is not False and v is not None: html += f' {k}="{v}"'
+            escaped_label = html_lib.escape(str(label), quote=True)
+            escaped_value = html_lib.escape(str(cv), quote=True)
+            html = f'<wa-textarea id="{cid}" label="{escaped_label}" value="{escaped_value}" appearance="outlined"'
+            serialized_attrs = self._serialize_widget_attrs({**attrs, **textarea_props, **local_props}, allow_event_handlers=True)
+            if serialized_attrs:
+                html += f' {serialized_attrs}'
             html += f'></wa-textarea>{listener_script}'
             
             _wd = self._get_widget_defaults("text_area")
@@ -950,6 +964,7 @@ class InputWidgetsMixin:
         """
         cid = self._resolve_widget_cid("number", key)
         user_part_cls = props.pop("part_cls", None)
+        safe_props = self._normalize_public_widget_props(dict(props))
         
         s = self._resolve_widget_state("number", label, value, key=key, bind=bind)
         
@@ -994,10 +1009,12 @@ class InputWidgetsMixin:
             if disabled: num_props["disabled"] = True
             if help: num_props["hint"] = help
             
-            html = f'<wa-input id="{cid}" label="{label}" value="{cv}" appearance="outlined"'
-            for k, v in {**attrs, **num_props, **props}.items():
-                if v is True: html += f' {k}'
-                elif v is not False and v is not None: html += f' {k}="{v}"'
+            escaped_label = html_lib.escape(str(label), quote=True)
+            escaped_value = html_lib.escape(str(cv), quote=True)
+            html = f'<wa-input id="{cid}" label="{escaped_label}" value="{escaped_value}" appearance="outlined"'
+            serialized_attrs = self._serialize_widget_attrs({**attrs, **num_props, **safe_props}, allow_event_handlers=True)
+            if serialized_attrs:
+                html += f' {serialized_attrs}'
             html += f'></wa-input>{listener_script}'
             
             _wd = self._get_widget_defaults("number_input")
@@ -1088,16 +1105,18 @@ class InputWidgetsMixin:
             else:
                 file_info = ""
             
-            accept_str = accept if accept else "*"
-            help_html = f'<div style="font-size:0.75rem;color:var(--vl-text-muted);margin-top:0.25rem;">{help}</div>' if help else ""
+            accept_str = html_lib.escape(str(accept if accept else "*"), quote=True)
+            safe_label = html_lib.escape(str(label))
+            help_html = f'<div style="font-size:0.75rem;color:var(--vl-text-muted);margin-top:0.25rem;">{html_lib.escape(str(help))}</div>' if help else ""
+            safe_file_info = html_lib.escape(str(file_info))
             
             html = f'''
             <div class="file-uploader">
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{safe_label}</label>
                 <input type="file" id="{cid}_input" accept="{accept_str}" {'multiple' if multiple else ''} 
                        style="display:block;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.25rem;background:var(--vl-bg-card);color:var(--vl-text);width:100%;font-family:inherit;cursor:pointer;" />
                 {help_html}
-                <div id="{cid}_info" style="margin-top:0.5rem;font-size:0.875rem;color:var(--vl-text-muted);">{file_info}</div>
+                <div id="{cid}_info" style="margin-top:0.5rem;font-size:0.875rem;color:var(--vl-text-muted);">{safe_file_info}</div>
             </div>
             <script>
             (function() {{
@@ -1189,6 +1208,7 @@ class InputWidgetsMixin:
         """
         cid = self._resolve_widget_cid("toggle", key)
         user_part_cls = props.pop("part_cls", None)
+        safe_props = self._normalize_public_widget_props(dict(props))
         
         s = self._resolve_widget_state("toggle", label, value, key=key, bind=bind)
         
@@ -1204,7 +1224,7 @@ class InputWidgetsMixin:
             rendering_ctx.reset(token)
             
             checked_attr = 'checked' if cv else ''
-            props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
+            props_str = self._serialize_widget_attrs(safe_props)
             
             if self.mode == 'lite':
                 attrs_str = f'onchange="window._vlHandleLiteToggleChange(this, \'{cid}\')"'
@@ -1236,7 +1256,8 @@ class InputWidgetsMixin:
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
             part_bridge_script = self._part_bridge_script(f'wa-switch#{cid}[data-vl-part-cls]') if _part_cls else ''
-            html = f'<wa-switch id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{label}{help_html}</wa-switch>{listener_script}{part_bridge_script}'
+            safe_label = html_lib.escape(str(label))
+            html = f'<wa-switch id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{safe_label}{help_html}</wa-switch>{listener_script}{part_bridge_script}'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s
@@ -1251,6 +1272,7 @@ class InputWidgetsMixin:
             label_visibility: "visible", "hidden", or "collapsed"
         """
         cid = self._resolve_widget_cid("color", key)
+        safe_props = self._normalize_public_widget_props(dict(props))
         
         s = self._resolve_widget_state("color", label, value, key=key, bind=bind)
         
@@ -1268,7 +1290,16 @@ class InputWidgetsMixin:
             else:
                 attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
             
-            inner = Component("wa-color-picker", id=cid, label=label, value=cv, appearance="outlined", **attrs, **props)
+            inner = Component(
+                "wa-color-picker",
+                id=cid,
+                label=label,
+                value=cv,
+                appearance="outlined",
+                __violit_allow_event_attrs__=True,
+                **attrs,
+                **safe_props,
+            )
             _wd = self._get_widget_defaults("color_picker")
             _fc = merge_cls(_wd.get("cls", ""), cls)
             _fs = merge_style(_wd.get("style", ""), style)
@@ -1279,10 +1310,11 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def date_input(self, label="Select date", value=None, key=None, on_change=None, cls: str = "", style: str = "", bind=None, **props):
+    def date_input(self, label="Select date", value=None, key=None, on_change=None, help=None, cls: str = "", style: str = "", bind=None, **props):
         """Date picker widget"""
         import datetime
         cid = self._resolve_widget_cid("date", key)
+        safe_props = self._normalize_public_widget_props(dict(props))
         default_val = value if value else datetime.date.today().isoformat()
         s = self._resolve_widget_state("date", label, default_val, key=key, bind=bind)
         
@@ -1299,13 +1331,18 @@ class InputWidgetsMixin:
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "change", "hx-swap": "none", "name": "value"}
             else:
                 attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
+            serialized_attrs = self._serialize_widget_attrs({**attrs, **safe_props}, allow_event_handlers=True)
+            safe_label = html_lib.escape(str(label))
+            safe_value = html_lib.escape(str(cv), quote=True)
+            help_html = f'<div style="margin-top:0.25rem;font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</div>' if help else ''
             
             html = f'''
             <div>
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
-                <input type="date" id="{cid}_input" value="{cv}" 
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{safe_label}</label>
+                <input type="date" id="{cid}_input" value="{safe_value}" 
                        style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
-                       {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
+                       {serialized_attrs} />
+                {help_html}
             </div>
             '''
             _wd = self._get_widget_defaults("date_input")
@@ -1316,10 +1353,11 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def time_input(self, label="Select time", value=None, key=None, on_change=None, cls: str = "", style: str = "", bind=None, **props):
+    def time_input(self, label="Select time", value=None, key=None, on_change=None, help=None, cls: str = "", style: str = "", bind=None, **props):
         """Time picker widget"""
         import datetime
         cid = self._resolve_widget_cid("time", key)
+        safe_props = self._normalize_public_widget_props(dict(props))
         default_val = value if value else datetime.datetime.now().strftime("%H:%M")
         s = self._resolve_widget_state("time", label, default_val, key=key, bind=bind)
         
@@ -1336,13 +1374,18 @@ class InputWidgetsMixin:
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "change", "hx-swap": "none", "name": "value"}
             else:
                 attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
+            serialized_attrs = self._serialize_widget_attrs({**attrs, **safe_props}, allow_event_handlers=True)
+            safe_label = html_lib.escape(str(label))
+            safe_value = html_lib.escape(str(cv), quote=True)
+            help_html = f'<div style="margin-top:0.25rem;font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</div>' if help else ''
             
             html = f'''
             <div>
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
-                <input type="time" id="{cid}_input" value="{cv}" 
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{safe_label}</label>
+                <input type="time" id="{cid}_input" value="{safe_value}" 
                        style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
-                       {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
+                       {serialized_attrs} />
+                {help_html}
             </div>
             '''
             _wd = self._get_widget_defaults("time_input")
@@ -1353,10 +1396,11 @@ class InputWidgetsMixin:
         self._register_component(cid, builder, action=action)
         return s
 
-    def datetime_input(self, label="Select date and time", value=None, key=None, on_change=None, cls: str = "", style: str = "", bind=None, **props):
+    def datetime_input(self, label="Select date and time", value=None, key=None, on_change=None, help=None, cls: str = "", style: str = "", bind=None, **props):
         """DateTime picker widget"""
         import datetime
         cid = self._resolve_widget_cid("datetime", key)
+        safe_props = self._normalize_public_widget_props(dict(props))
         default_val = value if value else datetime.datetime.now().strftime("%Y-%m-%dT%H:%M")
         s = self._resolve_widget_state("datetime", label, default_val, key=key, bind=bind)
         
@@ -1373,13 +1417,18 @@ class InputWidgetsMixin:
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "change", "hx-swap": "none", "name": "value"}
             else:
                 attrs = {"onchange": f"window.sendAction('{cid}', this.value)"}
+            serialized_attrs = self._serialize_widget_attrs({**attrs, **safe_props}, allow_event_handlers=True)
+            safe_label = html_lib.escape(str(label))
+            safe_value = html_lib.escape(str(cv), quote=True)
+            help_html = f'<div style="margin-top:0.25rem;font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</div>' if help else ''
             
             html = f'''
             <div>
-                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{label}</label>
-                <input type="datetime-local" id="{cid}_input" value="{cv}" 
+                <label style="display:block;margin-bottom:0.5rem;font-weight:500;color:var(--vl-text);">{safe_label}</label>
+                <input type="datetime-local" id="{cid}_input" value="{safe_value}" 
                        style="width:100%;padding:0.5rem;border:1px solid var(--vl-border);border-radius:0.5rem;background:var(--vl-bg-card);color:var(--vl-text);font-family:inherit;"
-                       {' '.join(f'{k}="{v}"' for k,v in attrs.items())} />
+                       {serialized_attrs} />
+                {help_html}
             </div>
             '''
             _wd = self._get_widget_defaults("datetime_input")
@@ -1394,6 +1443,7 @@ class InputWidgetsMixin:
         """Generic input component builder"""
         cid = self._resolve_widget_cid(type_name, key)
         user_part_cls = props.pop("part_cls", None)
+        safe_props = self._normalize_public_widget_props(dict(props))
         
         s = self._resolve_widget_state(type_name, label, value, key=key, bind=bind)
         
@@ -1550,16 +1600,7 @@ class InputWidgetsMixin:
                 </script>
                 '''
             
-            # Build props - handle boolean attrs & hyphenated names (e.g. help-text)
-            parts = []
-            for k, v in props.items():
-                if v is None or v is False:
-                    continue
-                if v is True:
-                    parts.append(k)
-                else:
-                    parts.append(f'{k}="{v}"')
-            props_str = ' '.join(parts)
+            props_str = self._serialize_widget_attrs(safe_props)
             escaped_cv = html_lib.escape(str(cv), quote=True)
             # label_visibility support
             _lbl = label
@@ -1567,7 +1608,8 @@ class InputWidgetsMixin:
                 _lbl = ""
             elif label_visibility == "collapsed":
                 _lbl = ""
-            html = f'<{tag_name} id="{cid}" label="{_lbl}" value="{escaped_cv}" appearance="outlined" {attrs_str} {props_str}></{tag_name}>{listener_script}'
+            escaped_label = html_lib.escape(str(_lbl), quote=True)
+            html = f'<{tag_name} id="{cid}" label="{escaped_label}" value="{escaped_cv}" appearance="outlined" {attrs_str} {props_str}></{tag_name}>{listener_script}'
             
             _wd = self._get_widget_defaults(type_name)
             default_host_cls, default_auto_part_cls = auto_split_widget_cls(type_name, _wd.get("cls", ""))

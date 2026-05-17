@@ -3,7 +3,10 @@ Style Utilities for Violit
 Provides merge helpers for cls (class) and style (inline CSS) parameters.
 """
 
+import html as html_lib
 import json
+
+from .component import sanitize_inline_style
 
 
 AUTO_PART_WIDGETS = {
@@ -674,9 +677,11 @@ def wrap_html(html: str, cls: str = "", style: str = "", wrapper_id: str = "") -
         return html
     attrs = []
     if wrapper_id:
-        attrs.append(f'id="{wrapper_id}"')
+        attrs.append(f'id="{html_lib.escape(wrapper_id, quote=True)}"')
     if cls:
-        attrs.append(f'class="{cls}"')
+        attrs.append(f'class="{html_lib.escape(cls, quote=True)}"')
     if style:
-        attrs.append(f'style="{style}"')
+        safe_style = sanitize_inline_style(style)
+        if safe_style:
+            attrs.append(f'style="{html_lib.escape(safe_style, quote=True)}"')
     return f'<div {" ".join(attrs)}>{html}</div>'
