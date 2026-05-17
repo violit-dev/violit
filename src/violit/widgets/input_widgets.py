@@ -48,6 +48,31 @@ class InputWidgetsMixin:
         return serialize_public_component_attrs(attrs, allow_event_handlers=allow_event_handlers)
 
     @staticmethod
+    def _runtime_attr_string(init_names: list[str] | tuple[str, ...], configs: Optional[dict[str, Any]] = None) -> str:
+        attrs: list[str] = []
+        names = " ".join(name for name in init_names if name)
+        if names:
+            attrs.append(f'data-vl-init="{html_lib.escape(names, quote=True)}"')
+        for attr_name, payload in (configs or {}).items():
+            if payload is None:
+                continue
+            encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            attrs.append(f'{attr_name}="{html_lib.escape(encoded, quote=True)}"')
+        return " ".join(attrs)
+
+    @staticmethod
+    def _runtime_init_props(init_names: list[str] | tuple[str, ...], configs: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+        props: dict[str, Any] = {}
+        names = " ".join(name for name in init_names if name)
+        if names:
+            props["data_vl_init"] = names
+        for attr_name, payload in (configs or {}).items():
+            if payload is None:
+                continue
+            props[attr_name.replace("-", "_")] = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        return props
+
+    @staticmethod
     def _sanitize_widget_key(value: Any) -> str:
         raw = str(value)
         normalized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw)
@@ -331,26 +356,19 @@ class InputWidgetsMixin:
             
             checked_attr = 'checked' if cv else ''
             props_str = self._serialize_widget_attrs(safe_props)
+            runtime_init_names = ["input-control"]
+            runtime_config = {
+                "cid": cid,
+                "eventName": "change",
+                "transport": "lite-direct" if self.mode == 'lite' else "ws",
+                "valueProp": "checked",
+                "desiredValue": bool(cv),
+            }
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
-                listener_script = ""
-            else:
-                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    if (el && !el.hasAttribute('data-ws-listener')) {{
-                        el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('change', function(e) {{
-                            window.sendAction('{cid}', el.checked);
-                        }});
-                    }}
-                }})();
-                </script>
-                '''
+            else:
+                attrs_str = ""
             
             disabled_attr = 'disabled' if disabled else ''
             help_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
@@ -360,9 +378,12 @@ class InputWidgetsMixin:
             _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
             part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
-            part_bridge_script = self._part_bridge_script(f'wa-checkbox#{cid}[data-vl-part-cls]') if _part_cls else ''
-            html = f'<wa-checkbox id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</wa-checkbox>{listener_script}{part_bridge_script}'
+            if _part_cls:
+                runtime_init_names.append("part-bridge")
+                runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
+            html = f'<wa-checkbox id="{cid}"{part_attr} {runtime_attrs} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{html_lib.escape(str(label))}{help_html}</wa-checkbox>'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s
@@ -395,6 +416,14 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
+            runtime_init_names = ["input-control"]
+            runtime_config = {
+                "cid": cid,
+                "eventName": "change",
+                "transport": "lite-direct" if self.mode == 'lite' else "ws",
+                "valueProp": "value",
+                "desiredValue": "" if cv is None else str(cv),
+            }
 
             _wd = self._get_widget_defaults("radio")
             default_host_cls, default_auto_part_cls = auto_split_widget_cls("radio", _wd.get("cls", ""))
@@ -403,7 +432,8 @@ class InputWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             radio_part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
-            part_bridge_script = self._part_bridge_script(f'wa-radio-group#{cid} wa-radio[data-vl-part-cls]') if _part_cls else ''
+            if _part_cls:
+                runtime_init_names.append("part-bridge")
             
             opts_html = ""
             for i_opt, opt in enumerate(options):
@@ -420,35 +450,21 @@ class InputWidgetsMixin:
                 opts_html += f'<wa-radio value="{escaped_opt}" style="{option_style}"{radio_part_attr} {sel}>{escaped_opt}{caption_html}</wa-radio>'
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" name="value"'
-                listener_script = ""
-            else:
-                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    if (el && !el.hasAttribute('data-ws-listener')) {{
-                        el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('change', function(e) {{
-                            window.sendAction('{cid}', el.value);
-                        }});
-                    }}
-                }})();
-                </script>
-                '''
+            else:
+                attrs_str = ""
             
             props_str = self._serialize_widget_attrs(safe_props)
             escaped_cv = html_lib.escape(str(cv), quote=True)
             disabled_attr = 'disabled' if disabled else ''
             help_attr = f'hint="{html_lib.escape(str(help), quote=True)}"' if help else ''
             escaped_label = html_lib.escape(str(label), quote=True)
+            runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
             # Keep the default layout vertical and only opt into horizontal rows when requested.
             options_layout_style = 'display:flex;flex-direction:column;gap:0.5rem;'
             if horizontal:
                 options_layout_style = 'display:flex;flex-direction:row;flex-wrap:wrap;gap:1rem;align-items:center;'
-            html = f'<wa-radio-group id="{cid}" label="{escaped_label}" value="{escaped_cv}" {disabled_attr} {help_attr} {attrs_str} {props_str}><div style="{options_layout_style}">{opts_html}</div></wa-radio-group>{listener_script}{part_bridge_script}'
+            html = f'<wa-radio-group id="{cid}" label="{escaped_label}" value="{escaped_cv}" {runtime_attrs} {disabled_attr} {help_attr} {attrs_str} {props_str}><div style="{options_layout_style}">{opts_html}</div></wa-radio-group>'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
             
         self._register_component(cid, builder, action=action)
@@ -505,6 +521,7 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
+            runtime_init_names = ["input-control"]
             
             opts_html = ""
             for opt in options:
@@ -521,47 +538,21 @@ class InputWidgetsMixin:
             if label_position != "top" and label:
                 label_attrs["aria-label"] = label
             escaped_label = html_lib.escape(str(rendered_label), quote=True)
+            runtime_config = {
+                "cid": cid,
+                "eventName": "change",
+                "transport": "lite-direct" if self.mode == 'lite' else "ws",
+                "valueProp": "value",
+                "desiredValue": encoded_cv,
+            }
             
             if self.mode == 'lite':
-                attrs = {"onchange": f"window._vlHandleLiteSelectChange(this, '{cid}')"}
-                listener_script = ""
-            else:
-                # WS mode: use native change events from Web Awesome
                 attrs = {}
-                desired_json = json.dumps(encoded_cv, ensure_ascii=False)
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    const desiredValue = {desired_json};
-                    if (el) {{
-                        function syncValue() {{
-                            if (el.value !== desiredValue) el.value = desiredValue;
-                        }}
-                        
-                        syncValue();
-                        
-                        if (el.updateComplete) {{
-                            el.updateComplete.then(syncValue);
-                        }}
-                        
-                        requestAnimationFrame(function() {{
-                            syncValue();
-                            setTimeout(syncValue, 150);
-                        }});
-                        
-                        if (!el.hasAttribute('data-ws-listener')) {{
-                            el.setAttribute('data-ws-listener', 'true');
-                            el.addEventListener('change', function(e) {{
-                                window.sendAction('{cid}', el.value);
-                            }});
-                        }}
-                    }}
-                }})();
-                </script>
-                '''
+            else:
+                attrs = {}
             
-            select_html = f'<wa-select id="{cid}" label="{escaped_label}" value="{escaped_cv}" appearance="outlined"'
+            runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
+            select_html = f'<wa-select id="{cid}" label="{escaped_label}" value="{escaped_cv}" appearance="outlined" {runtime_attrs}'
             extra_attrs = {}
             if placeholder: extra_attrs['placeholder'] = placeholder
             if disabled: extra_attrs['disabled'] = True
@@ -570,7 +561,7 @@ class InputWidgetsMixin:
             serialized_attrs = self._serialize_widget_attrs(merged_attrs, allow_event_handlers=True)
             if serialized_attrs:
                 select_html += f' {serialized_attrs}'
-            select_html += f'>{opts_html}</wa-select>{listener_script}'
+            select_html += f'>{opts_html}</wa-select>'
             
             _wd = self._get_widget_defaults("selectbox")
             default_host_cls, default_auto_part_cls = auto_split_widget_cls("selectbox", _wd.get("cls", ""))
@@ -578,24 +569,13 @@ class InputWidgetsMixin:
             _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
-            part_bridge_script = ""
             if _part_cls:
+                runtime_init_names.append("part-bridge")
+                runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
                 part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
                 select_html = select_html.replace(f'<wa-select id="{cid}"', f'<wa-select id="{cid}"{part_attr}', 1)
-                part_bridge_script = f'''<script>(function() {{
-                    let attempts = 0;
-                    const run = function() {{
-                        attempts += 1;
-                        const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyPartStyles) {{
-                            window.applyPartStyles(el);
-                            return;
-                        }}
-                        if (attempts < 20) setTimeout(run, 80);
-                    }};
-                    run();
-                }})();</script>'''
-            content_html = select_html + part_bridge_script
+                select_html = select_html.replace(' appearance="outlined" ', f' appearance="outlined" {runtime_attrs} ', 1)
+            content_html = select_html
             if label_position != "top":
                 label_html = ""
                 if label_visibility != "collapsed" and label:
@@ -649,7 +629,7 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
-            
+            runtime_init_names = ["input-control"]
             opts_html = ""
             for opt in options:
                 encoded_opt = InputWidgetsMixin._select_encode(opt)
@@ -658,44 +638,14 @@ class InputWidgetsMixin:
                 sel = 'selected' if opt in cv else ''
                 opts_html += f'<wa-option value="{escaped_encoded}" {sel}>{escaped_display}</wa-option>'
             
-            listener_script = ""
-            if self.mode == 'ws':
-                encoded_cv = [InputWidgetsMixin._select_encode(x) for x in cv] if cv else []
-                desired_json = json.dumps(encoded_cv, ensure_ascii=False)
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    const desiredValue = {desired_json};
-                    if (el) {{
-                        function syncValue() {{
-                            const current = Array.isArray(el.value) ? el.value.join(',') : '';
-                            const desired = desiredValue.join(',');
-                            if (current !== desired) el.value = desiredValue;
-                        }}
-                        
-                        syncValue();
-                        
-                        if (el.updateComplete) {{
-                            el.updateComplete.then(syncValue);
-                        }}
-                        
-                        requestAnimationFrame(function() {{
-                            syncValue();
-                            setTimeout(syncValue, 150);
-                        }});
-                        
-                        if (!el.hasAttribute('data-ws-listener')) {{
-                            el.setAttribute('data-ws-listener', 'true');
-                            el.addEventListener('change', function(e) {{
-                                const vals = Array.isArray(el.value) ? el.value : (el.value ? [el.value] : []);
-                                window.sendAction('{cid}', vals.join(','));
-                            }});
-                        }}
-                    }}
-                }})();
-                </script>
-                '''
+            encoded_cv = [InputWidgetsMixin._select_encode(x) for x in cv] if cv else []
+            runtime_config = {
+                "cid": cid,
+                "eventName": "change",
+                "transport": "lite-direct" if self.mode == 'lite' else "ws",
+                "valueProp": "multiselect-comma",
+                "desiredValue": encoded_cv,
+            }
 
             _wd = self._get_widget_defaults("multiselect")
             default_host_cls, default_auto_part_cls = auto_split_widget_cls("multiselect", _wd.get("cls", ""))
@@ -712,56 +662,18 @@ class InputWidgetsMixin:
             if help: _ms_extra['hint'] = help
             if max_selections: _ms_extra['max-options-visible'] = max_selections
             _ms_extra.update(label_attrs)
+            _ms_extra.update(self._runtime_init_props(runtime_init_names, {"data-vl-input-config": runtime_config}))
             if _part_cls:
+                runtime_init_names.append("part-bridge")
+                _ms_extra.update(self._runtime_init_props(runtime_init_names, {"data-vl-input-config": runtime_config}))
                 _ms_extra["data_vl_part_cls"] = serialize_part_cls(_part_cls)
             inner = Component("wa-select", id=cid, label=rendered_label, content=opts_html, multiple=True, with_clear=True, appearance="outlined", **_ms_extra)
-            inner_html = inner.render() + listener_script
-            if _part_cls:
-                inner_html += self._part_bridge_script(f'wa-select#{cid}[data-vl-part-cls]')
+            inner_html = inner.render()
             if _fc or _fs:
                 return Component(None, id=f"{cid}_wrap", content=wrap_html(inner_html, _fc, _fs))
             return Component(None, id=cid, content=inner_html)
         
         self._register_component(cid, builder, action=action)
-        
-        # Add initialization script for lite mode
-        if self.mode == 'lite':
-            init_script_cid = f"{cid}_init"
-            def script_builder():
-                script = f'''
-                <script>
-                (function() {{
-                    function initSelect() {{
-                        const el = document.getElementById('{cid}');
-                        if (!el) {{
-                            setTimeout(initSelect, 50);
-                            return;
-                        }}
-                        if (!el.hasAttribute('data-listener-added')) {{
-                            el.setAttribute('data-listener-added', 'true');
-                            el.addEventListener('change', function(e) {{
-                                const values = Array.isArray(el.value) ? el.value : [];
-                                const valueStr = values.join(',');
-                                htmx.ajax('POST', '/action/{cid}', {{
-                                    values: {{ value: valueStr }},
-                                    swap: 'none'
-                                }});
-                            }});
-                        }}
-                    }}
-                    initSelect();
-                }})();
-                </script>
-                '''
-                return Component("div", id=init_script_cid, style="display:none", content=script)
-            
-            self.static_builders[init_script_cid] = script_builder
-            if layout_ctx.get() == "sidebar":
-                if init_script_cid not in self.static_sidebar_order:
-                    self.static_sidebar_order.append(init_script_cid)
-            else:
-                if init_script_cid not in self.static_order:
-                    self.static_order.append(init_script_cid)
         
         return s
 
@@ -796,7 +708,7 @@ class InputWidgetsMixin:
             # Create local shallow copies of cls/style to avoid shadowing/unbound errors
             _cls = cls
             _style = style
-            local_props = dict(props)
+            builder_props = dict(local_props)
 
             token = rendering_ctx.set(cid)
             cv = s.value
@@ -809,14 +721,14 @@ class InputWidgetsMixin:
             explicit_height_px = None
             height_mode = None
 
-            rows_value = local_props.pop("rows", None)
+            rows_value = builder_props.pop("rows", None)
             if rows_value is not None:
                 try:
                     effective_rows = max(1, int(float(str(rows_value).strip().replace("rows", ""))))
                 except ValueError:
                     effective_rows = 3
 
-            resize_prop = local_props.pop("resize", None)
+            resize_prop = builder_props.pop("resize", None)
             if height is None:
                 pass
             elif isinstance(height, (int, float)):
@@ -847,52 +759,20 @@ class InputWidgetsMixin:
                         explicit_height_px = None
 
             textarea_resize = resize_prop if resize_prop is not None else ("auto" if height_mode in {"content", "stretch"} else "vertical")
+            runtime_init_names = ["input-control"]
+            runtime_config = {
+                "cid": cid,
+                "eventName": "input",
+                "transport": "lite-hx" if self.mode == 'lite' else "ws",
+                "valueProp": "value",
+                "desiredValue": text_value,
+                "extraSync": "textarea-autoresize" if textarea_resize == "auto" else None,
+            }
 
             if self.mode == 'lite':
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
-                listener_script = ""
             else:
-                # WS mode: use addEventListener for Web Awesome custom events
                 attrs = {}
-                desired_json = json.dumps(cv, ensure_ascii=False)
-                resize_sync = ""
-                if textarea_resize == "auto":
-                    resize_sync = '''
-                            if (typeof el.handleValueChange === 'function') el.handleValueChange();
-                            if (typeof el.setTextareaDimensions === 'function') el.setTextareaDimensions();
-                    '''
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    const desiredValue = {desired_json};
-                    if (el) {{
-                        const syncTextarea = function() {{
-                            if (el.value !== desiredValue) el.value = desiredValue;
-{resize_sync}
-                        }};
-
-                        syncTextarea();
-
-                        if (el.updateComplete) {{
-                            el.updateComplete.then(syncTextarea);
-                        }}
-
-                        requestAnimationFrame(function() {{
-                            syncTextarea();
-                            setTimeout(syncTextarea, 150);
-                        }});
-
-                        if (!el.hasAttribute('data-ws-listener')) {{
-                            el.setAttribute('data-ws-listener', 'true');
-                            el.addEventListener('input', function(e) {{
-                                window.sendAction('{cid}', el.value);
-                            }});
-                        }}
-                    }}
-                }})();
-                </script>
-                '''
             
             textarea_props = {"resize": textarea_resize, "rows": effective_rows}
 
@@ -900,7 +780,7 @@ class InputWidgetsMixin:
             # before the component fully measures itself, especially in initially hidden tabs.
             # Give the host element a stable baseline size that follows Streamlit-style height semantics.
             min_height_rem = max(4.75, 1.35 * effective_rows + 1.2)
-            existing_inner_style = local_props.pop("style", "")
+            existing_inner_style = builder_props.pop("style", "")
             if explicit_height_px is not None:
                 textarea_style = merge_style(existing_inner_style, f"--wa-form-control-height: {explicit_height_px}px;")
             elif height_mode == "stretch":
@@ -915,11 +795,12 @@ class InputWidgetsMixin:
             if help: textarea_props["hint"] = help
             escaped_label = html_lib.escape(str(label), quote=True)
             escaped_value = html_lib.escape(str(cv), quote=True)
-            html = f'<wa-textarea id="{cid}" label="{escaped_label}" value="{escaped_value}" appearance="outlined"'
-            serialized_attrs = self._serialize_widget_attrs({**attrs, **textarea_props, **local_props}, allow_event_handlers=True)
+            runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
+            html = f'<wa-textarea id="{cid}" label="{escaped_label}" value="{escaped_value}" appearance="outlined" {runtime_attrs}'
+            serialized_attrs = self._serialize_widget_attrs({**attrs, **textarea_props, **builder_props}, allow_event_handlers=True)
             if serialized_attrs:
                 html += f' {serialized_attrs}'
-            html += f'></wa-textarea>{listener_script}'
+            html += f'></wa-textarea>'
             
             _wd = self._get_widget_defaults("text_area")
             default_host_cls, default_auto_part_cls = auto_split_widget_cls("text_area", _wd.get("cls", ""))
@@ -929,22 +810,12 @@ class InputWidgetsMixin:
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             part_bridge_script = ""
             if _part_cls:
+                runtime_init_names.append("part-bridge")
+                runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
                 part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
                 html = html.replace(f'<wa-textarea id="{cid}"', f'<wa-textarea id="{cid}"{part_attr}', 1)
-                part_bridge_script = f'''<script>(function() {{
-                    let attempts = 0;
-                    const run = function() {{
-                        attempts += 1;
-                        const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyPartStyles) {{
-                            window.applyPartStyles(el);
-                            return;
-                        }}
-                        if (attempts < 20) setTimeout(run, 80);
-                    }};
-                    run();
-                }})();</script>'''
-            return Component(None, id=cid, content=wrap_html(html + part_bridge_script, _fc, _fs))
+                html = html.replace(' appearance="outlined" ', f' appearance="outlined" {runtime_attrs} ', 1)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         
         self._register_component(cid, builder, action=action)
         return s
@@ -980,26 +851,19 @@ class InputWidgetsMixin:
             token = rendering_ctx.set(cid)
             cv = s.value
             rendering_ctx.reset(token)
+            runtime_init_names = ["input-control"]
+            runtime_config = {
+                "cid": cid,
+                "eventName": "input",
+                "transport": "lite-hx" if self.mode == 'lite' else "ws",
+                "valueProp": "value",
+                "desiredValue": "" if cv is None else str(cv),
+            }
             
             if self.mode == 'lite':
                 attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "input delay:50ms", "hx-swap": "none", "name": "value"}
-                listener_script = ""
             else:
-                # WS mode: use addEventListener
                 attrs = {}
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    if (el && !el.hasAttribute('data-ws-listener')) {{
-                        el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('input', function(e) {{
-                            window.sendAction('{cid}', el.value);
-                        }});
-                    }}
-                }})();
-                </script>
-                '''
             
             num_props = {"type": "number"}
             if min_value is not None: num_props["min"] = min_value
@@ -1011,11 +875,12 @@ class InputWidgetsMixin:
             
             escaped_label = html_lib.escape(str(label), quote=True)
             escaped_value = html_lib.escape(str(cv), quote=True)
-            html = f'<wa-input id="{cid}" label="{escaped_label}" value="{escaped_value}" appearance="outlined"'
+            runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
+            html = f'<wa-input id="{cid}" label="{escaped_label}" value="{escaped_value}" appearance="outlined" {runtime_attrs}'
             serialized_attrs = self._serialize_widget_attrs({**attrs, **num_props, **safe_props}, allow_event_handlers=True)
             if serialized_attrs:
                 html += f' {serialized_attrs}'
-            html += f'></wa-input>{listener_script}'
+            html += f'></wa-input>'
             
             _wd = self._get_widget_defaults("number_input")
             default_host_cls, default_auto_part_cls = auto_split_widget_cls("number_input", _wd.get("cls", ""))
@@ -1024,9 +889,11 @@ class InputWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
             if _part_cls:
+                runtime_init_names.append("part-bridge")
+                runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
                 part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
                 html = html.replace(f'<wa-input id="{cid}"', f'<wa-input id="{cid}"{part_attr}', 1)
-                html += self._part_bridge_script(f'wa-input#{cid}[data-vl-part-cls]')
+                html = html.replace(' appearance="outlined" ', f' appearance="outlined" {runtime_attrs} ', 1)
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         
         self._register_component(cid, builder, action=action)
@@ -1225,26 +1092,19 @@ class InputWidgetsMixin:
             
             checked_attr = 'checked' if cv else ''
             props_str = self._serialize_widget_attrs(safe_props)
+            runtime_init_names = ["input-control"]
+            runtime_config = {
+                "cid": cid,
+                "eventName": "change",
+                "transport": "lite-direct" if self.mode == 'lite' else "ws",
+                "valueProp": "checked",
+                "desiredValue": bool(cv),
+            }
             
             if self.mode == 'lite':
-                attrs_str = f'onchange="window._vlHandleLiteToggleChange(this, \'{cid}\')"'
-                listener_script = ""
-            else:
-                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    if (el && !el.hasAttribute('data-ws-listener')) {{
-                        el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('change', function(e) {{
-                            window.sendAction('{cid}', el.checked);
-                        }});
-                    }}
-                }})();
-                </script>
-                '''
+            else:
+                attrs_str = ""
             
             disabled_attr = 'disabled' if disabled else ''
             help_html = f'<br><span style="font-size:0.75rem;color:var(--vl-text-muted);">{html_lib.escape(str(help))}</span>' if help else ''
@@ -1254,10 +1114,13 @@ class InputWidgetsMixin:
             _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
+            runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
             part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"' if _part_cls else ''
-            part_bridge_script = self._part_bridge_script(f'wa-switch#{cid}[data-vl-part-cls]') if _part_cls else ''
+            if _part_cls:
+                runtime_init_names.append("part-bridge")
+                runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
             safe_label = html_lib.escape(str(label))
-            html = f'<wa-switch id="{cid}"{part_attr} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{safe_label}{help_html}</wa-switch>{listener_script}{part_bridge_script}'
+            html = f'<wa-switch id="{cid}"{part_attr} {runtime_attrs} {checked_attr} {disabled_attr} {attrs_str} {props_str}>{safe_label}{help_html}</wa-switch>'
             return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s
@@ -1482,123 +1345,21 @@ class InputWidgetsMixin:
             cv = s.value
             rendering_ctx.reset(token)
             submit_on_enter = type_name == "input" and bool(on_submit)
-            submit_on_enter_js = "true" if submit_on_enter else "false"
+            runtime_init_names = ["input-control"]
+            runtime_config = {
+                "cid": cid,
+                "eventName": input_event,
+                "transport": "lite-hx" if self.mode == 'lite' else "ws",
+                "valueProp": "value",
+                "desiredValue": "" if cv is None else str(cv),
+                "submitOnEnter": submit_on_enter,
+                "submitDirtyFlag": self.mode == 'lite' and submit_on_enter,
+            }
             
             if self.mode == 'lite':
                 attrs_str = f'hx-post="/action/{cid}" hx-trigger="{input_event}" hx-swap="none" name="value"'
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    if (!el) return;
-                    const shouldSkipEcho = function() {{
-                        if (!Object.prototype.hasOwnProperty.call(el, '_vlSkipNextInputEventValue')) return false;
-                        const skipValue = el._vlSkipNextInputEventValue;
-                        delete el._vlSkipNextInputEventValue;
-                        return el.value === skipValue;
-                    }};
-
-                    if (!el.hasAttribute('data-vl-echo-guard')) {{
-                        el.setAttribute('data-vl-echo-guard', 'true');
-                        el.addEventListener('{input_event}', function(event) {{
-                            if (!shouldSkipEcho()) return;
-                            event.preventDefault();
-                            event.stopImmediatePropagation();
-                        }}, true);
-                    }}
-
-                    const bindSubmitOnEnter = function(attempts) {{
-                        if (!{submit_on_enter_js}) return;
-                        const inner = el.shadowRoot ? el.shadowRoot.querySelector('input, textarea') : null;
-                        const target = inner || (attempts >= 10 ? el : null);
-                        if (!target) {{
-                            setTimeout(function() {{ bindSubmitOnEnter(attempts + 1); }}, 80);
-                            return;
-                        }}
-                        if (target.hasAttribute('data-vl-submit-listener')) return;
-                        target.setAttribute('data-vl-submit-listener', 'true');
-                        const allowFocusedUpdateTree = function() {{
-                            if (!window._vlAllowNextFocusedUpdate) return;
-                            let current = el;
-                            while (current) {{
-                                if (current.id) {{
-                                    window._vlAllowNextFocusedUpdate(current.id);
-                                }}
-                                current = current.parentElement;
-                            }}
-                        }};
-                        target.addEventListener('keydown', function(event) {{
-                            if (event.key !== 'Enter') return;
-                            event.preventDefault();
-                            el._vlSkipNextInputEventValue = el.value;
-                            allowFocusedUpdateTree();
-                            const payload = JSON.stringify({{ eventType: 'submit', value: el.value }});
-                            htmx.ajax('POST', '/action/{cid}', {{
-                                values: {{ value: payload, _vl_lite_stream_dirty: 'true' }},
-                                swap: 'none'
-                            }});
-                        }});
-                    }};
-
-                    bindSubmitOnEnter(0);
-                }})();
-                </script>
-                '''
             else:
-                # WS mode: use addEventListener for Web Awesome custom events
                 attrs_str = ""
-                listener_script = f'''
-                <script>
-                (function() {{
-                    const el = document.getElementById('{cid}');
-                    const shouldSkipEcho = function() {{
-                        if (!el || !Object.prototype.hasOwnProperty.call(el, '_vlSkipNextInputEventValue')) return false;
-                        const skipValue = el._vlSkipNextInputEventValue;
-                        delete el._vlSkipNextInputEventValue;
-                        return el.value === skipValue;
-                    }};
-
-                    if (el && !el.hasAttribute('data-ws-listener')) {{
-                        el.setAttribute('data-ws-listener', 'true');
-                        el.addEventListener('{input_event}', function(e) {{
-                            if (shouldSkipEcho()) return;
-                            window.sendAction('{cid}', el.value);
-                        }});
-                    }}
-
-                    const bindSubmitOnEnter = function(attempts) {{
-                        if (!el || !{submit_on_enter_js}) return;
-                        const inner = el.shadowRoot ? el.shadowRoot.querySelector('input, textarea') : null;
-                        const target = inner || (attempts >= 10 ? el : null);
-                        if (!target) {{
-                            setTimeout(function() {{ bindSubmitOnEnter(attempts + 1); }}, 80);
-                            return;
-                        }}
-                        if (target.hasAttribute('data-vl-submit-listener')) return;
-                        target.setAttribute('data-vl-submit-listener', 'true');
-                        const allowFocusedUpdateTree = function() {{
-                            if (!window._vlAllowNextFocusedUpdate) return;
-                            let current = el;
-                            while (current) {{
-                                if (current.id) {{
-                                    window._vlAllowNextFocusedUpdate(current.id);
-                                }}
-                                current = current.parentElement;
-                            }}
-                        }};
-                        target.addEventListener('keydown', function(event) {{
-                            if (event.key !== 'Enter') return;
-                            event.preventDefault();
-                            el._vlSkipNextInputEventValue = el.value;
-                            allowFocusedUpdateTree();
-                            window.sendAction('{cid}', {{ eventType: 'submit', value: el.value }});
-                        }});
-                    }};
-
-                    bindSubmitOnEnter(0);
-                }})();
-                </script>
-                '''
             
             props_str = self._serialize_widget_attrs(safe_props)
             escaped_cv = html_lib.escape(str(cv), quote=True)
@@ -1609,7 +1370,8 @@ class InputWidgetsMixin:
             elif label_visibility == "collapsed":
                 _lbl = ""
             escaped_label = html_lib.escape(str(_lbl), quote=True)
-            html = f'<{tag_name} id="{cid}" label="{escaped_label}" value="{escaped_cv}" appearance="outlined" {attrs_str} {props_str}></{tag_name}>{listener_script}'
+            runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
+            html = f'<{tag_name} id="{cid}" label="{escaped_label}" value="{escaped_cv}" appearance="outlined" {runtime_attrs} {attrs_str} {props_str}></{tag_name}>'
             
             _wd = self._get_widget_defaults(type_name)
             default_host_cls, default_auto_part_cls = auto_split_widget_cls(type_name, _wd.get("cls", ""))
@@ -1617,23 +1379,12 @@ class InputWidgetsMixin:
             _fc = merge_cls(default_host_cls, user_host_cls)
             _fs = merge_style(_wd.get("style", ""), style)
             _part_cls = merge_part_cls(default_auto_part_cls, _wd.get("part_cls", {}), user_auto_part_cls, user_part_cls)
-            part_bridge_script = ""
             if _part_cls:
+                runtime_init_names.append("part-bridge")
+                runtime_attrs = self._runtime_attr_string(runtime_init_names, {"data-vl-input-config": runtime_config})
                 part_attr = f' data-vl-part-cls="{html_lib.escape(serialize_part_cls(_part_cls), quote=True)}"'
                 html = html.replace(f'<{tag_name} id="{cid}"', f'<{tag_name} id="{cid}"{part_attr}', 1)
-                part_bridge_script = f'''<script>(function() {{
-                    let attempts = 0;
-                    const run = function() {{
-                        attempts += 1;
-                        const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyPartStyles) {{
-                            window.applyPartStyles(el);
-                            return;
-                        }}
-                        if (attempts < 20) setTimeout(run, 80);
-                    }};
-                    run();
-                }})();</script>'''
-            return Component(None, id=cid, content=wrap_html(html + part_bridge_script, _fc, _fs))
+                html = html.replace(' appearance="outlined" ', f' appearance="outlined" {runtime_attrs} ', 1)
+            return Component(None, id=cid, content=wrap_html(html, _fc, _fs))
         self._register_component(cid, builder, action=action)
         return s

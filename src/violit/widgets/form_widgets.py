@@ -69,22 +69,9 @@ class FormWidgetsMixin:
                 else:
                     host_style = merge_style(host_style, f"height:{height};")
             host_props = dict(props)
-            part_bridge_script = ""
             if _part_cls:
                 host_props["data_vl_part_cls"] = serialize_part_cls(_part_cls)
-                part_bridge_script = f'''<script>(function() {{
-                    let attempts = 0;
-                    const run = function() {{
-                        attempts += 1;
-                        const el = document.getElementById('{cid}');
-                        if (el && el.shadowRoot && window.applyPartStyles) {{
-                            window.applyPartStyles(el);
-                            return;
-                        }}
-                        if (attempts < 20) setTimeout(run, 80);
-                    }};
-                    run();
-                }})();</script>'''
+                host_props["data_vl_init"] = "part-bridge"
             inner = Component("wa-button", id=cid, content=f"{icon_html}{icon_emoji}{bt}",
                               class_=_fc or None, style=host_style or None,
                               variant=theme_variant, appearance=appearance,
@@ -93,7 +80,6 @@ class FormWidgetsMixin:
             inner_html = inner.render()
             if disabled:
                 inner_html = inner_html.replace(f'id="{cid}"', f'id="{cid}" disabled', 1)
-            inner_html += part_bridge_script
             return Component(None, id=cid, content=inner_html)
         self._register_component(cid, builder, action=on_click)
 

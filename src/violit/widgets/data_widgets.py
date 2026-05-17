@@ -1,5 +1,6 @@
 """Data Widgets Mixin for Violit"""
 
+import html as html_lib
 from typing import Union, Callable, Optional, Any
 import hashlib
 import inspect
@@ -206,8 +207,6 @@ class DataWidgetsMixin:
                                     script_body: str, toolbar_config: dict[str, Any],
                                     toolbar_extra_actions_html: str = "", bottom_html: str = "",
                                     grid_config_hash: str = "") -> str:
-        import html as html_lib
-
         toolbar_html = ""
         if toolbar_config.get("enabled"):
             search_html = ""
@@ -235,6 +234,16 @@ class DataWidgetsMixin:
                 <div class="vl-ag-grid-toolbar__right">{"".join(actions)}</div>
             </div>
             '''
+
+        runtime_config = html_lib.escape(json.dumps({
+            "apiKey": f"gridApi_{cid}",
+            "surfaceId": f"{cid}_surface",
+            "searchInputId": f"{cid}_toolbar_search" if toolbar_config.get("search") else None,
+            "csvButtonId": f"{cid}_toolbar_csv" if toolbar_config.get("export_csv") else None,
+            "fullscreenButtonId": f"{cid}_toolbar_fullscreen" if toolbar_config.get("fullscreen") else None,
+            "fullscreenTargetId": f"{cid}_surface",
+            "csvFileName": toolbar_config.get("csv_file_name", "data.csv"),
+        }, ensure_ascii=False, separators=(",", ":")), quote=True)
 
         return f'''
             <style>
@@ -362,75 +371,12 @@ class DataWidgetsMixin:
                     height: calc(100vh - 6rem) !important;
                 }}
             </style>
-            <div id="{cid}_surface" class="vl-ag-grid-surface">
+            <div id="{cid}_surface" class="vl-ag-grid-surface" data-vl-init="ag-grid-surface" data-vl-ag-grid-config="{runtime_config}">
                 {toolbar_html}
                 <div id="{cid}" data-vl-grid-config-hash="{grid_config_hash}" style="height: {height_css}; width: {width_css}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
                 {bottom_html}
             </div>
             <script>(function(){{
-                if (!window._vlBindAgGridSurface) {{
-                    window._vlBindAgGridSurface = function(cfg) {{
-                        const getApi = () => window[cfg.apiKey];
-
-                        if (cfg.searchInputId) {{
-                            const searchInput = document.getElementById(cfg.searchInputId);
-                            if (searchInput && !searchInput.dataset.vlBound) {{
-                                searchInput.dataset.vlBound = '1';
-                                const applyQuickFilter = function() {{
-                                    const api = getApi();
-                                    if (!api) {{
-                                        return;
-                                    }}
-                                    const nextValue = searchInput.value || '';
-                                    if (typeof api.setGridOption === 'function') {{
-                                        api.setGridOption('quickFilterText', nextValue);
-                                    }} else if (typeof api.updateGridOptions === 'function') {{
-                                        api.updateGridOptions({{ quickFilterText: nextValue }});
-                                    }} else if (typeof api.setQuickFilter === 'function') {{
-                                        api.setQuickFilter(nextValue);
-                                    }}
-                                }};
-                                searchInput.addEventListener('input', applyQuickFilter);
-                                requestAnimationFrame(applyQuickFilter);
-                            }}
-                        }}
-
-                        if (cfg.csvButtonId) {{
-                            const csvButton = document.getElementById(cfg.csvButtonId);
-                            if (csvButton && !csvButton.dataset.vlBound) {{
-                                csvButton.dataset.vlBound = '1';
-                                csvButton.addEventListener('click', function() {{
-                                    const api = getApi();
-                                    if (api && typeof api.exportDataAsCsv === 'function') {{
-                                        api.exportDataAsCsv({{ fileName: cfg.csvFileName || 'data.csv' }});
-                                    }}
-                                }});
-                            }}
-                        }}
-
-                        if (cfg.fullscreenButtonId) {{
-                            const fullscreenButton = document.getElementById(cfg.fullscreenButtonId);
-                            if (fullscreenButton && !fullscreenButton.dataset.vlBound) {{
-                                fullscreenButton.dataset.vlBound = '1';
-                                fullscreenButton.addEventListener('click', function() {{
-                                    const target = document.getElementById(cfg.fullscreenTargetId || cfg.surfaceId);
-                                    if (!target) {{
-                                        return;
-                                    }}
-                                    if (document.fullscreenElement === target) {{
-                                        if (document.exitFullscreen) {{
-                                            document.exitFullscreen().catch(() => {{}});
-                                        }}
-                                        return;
-                                    }}
-                                    if (target.requestFullscreen) {{
-                                        target.requestFullscreen().catch(() => {{}});
-                                    }}
-                                }});
-                            }}
-                        }}
-                    }};
-                }}
                 {script_body}
             }})();</script>
             '''
@@ -593,7 +539,9 @@ class DataWidgetsMixin:
                     if (el && window.agGrid) {{ 
                         const gridApi = agGrid.createGrid(el, opt);
                         window['gridApi_{cid}'] = gridApi;
-                        window._vlBindAgGridSurface({json.dumps(toolbar_bind_config)});
+                        if (window.violitRuntime && typeof window.violitRuntime.bindAgGridSurface === 'function') {{
+                            window.violitRuntime.bindAgGridSurface({json.dumps(toolbar_bind_config)});
+                        }}
                     }}
                     else {{ console.error("agGrid not found"); }}
                 }}
@@ -1174,7 +1122,9 @@ class DataWidgetsMixin:
                     if (el && window.agGrid) {{
                         const gridApi = agGrid.createGrid(el, gridOptions);
                         window['gridApi_{cid}'] = gridApi;
-                        window._vlBindAgGridSurface({json.dumps(toolbar_bind_config)});
+                        if (window.violitRuntime && typeof window.violitRuntime.bindAgGridSurface === 'function') {{
+                            window.violitRuntime.bindAgGridSurface({json.dumps(toolbar_bind_config)});
+                        }}
                         syncDeleteSelectedButtonState();
                     }}
 

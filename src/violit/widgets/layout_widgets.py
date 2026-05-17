@@ -1,6 +1,8 @@
 """Layout Widgets Mixin for Violit"""
 
 import hashlib
+import html as html_lib
+import json
 import re
 
 from functools import wraps
@@ -393,85 +395,15 @@ class LayoutWidgetsMixin:
                     inner_html = "".join(htmls)
                     open_attr = "open" if self.expanded else ""
                     summary_html = summary_builder().render()
-                    restore_script = f'''
-                    <script>
-                    (function() {{
-                        const details = document.getElementById({details_cid!r});
-                        if (!details) return;
-
-                        const storageKey = {'vl_expander_open:' + self.expander_id!r};
-                        const storedOpen = sessionStorage.getItem(storageKey);
-                        const serverOpen = {str(bool(self.expanded)).lower()};
-                        const initialOpen = storedOpen === null ? serverOpen : storedOpen === 'true';
-
-                        const applyOpen = function(nextOpen) {{
-                            if (details.open !== nextOpen) {{
-                                details.open = nextOpen;
-                            }}
-                        }};
-
-                        const armPersistenceFromSummaryInteraction = function(event) {{
-                            const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
-                            const fromSummary = path.some(function(node) {{
-                                return !!(node && typeof node.getAttribute === 'function' && node.getAttribute('slot') === 'summary');
-                            }});
-
-                            if (!fromSummary) return;
-                            if (event.type === 'keydown') {{
-                                const key = event.key || '';
-                                if (key !== 'Enter' && key !== ' ') return;
-                            }}
-
-                            details.dataset.vlExpanderPersistArmed = 'true';
-                        }};
-
-                        const shouldPersistToggle = function() {{
-                            return (
-                                details.dataset.vlExpanderPersistArmed === 'true' &&
-                                details.isConnected &&
-                                document.getElementById(details.id) === details
-                            );
-                        }};
-
-                        const clearPersistArm = function() {{
-                            delete details.dataset.vlExpanderPersistArmed;
-                        }};
-
-                        applyOpen(initialOpen);
-                        requestAnimationFrame(function() {{
-                            applyOpen(initialOpen);
-                        }});
-
-                        if (!details.dataset.vlExpanderPersistenceBound) {{
-                            details.dataset.vlExpanderPersistenceBound = 'true';
-                            details.addEventListener('click', armPersistenceFromSummaryInteraction, true);
-                            details.addEventListener('keydown', armPersistenceFromSummaryInteraction, true);
-                            details.addEventListener('wa-show', function() {{
-                                requestAnimationFrame(function() {{
-                                    if (shouldPersistToggle()) {{
-                                        sessionStorage.setItem(storageKey, 'true');
-                                    }}
-                                    clearPersistArm();
-                                }});
-                            }});
-                            details.addEventListener('wa-hide', function() {{
-                                requestAnimationFrame(function() {{
-                                    if (shouldPersistToggle()) {{
-                                        sessionStorage.setItem(storageKey, 'false');
-                                    }}
-                                    clearPersistArm();
-                                }});
-                            }});
-                        }}
-                    }})();
-                    </script>
-                    '''
+                    expander_config = html_lib.escape(json.dumps({
+                        "storageKey": f"vl_expander_open:{self.expander_id}",
+                        "serverOpen": bool(self.expanded),
+                    }, ensure_ascii=False, separators=(",", ":")), quote=True)
                     html = f'''
-                    <wa-details id="{details_cid}" {open_attr}>
+                    <wa-details id="{details_cid}" data-vl-init="expander-persistence" data-vl-expander-config="{expander_config}" {open_attr}>
                         {summary_html}
                         <div style="padding:0.5rem 0; display:flex; flex-direction:column; width:100%; min-width:0;">{inner_html}</div>
                     </wa-details>
-                    {restore_script}
                     '''
                     _wd = self.app._get_widget_defaults("expander")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
@@ -568,64 +500,20 @@ class LayoutWidgetsMixin:
                         panel_content = "".join(tab_htmls)
                         panels.append(f'<wa-tab-panel name="{panel_name}">{panel_content}</wa-tab-panel>')
 
-                    restore_script = f'''
-                    <script>
-                    (function() {{
-                        const group = document.getElementById('{group_id}');
-                        if (!group) return;
-
-                        const storageKey = 'vl_active_tab:{self.tabs_id}';
-                        const validPanels = new Set({self.panel_names!r});
-                        const defaultPanel = {self.default_panel!r};
-                        const serverPanel = {active_panel!r};
-                        const actionCid = {self.action_cid!r};
-                        const shouldSyncServer = group.dataset.vlSyncServer === 'true';
-
-                        const applyActivePanel = function(panelName) {{
-                            if (!panelName || !validPanels.has(panelName)) return false;
-                            group.setAttribute('active', panelName);
-                            requestAnimationFrame(function() {{
-                                group.setAttribute('active', panelName);
-                                if (typeof group.updateActiveTab === 'function') {{
-                                    group.updateActiveTab();
-                                }}
-                            }});
-                            return true;
-                        }};
-
-                        const syncServer = function(panelName) {{
-                            if (!shouldSyncServer) return;
-                            if (!panelName || panelName === serverPanel) return;
-                            if (typeof window.sendAction === 'function') {{
-                                window.sendAction(actionCid, panelName);
-                            }}
-                        }};
-
-                        const storedPanel = sessionStorage.getItem(storageKey);
-                        const initialPanel = validPanels.has(storedPanel) ? storedPanel : (validPanels.has(serverPanel) ? serverPanel : defaultPanel);
-                        applyActivePanel(initialPanel);
-                        sessionStorage.setItem(storageKey, initialPanel);
-                        syncServer(initialPanel);
-
-                        if (!group.dataset.vlTabPersistenceBound) {{
-                            group.dataset.vlTabPersistenceBound = 'true';
-                            group.addEventListener('wa-tab-show', function(event) {{
-                                const panelName = event.detail && event.detail.name;
-                                if (!validPanels.has(panelName)) return;
-                                sessionStorage.setItem(storageKey, panelName);
-                                syncServer(panelName);
-                            }});
-                        }}
-                    }})();
-                    </script>
-                    '''
+                    tabs_config = html_lib.escape(json.dumps({
+                        "storageKey": f"vl_active_tab:{self.tabs_id}",
+                        "validPanels": self.panel_names,
+                        "defaultPanel": self.default_panel,
+                        "serverPanel": active_panel,
+                        "actionCid": self.action_cid,
+                        "syncServer": False,
+                    }, ensure_ascii=False, separators=(",", ":")), quote=True)
                     
                     html = f'''
-                    <wa-tab-group id="{group_id}" active="{active_panel}">
+                    <wa-tab-group id="{group_id}" active="{active_panel}" data-vl-init="tabs-persistence" data-vl-tabs-config="{tabs_config}">
                         {"".join(headers)}
                         {"".join(panels)}
                     </wa-tab-group>
-                    {restore_script}
                     '''
                     _wd = self.app._get_widget_defaults("tabs")
                     _fc = merge_cls(_wd.get("cls", ""), self.user_cls)
@@ -765,28 +653,14 @@ class LayoutWidgetsMixin:
                 if not inner_html:
                     return Component("div", id=dialog_id, content="")
 
+                dialog_config = html_lib.escape(json.dumps({
+                    "actionCid": dialog_id,
+                }, ensure_ascii=False, separators=(",", ":")), quote=True)
+
                 html = f'''
-                <wa-dialog id="{modal_id}" label="{title}" open light-dismiss style="--width: {dialog_width};">
+                <wa-dialog id="{modal_id}" label="{title}" open light-dismiss style="--width: {dialog_width};" data-vl-init="dialog-auto-open" data-vl-dialog-config="{dialog_config}">
                     <div style="padding:1rem;">{inner_html}</div>
                 </wa-dialog>
-                <script>
-                    (() => {{
-                        const dialog = document.getElementById('{modal_id}');
-                        if (!dialog) return;
-                        dialog.open = true;
-                        requestAnimationFrame(() => {{
-                            dialog.open = true;
-                        }});
-                        if (dialog.dataset.vlHideBound === 'true') return;
-                        dialog.dataset.vlHideBound = 'true';
-                        // Listen for native close event (e.g. backdrop click, escape key, etc.)
-                        dialog.addEventListener('wa-after-hide', (e) => {{
-                            if (e.target.id === '{modal_id}') {{
-                                window.sendAction('{dialog_id}', 'closed');
-                            }}
-                        }});
-                    }})();
-                </script>
                 '''
                 return Component("div", id=dialog_id, content=html)
 

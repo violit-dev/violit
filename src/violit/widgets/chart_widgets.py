@@ -1,6 +1,7 @@
 """Chart Widgets Mixin for Violit"""
 
 import base64
+import html as html_lib
 import json
 
 from typing import Union, Optional, Any, Callable
@@ -444,71 +445,19 @@ class ChartWidgetsMixin:
 
     def _chart_placeholder_component(self, cid, widget_name, height, use_container_width, cls, style, message):
         width_style = "width: 100%;" if use_container_width else ""
+        deferred_config = html_lib.escape(json.dumps({
+            "cid": cid,
+            "preloadLib": "Plotly",
+            "requestValue": "__REQUEST_DATA__",
+            "trigger": "visible",
+        }, ensure_ascii=False, separators=(",", ":")), quote=True)
         html = f'''
-        <div id="{cid}" class="js-plotly-plot" data-vl-deferred-chart="true" style="{width_style} height: {height}px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
+        <div id="{cid}" class="js-plotly-plot" data-vl-deferred-chart="true" data-vl-init="deferred-chart" data-vl-deferred-chart-config="{deferred_config}" style="{width_style} height: {height}px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
             <div style="text-align: center;">
                 <wa-spinner style="font-size: 1.5rem; margin-bottom: 0.75rem;"></wa-spinner>
                 <div style="font-size: 0.85rem; color: var(--vl-text-muted); font-weight: 500;">{message}</div>
             </div>
         </div>
-        <script>
-            (function() {{
-                const chartId = '{cid}';
-
-                if (!window._vlDeferredChartsRequested) {{
-                    window._vlDeferredChartsRequested = new Set();
-                }}
-
-                const requestHydration = () => {{
-                    if (window._vlDeferredChartsRequested.has(chartId)) return;
-
-                    const el = document.getElementById(chartId);
-                    if (!el) return;
-
-                    window._vlDeferredChartsRequested.add(chartId);
-
-                    if (window._vlPreloadLib) window._vlPreloadLib('Plotly');
-
-                    if (window._vlQueueDeferredAction) {{
-                        window._vlQueueDeferredAction(chartId, '__REQUEST_DATA__');
-                    }} else if (window.sendAction) {{
-                        window.sendAction(chartId, '__REQUEST_DATA__');
-                    }}
-                }};
-
-                const observeVisibility = () => {{
-                    const el = document.getElementById(chartId);
-                    if (!el) {{
-                        setTimeout(observeVisibility, 50);
-                        return;
-                    }}
-
-                    if (window._vlPreloadLib) window._vlPreloadLib('Plotly');
-
-                    if (!('IntersectionObserver' in window)) {{
-                        requestHydration();
-                        return;
-                    }}
-
-                    const io = new IntersectionObserver((entries) => {{
-                        const entry = entries[0];
-                        if (!entry) return;
-                        if (entry.isIntersecting || entry.boundingClientRect.top < window.innerHeight + 240) {{
-                            io.disconnect();
-                            requestHydration();
-                        }}
-                    }}, {{ rootMargin: '240px 0px 320px 0px' }});
-
-                    io.observe(el);
-                }};
-
-                if (document.readyState === 'loading') {{
-                    document.addEventListener('DOMContentLoaded', observeVisibility, {{ once: true }});
-                }} else {{
-                    observeVisibility();
-                }}
-            }})();
-        </script>
         '''
         _wd = self._get_widget_defaults(widget_name)
         _fc = merge_cls(_wd.get("cls", ""), cls)
@@ -566,25 +515,19 @@ class ChartWidgetsMixin:
             # This ensures the first HTML response is small and the splash screen appears instantly.
             if initial_render_ctx.get() and data_points > _ASYNC_CHART_THRESHOLD:
                 width_style = "width: 100%;" if use_container_width else ""
+                deferred_config = html_lib.escape(json.dumps({
+                    "cid": cid,
+                    "preloadLib": "Plotly",
+                    "requestValue": "__REQUEST_DATA__",
+                    "trigger": "immediate",
+                }, ensure_ascii=False, separators=(",", ":")), quote=True)
                 html = f'''
-                <div id="{cid}" class="js-plotly-plot" style="{width_style} height: 500px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
+                <div id="{cid}" class="js-plotly-plot" data-vl-init="deferred-chart" data-vl-deferred-chart-config="{deferred_config}" style="{width_style} height: 500px; display: flex; align-items: center; justify-content: center; background: var(--vl-bg-card); border: 1px solid var(--vl-border); border-radius: var(--vl-radius);">
                     <div style="text-align: center;">
                         <wa-spinner style="font-size: 2rem; margin-bottom: 0.75rem;"></wa-spinner>
                         <div style="font-size: 0.85rem; color: var(--vl-text-muted); font-weight: 500;">Loading dataset ({data_points:,} points)...</div>
                     </div>
                 </div>
-                <script>
-                    (function() {{
-                        const check = () => {{
-                            if (window.sendAction) {{
-                                window.sendAction('{cid}', '__REQUEST_DATA__');
-                            }} else {{
-                                setTimeout(check, 50);
-                            }}
-                        }};
-                        check();
-                    }})();
-                </script>
                 '''
                 _wd = self._get_widget_defaults("plotly_chart")
                 _fc = merge_cls(_wd.get("cls", ""), cls)

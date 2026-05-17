@@ -301,16 +301,75 @@
             });
         };
 
-        window._vlHandleLiteSelectChange = async (element, cid) => {
-            if (mode !== 'lite' || !element || !cid || typeof window.fetch !== 'function') {
+        window.violitRuntime = window.violitRuntime || {};
+        const violitRuntime = window.violitRuntime;
+        violitRuntime._initializers = violitRuntime._initializers || {};
+
+        violitRuntime.registerInitializer = function(name, initializer) {
+            if (!name || typeof initializer !== 'function') {
                 return;
+            }
+            violitRuntime._initializers[name] = initializer;
+        };
+
+        violitRuntime.readJsonAttr = function(element, attrName, fallback = null) {
+            if (!element || typeof element.getAttribute !== 'function') {
+                return fallback;
+            }
+            const rawValue = element.getAttribute(attrName);
+            if (!rawValue) {
+                return fallback;
+            }
+            try {
+                return JSON.parse(rawValue);
+            } catch (error) {
+                console.warn('[violitRuntime] Failed to parse JSON attr', attrName, error);
+                return fallback;
+            }
+        };
+
+        violitRuntime.markBound = function(element, key) {
+            if (!element || !key) {
+                return false;
+            }
+            const attrName = `data-vl-bound-${key}`;
+            if (element.hasAttribute(attrName)) {
+                return true;
+            }
+            element.setAttribute(attrName, 'true');
+            return false;
+        };
+
+        violitRuntime.allowFocusedUpdateTree = function(element) {
+            if (!element || typeof window._vlAllowNextFocusedUpdate !== 'function') {
+                return;
+            }
+            let current = element;
+            while (current) {
+                if (current.id) {
+                    window._vlAllowNextFocusedUpdate(current.id);
+                }
+                current = current.parentElement;
+            }
+        };
+
+        violitRuntime.postLiteAction = async function(cid, value, options = {}) {
+            if (mode !== 'lite' || !cid || typeof window.fetch !== 'function') {
+                return null;
             }
 
             const scrollRestore = captureViewportScroll();
-
             const params = new URLSearchParams();
-            params.set('value', element.value || '');
-            params.set('_vl_skip_clicked', 'true');
+            params.set('value', typeof value === 'string' ? value : JSON.stringify(value));
+            params.set('_vl_skip_clicked', options.skipClicked === false ? 'false' : 'true');
+            if (options.extraValues && typeof options.extraValues === 'object') {
+                Object.entries(options.extraValues).forEach(([key, extraValue]) => {
+                    if (extraValue === undefined || extraValue === null) {
+                        return;
+                    }
+                    params.set(key, String(extraValue));
+                });
+            }
             if (window._csrf_token) params.set('_csrf_token', window._csrf_token);
             if (window._vlViewId) params.set('_vl_view_id', window._vlViewId);
 
@@ -328,35 +387,616 @@
                 applyLiteStreamPayload(html);
                 restoreViewportScroll(scrollRestore);
             }
+            return { response, html };
+        };
+
+        violitRuntime.initElement = function(element) {
+            if (!element || typeof element.getAttribute !== 'function') {
+                return;
+            }
+            const initNames = (element.getAttribute('data-vl-init') || '')
+                .split(/\s+/)
+                .map((name) => name.trim())
+                .filter(Boolean);
+
+            initNames.forEach((name) => {
+                const initializer = violitRuntime._initializers[name];
+                if (typeof initializer !== 'function') {
+                    return;
+                }
+                initializer(element);
+            });
+        };
+
+        violitRuntime.initScope = function(scope = document) {
+            const roots = [];
+            if (scope instanceof Element || scope instanceof Document || scope instanceof DocumentFragment) {
+                roots.push(scope);
+            }
+            if (scope && scope.jquery && scope.length) {
+                scope.each(function() {
+                    roots.push(this);
+                });
+            }
+
+            roots.forEach((root) => {
+                if (!root || !root.querySelectorAll) {
+                    return;
+                }
+                if (root instanceof Element && root.hasAttribute('data-vl-init')) {
+                    violitRuntime.initElement(root);
+                }
+                root.querySelectorAll('[data-vl-init]').forEach((element) => {
+                    violitRuntime.initElement(element);
+                });
+            });
+
+            if (typeof window._vlApplyPartBridge === 'function') {
+                window._vlApplyPartBridge(scope || document);
+            }
+            if (typeof window._vlApplyVisualStreamSmoothing === 'function') {
+                window._vlApplyVisualStreamSmoothing(scope || document);
+            }
+        };
+
+        violitRuntime.scheduleScopeInit = function(scope = document) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    violitRuntime.initScope(scope);
+                });
+            });
+        };
+
+        violitRuntime.resolveControlTarget = function(element) {
+            if (!element) {
+                return null;
+            }
+            if (element.shadowRoot) {
+                return element.shadowRoot.querySelector('input, textarea, select') || element;
+            }
+            return element;
+        };
+
+        violitRuntime.readControlValue = function(element, valueProp) {
+            if (!element) {
+                return '';
+            }
+            if (valueProp === 'checked') {
+                return !!element.checked;
+            }
+            if (valueProp === 'multiselect-comma') {
+                const values = Array.isArray(element.value) ? element.value : (element.value ? [element.value] : []);
+                return values.join(',');
+            }
+            return element.value == null ? '' : element.value;
+        };
+
+        violitRuntime.writeControlValue = function(element, valueProp, nextValue) {
+            if (!element) {
+                return;
+            }
+            if (valueProp === 'checked') {
+                element.checked = !!nextValue;
+                return;
+            }
+            if (valueProp === 'multiselect-comma') {
+                if (Array.isArray(nextValue)) {
+                    element.value = nextValue;
+                } else if (typeof nextValue === 'string' && nextValue) {
+                    element.value = nextValue.split(',').filter(Boolean);
+                } else {
+                    element.value = [];
+                }
+                return;
+            }
+            element.value = nextValue == null ? '' : nextValue;
+        };
+
+        violitRuntime.normalizeControlValue = function(valueProp, value) {
+            if (valueProp === 'checked') {
+                return value ? 'true' : 'false';
+            }
+            if (valueProp === 'multiselect-comma') {
+                if (Array.isArray(value)) {
+                    return value.join(',');
+                }
+                return value == null ? '' : String(value);
+            }
+            return value == null ? '' : String(value);
+        };
+
+        violitRuntime.syncControlValue = function(element, config) {
+            if (!element || !config || !Object.prototype.hasOwnProperty.call(config, 'desiredValue')) {
+                return;
+            }
+
+            const desiredValue = config.desiredValue;
+            const valueProp = config.valueProp || 'value';
+            const applySync = () => {
+                const currentValue = violitRuntime.normalizeControlValue(valueProp, violitRuntime.readControlValue(element, valueProp));
+                const nextValue = violitRuntime.normalizeControlValue(valueProp, desiredValue);
+                if (currentValue !== nextValue) {
+                    violitRuntime.writeControlValue(element, valueProp, desiredValue);
+                }
+                if (config.extraSync === 'textarea-autoresize') {
+                    if (typeof element.handleValueChange === 'function') element.handleValueChange();
+                    if (typeof element.setTextareaDimensions === 'function') element.setTextareaDimensions();
+                }
+            };
+
+            applySync();
+            if (element.updateComplete && typeof element.updateComplete.then === 'function') {
+                element.updateComplete.then(applySync);
+            }
+
+            requestAnimationFrame(() => {
+                applySync();
+                setTimeout(applySync, typeof config.syncDelayMs === 'number' ? config.syncDelayMs : 150);
+            });
+        };
+
+        violitRuntime.buildControlSyncSignature = function(config = {}) {
+            if (!config || !Object.prototype.hasOwnProperty.call(config, 'desiredValue')) {
+                return '';
+            }
+            const valueProp = config.valueProp || 'value';
+            return JSON.stringify({
+                valueProp,
+                desiredValue: violitRuntime.normalizeControlValue(valueProp, config.desiredValue),
+                extraSync: config.extraSync || '',
+            });
+        };
+
+        violitRuntime.bindInputControl = function(element, config = {}) {
+            if (!element || !config.cid) {
+                return;
+            }
+
+            const valueProp = config.valueProp || 'value';
+            const eventName = config.eventName || 'change';
+            const transport = config.transport || (mode === 'ws' ? 'ws' : 'lite-hx');
+            const submitOnEnter = config.submitOnEnter === true;
+            const submitDirtyFlag = config.submitDirtyFlag === true;
+
+            const syncSignature = violitRuntime.buildControlSyncSignature(config);
+            const previousSyncSignature = element.getAttribute('data-vl-sync-signature') || '';
+            if (syncSignature !== previousSyncSignature) {
+                violitRuntime.syncControlValue(element, config);
+                if (syncSignature) {
+                    element.setAttribute('data-vl-sync-signature', syncSignature);
+                } else {
+                    element.removeAttribute('data-vl-sync-signature');
+                }
+            }
+
+            const readCurrentValue = () => violitRuntime.readControlValue(element, valueProp);
+            const shouldSkipEcho = function() {
+                if (!Object.prototype.hasOwnProperty.call(element, '_vlSkipNextInputEventValue')) return false;
+                const skipValue = element._vlSkipNextInputEventValue;
+                delete element._vlSkipNextInputEventValue;
+                return violitRuntime.normalizeControlValue(valueProp, readCurrentValue()) === String(skipValue);
+            };
+
+            if (transport === 'ws' && !violitRuntime.markBound(element, `ws-listener-${config.cid}-${eventName}`)) {
+                element.addEventListener(eventName, function() {
+                    if (shouldSkipEcho()) return;
+                    window.sendAction(config.cid, readCurrentValue());
+                });
+            }
+
+            if (transport === 'lite-direct' && !violitRuntime.markBound(element, `lite-direct-${config.cid}-${eventName}`)) {
+                element.addEventListener(eventName, function() {
+                    violitRuntime.postLiteAction(config.cid, readCurrentValue());
+                });
+            }
+
+            if (transport === 'lite-hx' && config.useEchoGuard !== false && !violitRuntime.markBound(element, `lite-echo-${config.cid}-${eventName}`)) {
+                element.addEventListener(eventName, function(event) {
+                    if (!shouldSkipEcho()) return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                }, true);
+            }
+
+            const bindSubmitOnEnter = function(attempts) {
+                if (!submitOnEnter) return;
+                const target = violitRuntime.resolveControlTarget(element) || (attempts >= 10 ? element : null);
+                if (!target) {
+                    setTimeout(function() { bindSubmitOnEnter(attempts + 1); }, 80);
+                    return;
+                }
+                if (violitRuntime.markBound(target, `submit-enter-${config.cid}`)) {
+                    return;
+                }
+                target.addEventListener('keydown', function(event) {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    const currentValue = readCurrentValue();
+                    element._vlSkipNextInputEventValue = violitRuntime.normalizeControlValue(valueProp, currentValue);
+                    violitRuntime.allowFocusedUpdateTree(element);
+                    const payload = { eventType: 'submit', value: currentValue };
+                    if (transport === 'ws') {
+                        window.sendAction(config.cid, payload);
+                        return;
+                    }
+                    if (transport === 'lite-direct') {
+                        violitRuntime.postLiteAction(config.cid, payload, {
+                            extraValues: submitDirtyFlag ? { _vl_lite_stream_dirty: 'true' } : null,
+                        });
+                        return;
+                    }
+                    if (window.htmx && typeof window.htmx.ajax === 'function') {
+                        const values = { value: JSON.stringify(payload) };
+                        if (submitDirtyFlag) {
+                            values._vl_lite_stream_dirty = 'true';
+                        }
+                        htmx.ajax('POST', `/action/${config.cid}`, {
+                            values,
+                            swap: 'none',
+                        });
+                    }
+                });
+            };
+
+            bindSubmitOnEnter(0);
+        };
+
+        violitRuntime.registerInitializer('input-control', function(element) {
+            const config = violitRuntime.readJsonAttr(element, 'data-vl-input-config', null);
+            if (!config) {
+                return;
+            }
+            violitRuntime.bindInputControl(element, config);
+        });
+
+        violitRuntime.registerInitializer('part-bridge', function(element) {
+            const run = function(attempts) {
+                if (!element || !element.isConnected) {
+                    return;
+                }
+                if (element.shadowRoot && typeof window.applyPartStyles === 'function') {
+                    window.applyPartStyles(element);
+                    return;
+                }
+                if (attempts < 20) {
+                    setTimeout(function() { run(attempts + 1); }, 80);
+                }
+            };
+            run(0);
+        });
+
+        violitRuntime.registerInitializer('expander-persistence', function(element) {
+            const config = violitRuntime.readJsonAttr(element, 'data-vl-expander-config', null);
+            if (!config || !config.storageKey) {
+                return;
+            }
+
+            const details = element;
+            const storedOpen = sessionStorage.getItem(config.storageKey);
+            const serverOpen = config.serverOpen === true;
+            const initialOpen = storedOpen === null ? serverOpen : storedOpen === 'true';
+
+            const applyOpen = function(nextOpen) {
+                if (details.open !== nextOpen) {
+                    details.open = nextOpen;
+                }
+            };
+
+            const armPersistenceFromSummaryInteraction = function(event) {
+                const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+                const fromSummary = path.some(function(node) {
+                    return !!(node && typeof node.getAttribute === 'function' && node.getAttribute('slot') === 'summary');
+                });
+
+                if (!fromSummary) return;
+                if (event.type === 'keydown') {
+                    const key = event.key || '';
+                    if (key !== 'Enter' && key !== ' ') return;
+                }
+
+                details.dataset.vlExpanderPersistArmed = 'true';
+            };
+
+            const shouldPersistToggle = function() {
+                return (
+                    details.dataset.vlExpanderPersistArmed === 'true' &&
+                    details.isConnected &&
+                    document.getElementById(details.id) === details
+                );
+            };
+
+            const clearPersistArm = function() {
+                delete details.dataset.vlExpanderPersistArmed;
+            };
+
+            applyOpen(initialOpen);
+            requestAnimationFrame(function() {
+                applyOpen(initialOpen);
+            });
+
+            if (violitRuntime.markBound(details, `expander-persistence-${details.id}`)) {
+                return;
+            }
+
+            details.addEventListener('click', armPersistenceFromSummaryInteraction, true);
+            details.addEventListener('keydown', armPersistenceFromSummaryInteraction, true);
+            details.addEventListener('wa-show', function() {
+                requestAnimationFrame(function() {
+                    if (shouldPersistToggle()) {
+                        sessionStorage.setItem(config.storageKey, 'true');
+                    }
+                    clearPersistArm();
+                });
+            });
+            details.addEventListener('wa-hide', function() {
+                requestAnimationFrame(function() {
+                    if (shouldPersistToggle()) {
+                        sessionStorage.setItem(config.storageKey, 'false');
+                    }
+                    clearPersistArm();
+                });
+            });
+        });
+
+        violitRuntime.registerInitializer('tabs-persistence', function(element) {
+            const config = violitRuntime.readJsonAttr(element, 'data-vl-tabs-config', null);
+            if (!config || !config.storageKey) {
+                return;
+            }
+
+            const group = element;
+            const validPanels = new Set(Array.isArray(config.validPanels) ? config.validPanels : []);
+            const defaultPanel = typeof config.defaultPanel === 'string' ? config.defaultPanel : '';
+            const serverPanel = typeof config.serverPanel === 'string' ? config.serverPanel : defaultPanel;
+            const actionCid = typeof config.actionCid === 'string' ? config.actionCid : '';
+            const shouldSyncServer = config.syncServer === true;
+
+            const applyActivePanel = function(panelName) {
+                if (!panelName || !validPanels.has(panelName)) return false;
+                group.setAttribute('active', panelName);
+                requestAnimationFrame(function() {
+                    group.setAttribute('active', panelName);
+                    if (typeof group.updateActiveTab === 'function') {
+                        group.updateActiveTab();
+                    }
+                });
+                return true;
+            };
+
+            const syncServer = function(panelName) {
+                if (!shouldSyncServer || !actionCid) return;
+                if (!panelName || panelName === serverPanel) return;
+                if (typeof window.sendAction === 'function') {
+                    window.sendAction(actionCid, panelName);
+                    return;
+                }
+                if (mode === 'lite') {
+                    violitRuntime.postLiteAction(actionCid, panelName);
+                }
+            };
+
+            const storedPanel = sessionStorage.getItem(config.storageKey);
+            const initialPanel = validPanels.has(storedPanel) ? storedPanel : (validPanels.has(serverPanel) ? serverPanel : defaultPanel);
+            applyActivePanel(initialPanel);
+            sessionStorage.setItem(config.storageKey, initialPanel);
+            syncServer(initialPanel);
+
+            if (violitRuntime.markBound(group, `tabs-persistence-${group.id}`)) {
+                return;
+            }
+
+            group.addEventListener('wa-tab-show', function(event) {
+                const panelName = event.detail && event.detail.name;
+                if (!validPanels.has(panelName)) return;
+                sessionStorage.setItem(config.storageKey, panelName);
+                syncServer(panelName);
+            });
+        });
+
+        violitRuntime.registerInitializer('dialog-auto-open', function(element) {
+            const config = violitRuntime.readJsonAttr(element, 'data-vl-dialog-config', null);
+            if (!config || !config.actionCid) {
+                return;
+            }
+
+            const dialog = element;
+            dialog.open = true;
+            requestAnimationFrame(function() {
+                dialog.open = true;
+            });
+
+            if (violitRuntime.markBound(dialog, `dialog-auto-open-${dialog.id}`)) {
+                return;
+            }
+
+            dialog.addEventListener('wa-after-hide', function(event) {
+                if (!event || !event.target || event.target.id !== dialog.id) {
+                    return;
+                }
+                if (typeof window.sendAction === 'function') {
+                    window.sendAction(config.actionCid, 'closed');
+                    return;
+                }
+                if (mode === 'lite') {
+                    violitRuntime.postLiteAction(config.actionCid, 'closed');
+                }
+            });
+        });
+
+        violitRuntime.requestDeferredAction = function(cid, value) {
+            if (!cid) {
+                return;
+            }
+            if (typeof window._vlQueueDeferredAction === 'function') {
+                window._vlQueueDeferredAction(cid, value);
+                return;
+            }
+            if (typeof window.sendAction === 'function') {
+                window.sendAction(cid, value);
+                return;
+            }
+            if (mode === 'lite') {
+                violitRuntime.postLiteAction(cid, value);
+            }
+        };
+
+        violitRuntime.registerInitializer('deferred-chart', function(element) {
+            const config = violitRuntime.readJsonAttr(element, 'data-vl-deferred-chart-config', null);
+            const chartId = config && typeof config.cid === 'string' ? config.cid : element.id;
+            if (!chartId) {
+                return;
+            }
+
+            if (!window._vlDeferredChartsRequested) {
+                window._vlDeferredChartsRequested = new Set();
+            }
+
+            const requestValue = config && Object.prototype.hasOwnProperty.call(config, 'requestValue')
+                ? config.requestValue
+                : '__REQUEST_DATA__';
+            const preloadLib = config && typeof config.preloadLib === 'string' ? config.preloadLib : 'Plotly';
+            const trigger = config && typeof config.trigger === 'string' ? config.trigger : 'visible';
+
+            const requestHydration = function() {
+                if (window._vlDeferredChartsRequested.has(chartId)) return;
+
+                const liveElement = document.getElementById(chartId);
+                if (!liveElement) return;
+
+                window._vlDeferredChartsRequested.add(chartId);
+
+                if (preloadLib && typeof window._vlPreloadLib === 'function') {
+                    window._vlPreloadLib(preloadLib);
+                }
+
+                violitRuntime.requestDeferredAction(chartId, requestValue);
+            };
+
+            const observeVisibility = function() {
+                const liveElement = document.getElementById(chartId);
+                if (!liveElement) {
+                    setTimeout(observeVisibility, 50);
+                    return;
+                }
+
+                if (preloadLib && typeof window._vlPreloadLib === 'function') {
+                    window._vlPreloadLib(preloadLib);
+                }
+
+                if (trigger === 'immediate') {
+                    requestHydration();
+                    return;
+                }
+
+                if (!('IntersectionObserver' in window)) {
+                    requestHydration();
+                    return;
+                }
+
+                const io = new IntersectionObserver(function(entries) {
+                    const entry = entries && entries[0];
+                    if (!entry) return;
+                    if (entry.isIntersecting || entry.boundingClientRect.top < window.innerHeight + 240) {
+                        io.disconnect();
+                        requestHydration();
+                    }
+                }, { rootMargin: '240px 0px 320px 0px' });
+
+                io.observe(liveElement);
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', observeVisibility, { once: true });
+            } else {
+                observeVisibility();
+            }
+        });
+
+        violitRuntime.bindAgGridSurface = function(config = {}) {
+            if (!config || !config.apiKey) {
+                return;
+            }
+
+            const getApi = function() {
+                return window[config.apiKey];
+            };
+
+            if (config.searchInputId) {
+                const searchInput = document.getElementById(config.searchInputId);
+                if (searchInput && !violitRuntime.markBound(searchInput, `ag-grid-search-${config.searchInputId}`)) {
+                    const applyQuickFilter = function() {
+                        const api = getApi();
+                        if (!api) {
+                            return;
+                        }
+                        const nextValue = searchInput.value || '';
+                        if (typeof api.setGridOption === 'function') {
+                            api.setGridOption('quickFilterText', nextValue);
+                        } else if (typeof api.updateGridOptions === 'function') {
+                            api.updateGridOptions({ quickFilterText: nextValue });
+                        } else if (typeof api.setQuickFilter === 'function') {
+                            api.setQuickFilter(nextValue);
+                        }
+                    };
+                    searchInput.addEventListener('input', applyQuickFilter);
+                    requestAnimationFrame(applyQuickFilter);
+                }
+            }
+
+            if (config.csvButtonId) {
+                const csvButton = document.getElementById(config.csvButtonId);
+                if (csvButton && !violitRuntime.markBound(csvButton, `ag-grid-csv-${config.csvButtonId}`)) {
+                    csvButton.addEventListener('click', function() {
+                        const api = getApi();
+                        if (api && typeof api.exportDataAsCsv === 'function') {
+                            api.exportDataAsCsv({ fileName: config.csvFileName || 'data.csv' });
+                        }
+                    });
+                }
+            }
+
+            if (config.fullscreenButtonId) {
+                const fullscreenButton = document.getElementById(config.fullscreenButtonId);
+                if (fullscreenButton && !violitRuntime.markBound(fullscreenButton, `ag-grid-fullscreen-${config.fullscreenButtonId}`)) {
+                    fullscreenButton.addEventListener('click', function() {
+                        const target = document.getElementById(config.fullscreenTargetId || config.surfaceId);
+                        if (!target) {
+                            return;
+                        }
+                        if (document.fullscreenElement === target) {
+                            if (document.exitFullscreen) {
+                                document.exitFullscreen().catch(function() {});
+                            }
+                            return;
+                        }
+                        if (target.requestFullscreen) {
+                            target.requestFullscreen().catch(function() {});
+                        }
+                    });
+                }
+            }
+        };
+
+        violitRuntime.registerInitializer('ag-grid-surface', function(element) {
+            const config = violitRuntime.readJsonAttr(element, 'data-vl-ag-grid-config', null);
+            if (!config) {
+                return;
+            }
+            violitRuntime.bindAgGridSurface(config);
+        });
+
+        window._vlHandleLiteSelectChange = async (element, cid) => {
+            if (mode !== 'lite' || !element || !cid || typeof window.fetch !== 'function') {
+                return;
+            }
+            await violitRuntime.postLiteAction(cid, element.value || '');
         };
 
         window._vlHandleLiteToggleChange = async (element, cid) => {
             if (mode !== 'lite' || !element || !cid || typeof window.fetch !== 'function') {
                 return;
             }
-
-            const scrollRestore = captureViewportScroll();
-
-            const params = new URLSearchParams();
-            params.set('value', element.checked ? 'true' : 'false');
-            params.set('_vl_skip_clicked', 'true');
-            if (window._csrf_token) params.set('_csrf_token', window._csrf_token);
-            if (window._vlViewId) params.set('_vl_view_id', window._vlViewId);
-
-            const response = await fetch(withRootPath(`/action/${cid}`), {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    ...(window._vlViewId ? { 'X-Violit-View': window._vlViewId } : {}),
-                },
-                body: params.toString(),
-            });
-            const html = await response.text();
-            if (response.ok && html) {
-                applyLiteStreamPayload(html);
-                restoreViewportScroll(scrollRestore);
-            }
+            await violitRuntime.postLiteAction(cid, element.checked ? 'true' : 'false');
         };
 
         function applyLiteStreamPayload(payload) {
@@ -429,11 +1069,8 @@
             if (window.htmx && typeof window.htmx.process === 'function') {
                 window.htmx.process(document.body);
             }
-            if (typeof window._vlApplyPartBridge === 'function') {
-                window._vlApplyPartBridge(document);
-            }
-            if (typeof window._vlApplyVisualStreamSmoothing === 'function') {
-                window._vlApplyVisualStreamSmoothing(document);
+            if (window.violitRuntime && typeof window.violitRuntime.scheduleScopeInit === 'function') {
+                window.violitRuntime.scheduleScopeInit(document);
             }
             if (typeof hljs !== 'undefined') {
                 document.querySelectorAll('.violit-code-block pre code:not(.hljs)').forEach(function(block) {
@@ -1888,8 +2525,9 @@
             syncSidebarWidthFromStorage();
             setupSidebarResizer();
             window._vlLoadLib('Plotly', setupPlotlyResizer);
-            window._vlApplyPartBridge(document);
-            window._vlApplyVisualStreamSmoothing(document);
+            if (window.violitRuntime && typeof window.violitRuntime.scheduleScopeInit === 'function') {
+                window.violitRuntime.scheduleScopeInit(document);
+            }
         });
 
         if (mode === 'ws') {
@@ -2794,6 +3432,9 @@
                         // Apply updates immediately (no View Transition).
                         // CSS fade-in on .page-container handles the smooth entrance.
                         applyUpdates(msg.payload);
+                        if (window.violitRuntime && typeof window.violitRuntime.scheduleScopeInit === 'function') {
+                            window.violitRuntime.scheduleScopeInit(document);
+                        }
                         window._vlApplyPartBridge(document);
                         window._vlApplyVisualStreamSmoothing(document);
 

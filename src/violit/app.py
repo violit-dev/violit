@@ -1672,7 +1672,7 @@ class App(
                 <script>
                     (function() {{
                         const root = document.documentElement;
-                        const vars = `{vars_str}`.split('\n');
+                        const vars = `{vars_str}`.split('\\n');
                         vars.forEach(v => {{
                             const parts = v.split(':');
                             if(parts.length === 2) {{
