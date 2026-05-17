@@ -1,7 +1,5 @@
 """Status Widgets Mixin for Violit"""
 
-import re
-import warnings
 from typing import Any, Callable, Optional, Union
 from ..component import Component
 from ..context import rendering_ctx, session_ctx, view_ctx
@@ -82,79 +80,6 @@ class StatusWidgetsMixin:
                 return
             store.setdefault('client_command_queue', []).append(command)
 
-    def _legacy_eval_to_command(self, code: Any, **lite_data) -> tuple[Optional[str], dict[str, Any]]:
-        if 'toast_data' in lite_data and isinstance(lite_data['toast_data'], dict):
-            return 'toast.show', dict(lite_data['toast_data'])
-
-        if 'effect' in lite_data:
-            return 'effect.play', {'effect': str(lite_data['effect'])}
-
-        if not isinstance(code, str):
-            return None, {}
-
-        stripped = code.strip()
-        if stripped == 'createBalloons()':
-            return 'effect.play', {'effect': 'balloons'}
-        if stripped == 'createSnow()':
-            return 'effect.play', {'effect': 'snow'}
-
-        toast_match = re.match(r'^createToast\((.*)\)$', stripped, flags=re.DOTALL)
-        if toast_match:
-            try:
-                import json
-
-                message, variant, icon = json.loads(f'[{toast_match.group(1)}]')
-                return 'toast.show', {
-                    'message': str(message),
-                    'variant': str(variant),
-                    'icon': str(icon),
-                }
-            except Exception:
-                return None, {}
-
-        interval_match = re.search(
-            r"window\._vlCreateInterval\('([^']+)',\s*(\d+),\s*(true|false)\)",
-            stripped,
-        )
-        if interval_match:
-            return 'interval.start', {
-                'id': interval_match.group(1),
-                'ms': int(interval_match.group(2)),
-                'autostart': interval_match.group(3) == 'true',
-            }
-
-        href_match = re.search(r"window\.location\.href\s*=\s*'([^']+)';?", stripped)
-        if href_match:
-            return 'navigate', {'mode': 'href', 'url': href_match.group(1)}
-
-        hash_match = re.search(
-            r"window\._currentPageKey='([^']+)';[\s\S]*window\.location\.hash='([^']*)';",
-            stripped,
-        )
-        if hash_match:
-            pending_match = re.search(r"window\._pendingPageKey='([^']+)';", stripped)
-            return 'navigate', {
-                'mode': 'hash',
-                'targetKey': pending_match.group(1) if pending_match else hash_match.group(1),
-                'targetHash': hash_match.group(2),
-            }
-
-        dialog_match = re.search(r"document\.getElementById\('([^']+)'\)", stripped)
-        if dialog_match and ('requestClose' in stripped or '.hide(' in stripped or '.close(' in stripped or 'dialog.open = false' in stripped):
-            return 'dialog.close', {'id': dialog_match.group(1)}
-
-        download_match = re.search(
-            r"a\.href = '([^']+)';[\s\S]*a\.download = '([^']+)';",
-            stripped,
-        )
-        if download_match:
-            return 'download.start', {
-                'href': download_match.group(1),
-                'fileName': download_match.group(2),
-            }
-
-        return None, {}
-    
     def success(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
         """Display success alert"""
         self.alert(*args, variant="success", icon=icon, show_icon=show_icon, cls=cls, style=style)
@@ -415,18 +340,6 @@ class StatusWidgetsMixin:
             _fs = merge_style(_wd.get("style", ""), style)
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
-
-    def _enqueue_eval(self, code, **lite_data):
-        """Deprecated compatibility wrapper for known legacy framework side effects."""
-        command_name, payload = self._legacy_eval_to_command(code, **lite_data)
-        if command_name is None:
-            warnings.warn(
-                "Arbitrary client-side JavaScript execution is disabled. Ignoring unsupported legacy eval payload.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-            return
-        self._enqueue_client_command(command_name, payload)
 
     def progress(self, value=0, *args, cls: str = "", style: str = ""):
         """Display progress bar with Signal support"""

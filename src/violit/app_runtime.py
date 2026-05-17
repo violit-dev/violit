@@ -376,9 +376,6 @@ class AppRuntimeMixin:
             client_command_queue = store.get('client_command_queue')
             if client_command_queue:
                 client_command_queue.clear()
-            eval_queue = store.get('eval_queue')
-            if eval_queue:
-                eval_queue.clear()
             deferred_charts = store.get('_vl_chart_requested')
             if deferred_charts:
                 deferred_charts.clear()

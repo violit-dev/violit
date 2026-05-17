@@ -2850,10 +2850,6 @@
                                 window._vlExecuteClientCommand(command);
                             }
                         });
-                    } else if (msg.type === 'eval') {
-                        if (!window._vlTryExecuteLegacyEval || !window._vlTryExecuteLegacyEval(msg.code)) {
-                            console.warn('[Violit Security] Ignored deprecated eval payload.');
-                        }
                     } else if (msg.type === 'interval_ctrl') {
                         // Server-initiated interval control (pause/resume/stop)
                         const ctrl = window._vlIntervals && window._vlIntervals[msg.id];
@@ -3191,89 +3187,7 @@
             return false;
         }
 
-        function tryExecuteLegacyEval(code) {
-            if (typeof code !== 'string') return false;
-            const trimmed = code.trim();
-            if (!trimmed) return true;
-
-            if (trimmed === 'createBalloons()') {
-                return executeClientCommand({ name: 'effect.play', payload: { effect: 'balloons' } });
-            }
-            if (trimmed === 'createSnow()') {
-                return executeClientCommand({ name: 'effect.play', payload: { effect: 'snow' } });
-            }
-
-            let match = trimmed.match(/^createToast\((.*)\)$/s);
-            if (match) {
-                try {
-                    const args = JSON.parse(`[${match[1]}]`);
-                    return executeClientCommand({
-                        name: 'toast.show',
-                        payload: {
-                            message: String(args[0] || ''),
-                            variant: String(args[1] || 'primary'),
-                            icon: String(args[2] || 'circle-info'),
-                        },
-                    });
-                } catch (error) {
-                    return false;
-                }
-            }
-
-            match = trimmed.match(/window\._vlCreateInterval\('([^']+)',\s*(\d+),\s*(true|false)\)/);
-            if (match) {
-                return executeClientCommand({
-                    name: 'interval.start',
-                    payload: {
-                        id: match[1],
-                        ms: Number(match[2]),
-                        autostart: match[3] === 'true',
-                    },
-                });
-            }
-
-            match = trimmed.match(/window\.location\.href\s*=\s*'([^']+)';?/);
-            if (match) {
-                return executeClientCommand({
-                    name: 'navigate',
-                    payload: { mode: 'href', url: match[1] },
-                });
-            }
-
-            const keyMatch = trimmed.match(/window\._currentPageKey='([^']+)';[\s\S]*window\.location\.hash='([^']*)';/);
-            if (keyMatch) {
-                const pendingMatch = trimmed.match(/window\._pendingPageKey='([^']+)';/);
-                return executeClientCommand({
-                    name: 'navigate',
-                    payload: {
-                        mode: 'hash',
-                        targetKey: pendingMatch ? pendingMatch[1] : keyMatch[1],
-                        targetHash: keyMatch[2],
-                    },
-                });
-            }
-
-            match = trimmed.match(/document\.getElementById\('([^']+)'\)/);
-            if (match && (trimmed.includes('requestClose') || trimmed.includes('.hide(') || trimmed.includes('.close(') || trimmed.includes('dialog.open = false'))) {
-                return executeClientCommand({
-                    name: 'dialog.close',
-                    payload: { id: match[1] },
-                });
-            }
-
-            match = trimmed.match(/a\.href = '([^']+)';[\s\S]*a\.download = '([^']+)';/);
-            if (match) {
-                return executeClientCommand({
-                    name: 'download.start',
-                    payload: { href: match[1], fileName: match[2] },
-                });
-            }
-
-            return false;
-        }
-
         window._vlExecuteClientCommand = executeClientCommand;
-        window._vlTryExecuteLegacyEval = tryExecuteLegacyEval;
         
         // Restore state from URL Hash (or force Home if no hash)
         function restoreFromHash() {

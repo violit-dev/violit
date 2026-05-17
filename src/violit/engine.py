@@ -133,6 +133,3 @@ class WsEngine:
             view_id=view_id,
         )
 
-    async def push_eval(self, sid: str, code: str, view_id: Optional[str] = None):
-        await self._send_json_to_view(sid, {"type": "eval", "code": code}, view_id=view_id)
-
