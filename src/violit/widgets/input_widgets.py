@@ -510,7 +510,7 @@ class InputWidgetsMixin:
             escaped_label = html_lib.escape(str(rendered_label), quote=True)
             
             if self.mode == 'lite':
-                attrs = {"hx-post": f"/action/{cid}", "hx-trigger": "change", "hx-swap": "none", "name": "value"}
+                attrs = {"onchange": f"window._vlHandleLiteSelectChange(this, '{cid}')"}
                 listener_script = ""
             else:
                 # WS mode: use native change events from Web Awesome
@@ -1207,7 +1207,7 @@ class InputWidgetsMixin:
             props_str = ' '.join(f'{k}="{v}"' for k, v in props.items() if v is not None and v is not False)
             
             if self.mode == 'lite':
-                attrs_str = f'hx-post="/action/{cid}" hx-trigger="change" hx-swap="none" hx-vals="js:{{value: event.target.checked}}"'
+                attrs_str = f'onchange="window._vlHandleLiteToggleChange(this, \'{cid}\')"'
                 listener_script = ""
             else:
                 # WS mode: use addEventListener for Web Awesome custom events

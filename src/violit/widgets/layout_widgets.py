@@ -750,88 +750,43 @@ class LayoutWidgetsMixin:
         def decorator(func):
             dialog_id = f"dialog_{func.__name__}"
             modal_id = f"{dialog_id}_modal"
-            
-            # Create a function to open the dialog
-            def open_dialog(*args, **kwargs):
+
+            def builder():
                 from ..state import get_session_store
                 store = get_session_store()
-                # Clear previous children so re-opening doesn't accumulate
-                store['fragment_components'][dialog_id] = []
 
-                # Set fragment context for dialog content
-                token = fragment_ctx.set(dialog_id)
+                htmls = []
+                for child_cid, child_builder in store['fragment_components'].get(dialog_id, []):
+                    htmls.append(child_builder().render())
 
-                # Execute the dialog content function
-                func(*args, **kwargs)
-                
-                # Build dialog HTML
-                def builder():
-                    from ..state import get_session_store
-                    store = get_session_store()
-                    
-                    # Render dialog content
-                    htmls = []
-                    for child_cid, child_builder in store['fragment_components'].get(dialog_id, []):
-                        htmls.append(child_builder().render())
-                    
-                    inner_html = "".join(htmls)
-                    html = f'''
-                    <wa-dialog id="{modal_id}" label="{title}" open light-dismiss style="--width: {dialog_width};">
-                        <div style="padding:1rem;">{inner_html}</div>
-                    </wa-dialog>
-                    <script>
-                        (() => {{
-                            const dialog = document.getElementById('{modal_id}');
-                            if (!dialog) return;
+                inner_html = "".join(htmls)
+                if not inner_html:
+                    return Component("div", id=dialog_id, content="")
+
+                html = f'''
+                <wa-dialog id="{modal_id}" label="{title}" open light-dismiss style="--width: {dialog_width};">
+                    <div style="padding:1rem;">{inner_html}</div>
+                </wa-dialog>
+                <script>
+                    (() => {{
+                        const dialog = document.getElementById('{modal_id}');
+                        if (!dialog) return;
+                        dialog.open = true;
+                        requestAnimationFrame(() => {{
                             dialog.open = true;
-                            requestAnimationFrame(() => {{
-                                dialog.open = true;
-                            }});
-                            if (dialog.dataset.vlHideBound === 'true') return;
-                            dialog.dataset.vlHideBound = 'true';
-                            // Listen for native close event (e.g. backdrop click, escape key, etc.)
-                            dialog.addEventListener('wa-after-hide', (e) => {{
-                                if (e.target.id === '{modal_id}') {{
-                                    window.sendAction('{dialog_id}', 'closed');
-                                }}
-                            }});
-                        }})();
-                    </script>
-                    '''
-                    return Component("div", id=dialog_id, content=html)
-                
-                fragment_ctx.reset(token)
-                
-                from ..context import session_ctx
-                store = get_session_store()
-                sid = session_ctx.get()
-                
-                def dialog_action(value=None):
-                    if value == 'closed':
-                        return
-                    close_dialog()
-
-                # Register action immediately so we can close from UI
-                if sid is None:
-                    self.static_actions[dialog_id] = dialog_action
-                else:
-                    store.setdefault('actions', {})[dialog_id] = dialog_action
-
-                # Check if it's already registered to avoid duplicates
-                is_registered = dialog_id in store.get('builders', {}) or dialog_id in self.static_builders
-                
-                if not is_registered:
-                    self._register_component(dialog_id, builder)
-                else:
-                    # Update existing builder
-                    if sid is None:
-                        self.static_builders[dialog_id] = builder
-                    else:
-                        store['builders'][dialog_id] = builder
-                        
-                # Force dirty to update it immediately
-                if sid is not None:
-                    store.setdefault('forced_dirty', set()).add(dialog_id)
+                        }});
+                        if (dialog.dataset.vlHideBound === 'true') return;
+                        dialog.dataset.vlHideBound = 'true';
+                        // Listen for native close event (e.g. backdrop click, escape key, etc.)
+                        dialog.addEventListener('wa-after-hide', (e) => {{
+                            if (e.target.id === '{modal_id}') {{
+                                window.sendAction('{dialog_id}', 'closed');
+                            }}
+                        }});
+                    }})();
+                </script>
+                '''
+                return Component("div", id=dialog_id, content=html)
 
             def close_dialog(*args, **kwargs):
                 self._enqueue_eval(
@@ -855,6 +810,35 @@ class LayoutWidgetsMixin:
                     }})();
                     """
                 )
+
+            def dialog_action(value=None):
+                if value == 'closed':
+                    return
+                close_dialog()
+
+            self._register_component(dialog_id, builder, action=dialog_action)
+            
+            # Create a function to open the dialog
+            def open_dialog(*args, **kwargs):
+                from ..state import get_session_store
+                store = get_session_store()
+                # Clear previous children so re-opening doesn't accumulate
+                store['fragment_components'][dialog_id] = []
+
+                # Set fragment context for dialog content
+                token = fragment_ctx.set(dialog_id)
+
+                # Execute the dialog content function
+                func(*args, **kwargs)
+
+                fragment_ctx.reset(token)
+                
+                from ..context import session_ctx
+                sid = session_ctx.get()
+                        
+                # Force dirty to update it immediately
+                if sid is not None:
+                    store.setdefault('forced_dirty', set()).add(dialog_id)
 
             open_dialog.open = open_dialog
             open_dialog.close = close_dialog

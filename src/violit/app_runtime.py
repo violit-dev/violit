@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import hmac
+import inspect
 import json
 import logging
 import queue
@@ -20,6 +21,29 @@ from .state import STATIC_STORE, clear_view_scoped_dependencies, get_session_sto
 
 
 VIEW_RESTORE_COOKIE = "_vl_reload_view"
+
+
+def _invoke_action_callback(action_callback, value):
+    if value is None:
+        action_callback()
+        return
+
+    try:
+        parameters = inspect.signature(action_callback).parameters.values()
+    except (TypeError, ValueError):
+        action_callback(value)
+        return
+
+    accepts_positional = any(
+        parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        for parameter in parameters
+    )
+    accepts_varargs = any(parameter.kind == inspect.Parameter.VAR_POSITIONAL for parameter in parameters)
+
+    if accepts_positional or accepts_varargs:
+        action_callback(value)
+    else:
+        action_callback()
 
 
 def _is_expected_websocket_runtime_disconnect(ws: WebSocket, error: RuntimeError) -> bool:
@@ -532,6 +556,7 @@ class AppRuntimeMixin:
             try:
                 value = form.get("value")
                 force_lite_stream_dirty = form.get("_vl_lite_stream_dirty") == "true"
+                skip_clicked_component = form.get("_vl_skip_clicked") == "true"
                 store = get_session_store()
                 if value is not None:
                     store.setdefault('submitted_values', {})[cid] = value
@@ -546,7 +571,7 @@ class AppRuntimeMixin:
                     action_token = action_ctx.set(True)
                     pending_token = pending_shared_views_ctx.set(set())
                     try:
-                        action_callback(value) if value is not None else action_callback()
+                        _invoke_action_callback(action_callback, value)
                     finally:
                         action_ctx.reset(action_token)
 
@@ -573,7 +598,7 @@ class AppRuntimeMixin:
 
                             if has_lite_stream:
                                 stream_components = list(other_dirty)
-                                if clicked_component is not None:
+                                if clicked_component is not None and not skip_clicked_component:
                                     stream_components.insert(0, clicked_component)
                                 payload = self._build_lite_oob_payload(stream_components)
                                 if payload:
@@ -583,7 +608,9 @@ class AppRuntimeMixin:
                                     self._schedule_scoped_state_flush(pending_views, exclude_current=True)
                                 return HTMLResponse("")
 
-                        response_html = clicked_component.render() if clicked_component else ""
+                        response_html = ""
+                        if clicked_component is not None and not skip_clicked_component:
+                            response_html = clicked_component.render()
                         response_html += self._build_lite_oob_payload(other_dirty)
                         pending_views = set(pending_shared_views_ctx.get() or set())
                         if pending_views:

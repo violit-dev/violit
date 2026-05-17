@@ -278,6 +278,87 @@
             }
         }
 
+        const captureViewportScroll = () => ({
+            x: window.scrollX || 0,
+            y: window.scrollY || window.pageYOffset || 0,
+        });
+
+        const restoreViewportScroll = (restore) => {
+            if (!restore) {
+                return;
+            }
+
+            const restoreScroll = () => {
+                window.scrollTo(restore.x || 0, restore.y || 0);
+            };
+
+            requestAnimationFrame(() => {
+                restoreScroll();
+                requestAnimationFrame(() => {
+                    restoreScroll();
+                    setTimeout(restoreScroll, 80);
+                });
+            });
+        };
+
+        window._vlHandleLiteSelectChange = async (element, cid) => {
+            if (mode !== 'lite' || !element || !cid || typeof window.fetch !== 'function') {
+                return;
+            }
+
+            const scrollRestore = captureViewportScroll();
+
+            const params = new URLSearchParams();
+            params.set('value', element.value || '');
+            params.set('_vl_skip_clicked', 'true');
+            if (window._csrf_token) params.set('_csrf_token', window._csrf_token);
+            if (window._vlViewId) params.set('_vl_view_id', window._vlViewId);
+
+            const response = await fetch(withRootPath(`/action/${cid}`), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    ...(window._vlViewId ? { 'X-Violit-View': window._vlViewId } : {}),
+                },
+                body: params.toString(),
+            });
+            const html = await response.text();
+            if (response.ok && html) {
+                applyLiteStreamPayload(html);
+                restoreViewportScroll(scrollRestore);
+            }
+        };
+
+        window._vlHandleLiteToggleChange = async (element, cid) => {
+            if (mode !== 'lite' || !element || !cid || typeof window.fetch !== 'function') {
+                return;
+            }
+
+            const scrollRestore = captureViewportScroll();
+
+            const params = new URLSearchParams();
+            params.set('value', element.checked ? 'true' : 'false');
+            params.set('_vl_skip_clicked', 'true');
+            if (window._csrf_token) params.set('_csrf_token', window._csrf_token);
+            if (window._vlViewId) params.set('_vl_view_id', window._vlViewId);
+
+            const response = await fetch(withRootPath(`/action/${cid}`), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    ...(window._vlViewId ? { 'X-Violit-View': window._vlViewId } : {}),
+                },
+                body: params.toString(),
+            });
+            const html = await response.text();
+            if (response.ok && html) {
+                applyLiteStreamPayload(html);
+                restoreViewportScroll(scrollRestore);
+            }
+        };
+
         function applyLiteStreamPayload(payload) {
             if (!payload) return;
 
@@ -360,7 +441,6 @@
                 });
             }
         }
-
         function decodeBase64Utf8(value) {
             if (typeof value !== 'string' || !value) {
                 return '';
@@ -2023,10 +2103,7 @@
                     }
                 }
 
-                window._pendingScrollRestore = {
-                    x: window.scrollX || 0,
-                    y: window.scrollY || window.pageYOffset || 0
-                };
+                window._pendingScrollRestore = captureViewportScroll();
                 
                 const payload = {
                     type: 'click',
@@ -3092,8 +3169,19 @@
             tryRestore();
         }
         
-        // Note: For ws mode, restoreFromHash is called from ws.onopen
-        // For lite mode, call it on load:
+        const handleBrowserHistoryNavigation = () => {
+            if (window._suppressHashRestoreOnce) {
+                window._suppressHashRestoreOnce = false;
+                return;
+            }
+            if (mode === 'ws' && !window._wsReady) {
+                return;
+            }
+            setTimeout(restoreFromHash, 40);
+        };
+
+        // Note: For ws mode, restoreFromHash is called from ws.onopen.
+        // For lite mode, call it on load and also react to later hash changes.
         if (mode !== 'ws') {
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', () => setTimeout(restoreFromHash, 200));
@@ -3101,19 +3189,6 @@
                 setTimeout(restoreFromHash, 200);
             }
         } else {
-            const handleBrowserHistoryNavigation = () => {
-                if (window._suppressHashRestoreOnce) {
-                    window._suppressHashRestoreOnce = false;
-                    return;
-                }
-                if (!window._wsReady) {
-                    return;
-                }
-                setTimeout(restoreFromHash, 40);
-            };
-
-            window.addEventListener('hashchange', handleBrowserHistoryNavigation);
-            window.addEventListener('popstate', handleBrowserHistoryNavigation);
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'hidden') {
                     window._vlLastHiddenAt = Date.now();
@@ -3123,6 +3198,11 @@
                     window._vlHandleResume('visibilitychange');
                 }
             });
+        }
+
+        window.addEventListener('hashchange', handleBrowserHistoryNavigation);
+        window.addEventListener('popstate', handleBrowserHistoryNavigation);
+        if (mode === 'ws') {
             window.addEventListener('focus', () => window._vlHandleResume('focus'));
             window.addEventListener('online', () => window._vlHandleResume('online'));
             window.addEventListener('pageshow', () => window._vlHandleResume('pageshow'));
