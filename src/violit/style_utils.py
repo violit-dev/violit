@@ -6,7 +6,7 @@ Provides merge helpers for cls (class) and style (inline CSS) parameters.
 import html as html_lib
 import json
 
-from .component import sanitize_inline_style
+from .component import class_string_needs_tailwind_wait, sanitize_inline_style
 
 
 AUTO_PART_WIDGETS = {
@@ -680,6 +680,8 @@ def wrap_html(html: str, cls: str = "", style: str = "", wrapper_id: str = "") -
         attrs.append(f'id="{html_lib.escape(wrapper_id, quote=True)}"')
     if cls:
         attrs.append(f'class="{html_lib.escape(cls, quote=True)}"')
+        if class_string_needs_tailwind_wait(cls):
+            attrs.append('data-vl-tailwind-wait="true"')
     if style:
         safe_style = sanitize_inline_style(style)
         if safe_style:

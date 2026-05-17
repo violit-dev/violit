@@ -97,6 +97,103 @@ _SAFE_DATA_URL_PREFIXES = (
     "video/ogg",
 )
 
+_TAILWIND_WAIT_EXACT_TOKENS = {
+    "block",
+    "inline",
+    "inline-block",
+    "flex",
+    "inline-flex",
+    "grid",
+    "inline-grid",
+    "contents",
+    "hidden",
+    "relative",
+    "absolute",
+    "fixed",
+    "sticky",
+    "static",
+    "border",
+    "rounded",
+    "shadow",
+    "ring",
+    "uppercase",
+    "lowercase",
+    "capitalize",
+    "italic",
+}
+
+_TAILWIND_WAIT_EXCLUDED_TOKENS = {
+    "text-small",
+    "text-medium",
+    "text-large",
+    "text-muted",
+}
+
+_TAILWIND_WAIT_PREFIXES = (
+    "m-",
+    "mx-",
+    "my-",
+    "mt-",
+    "mr-",
+    "mb-",
+    "ml-",
+    "ms-",
+    "me-",
+    "space-",
+    "w-",
+    "h-",
+    "min-w-",
+    "min-h-",
+    "max-w-",
+    "max-h-",
+    "size-",
+    "flex-",
+    "grid-",
+    "col-",
+    "row-",
+    "justify-",
+    "items-",
+    "content-",
+    "self-",
+    "place-",
+    "overflow-",
+    "overscroll-",
+    "inset-",
+    "top-",
+    "right-",
+    "bottom-",
+    "left-",
+    "start-",
+    "end-",
+    "z-",
+    "animate-",
+    "bg-",
+    "text-",
+    "font-",
+    "tracking-",
+    "leading-",
+    "decoration-",
+    "underline-",
+    "color-",
+    "border-",
+    "rounded-",
+    "shadow-",
+    "ring-",
+    "opacity-",
+    "backdrop-",
+    "fill-",
+    "stroke-",
+    "p-",
+    "px-",
+    "py-",
+    "pt-",
+    "pr-",
+    "pb-",
+    "pl-",
+    "ps-",
+    "pe-",
+)
+
 
 def normalize_component_attr_name(name: str) -> str:
     raw_name = name[:-1] if name.endswith('_') and not name.endswith('__') else name
@@ -136,6 +233,30 @@ def sanitize_component_url(raw_url: Any, *, attr_name: str) -> str | None:
             return None
 
     return url
+
+
+def class_string_needs_tailwind_wait(class_string: Any) -> bool:
+    raw_value = str(class_string or "").strip()
+    if not raw_value:
+        return False
+
+    for token in re.split(r"\s+", raw_value):
+        normalized = token.strip()
+        if not normalized:
+            continue
+        core = normalized.split(":")[-1].lstrip("!")
+        if not core:
+            continue
+        if core in _TAILWIND_WAIT_EXCLUDED_TOKENS:
+            continue
+        if core.startswith("[") or "[" in core:
+            return True
+        if core in _TAILWIND_WAIT_EXACT_TOKENS:
+            return True
+        if core.startswith(_TAILWIND_WAIT_PREFIXES):
+            return True
+
+    return False
 
 
 def is_allowed_public_attr(name: str) -> bool:
@@ -232,8 +353,17 @@ class Component:
             # Escape content if enabled
             return html.escape(content) if self.escape_content else content
 
-        props_str = serialize_public_component_attrs(self.props, allow_event_handlers=True)
-        content = self.props.get('content', '')
+        props = dict(self.props)
+        class_value = props.get('class') or props.get('class_') or ''
+        if (
+            class_string_needs_tailwind_wait(class_value)
+            and 'data_vl_tailwind_wait' not in props
+            and 'data-vl-tailwind-wait' not in props
+        ):
+            props['data_vl_tailwind_wait'] = 'true'
+
+        props_str = serialize_public_component_attrs(props, allow_event_handlers=True)
+        content = props.get('content', '')
         
         # Escape content if enabled
         if self.escape_content:

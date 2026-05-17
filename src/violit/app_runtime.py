@@ -473,7 +473,7 @@ class AppRuntimeMixin:
                 view_id=current_view_id or "",
                 view_restore_token=view_restore_token,
                 root_path=self.root_path,
-                runtime_asset_version=self.boot_id,
+                runtime_asset_version=self.runtime_asset_version,
             )
             html = self._rewrite_public_urls(html)
             return build_html_response(html)

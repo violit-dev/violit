@@ -11,9 +11,11 @@ import queue
 import warnings
 import secrets
 import logging
+import hashlib
 import base64
 import html
 import mimetypes
+from urllib.parse import parse_qs
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -72,6 +74,33 @@ from .widgets import (
 )
 
 
+class ViolitStaticFiles(StaticFiles):
+    """Static file serving with cache headers tuned for local startup reuse."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        if not response.headers.get("Cache-Control"):
+            response.headers["Cache-Control"] = self._cache_control_for_scope(scope)
+        return response
+
+    def _cache_control_for_scope(self, scope) -> str:
+        raw_path = str(scope.get("path") or "").replace("\\", "/").lower()
+        raw_query = scope.get("query_string") or b""
+        query = parse_qs(raw_query.decode("latin-1"), keep_blank_values=True)
+
+        if "/static/runtime/" in raw_path:
+            if query.get("v"):
+                return "public, max-age=31536000, immutable"
+            return "public, max-age=0, must-revalidate"
+
+        if "/static/vendor/" in raw_path:
+            if raw_path.endswith((".woff2", ".woff", ".ttf", ".otf")):
+                return "public, max-age=31536000, immutable"
+            return "public, max-age=3600, stale-while-revalidate=86400"
+
+        return "public, max-age=0, must-revalidate"
+
+
 class App(
     AppRuntimeMixin,
     AppLauncherMixin,
@@ -97,6 +126,7 @@ class App(
         self.disconnect_timeout = disconnect_timeout
         self.root_path = self._normalize_root_path(root_path)
         self.boot_id = uuid.uuid4().hex
+        self.runtime_asset_version = self._compute_runtime_asset_version() or self.boot_id
         self.app_title = title  # Renamed to avoid conflict with title() method
         self.theme_manager = Theme(theme)
         app_instance_ref[0] = self
@@ -126,7 +156,7 @@ class App(
         # Mount static files for offline support
         static_path = Path(__file__).parent / "static"
         if static_path.exists():
-            self.fastapi.mount("/static", StaticFiles(directory=static_path), name="static")
+            self.fastapi.mount("/static", ViolitStaticFiles(directory=static_path), name="static")
         
         # Debug mode: Check for --debug flag
         self.debug_mode = '--debug' in sys.argv
@@ -252,7 +282,24 @@ class App(
                 }}));
             }};
 
+            const needsTailwindRuntime = () => {{
+                const root = document.getElementById('root');
+                const scope = root || document;
+                if (document.querySelector('style[type="text/tailwindcss"]')) {{
+                    return true;
+                }}
+                if (!scope || !scope.querySelector) {{
+                    return false;
+                }}
+                return !!scope.querySelector('[data-vl-part-cls], [data-vl-tailwind-wait="true"]');
+            }};
+
             const waitForTailwindRuntime = () => new Promise((resolve) => {{
+                if (!needsTailwindRuntime()) {{
+                    resolve();
+                    return;
+                }}
+
                 if (window.__vlTailwindReady) {{
                     resolve();
                     return;
@@ -437,6 +484,14 @@ class App(
         self._animation_updater()
         
         self._setup_routes()
+
+    def _compute_runtime_asset_version(self) -> str:
+        runtime_path = Path(__file__).parent / "static" / "runtime" / "violit_app_runtime.js"
+        try:
+            digest = hashlib.sha1(runtime_path.read_bytes()).hexdigest()
+        except OSError:
+            return ""
+        return digest[:16]
 
     @staticmethod
     def _normalize_spacing_preset(spacing: Optional[str]) -> str:
