@@ -308,6 +308,9 @@
                         if (!smartUpdated && targetId.endsWith('_wrapper') && currentRoot.querySelector('[data-chat-thread="true"]')) {
                             smartUpdated = trySmartUpdateChatThreadWrapper(currentRoot, incomingRoot);
                         }
+                        if (!smartUpdated && targetId.endsWith('_wrapper') && currentRoot.querySelector('[data-vl-grid-config-hash]')) {
+                            smartUpdated = trySmartUpdateAgGridWrapper(currentRoot, incomingRoot);
+                        }
                         if (targetId.endsWith('_wrapper') && currentRoot.querySelector('.js-plotly-plot')) {
                             smartUpdated = trySmartUpdatePlotlyWrapper(currentRoot, incomingRoot.outerHTML);
                         }
@@ -686,6 +689,196 @@
                     target.setAttribute(name, source.getAttribute(name));
                 }
             });
+        }
+
+        function getSingleAgGridMount(root) {
+            if (!(root instanceof Element)) return null;
+
+            const mounts = [];
+            if (root.matches('[data-vl-grid-config-hash]')) {
+                mounts.push(root);
+            }
+            root.querySelectorAll('[data-vl-grid-config-hash]').forEach((el) => mounts.push(el));
+
+            return mounts.length === 1 ? mounts[0] : null;
+        }
+
+        function collectAgGridColumnIds(defs) {
+            if (!Array.isArray(defs)) {
+                return [];
+            }
+
+            return defs.reduce((acc, col) => {
+                if (!col || typeof col !== 'object') {
+                    return acc;
+                }
+                if (Array.isArray(col.children)) {
+                    acc.push(...collectAgGridColumnIds(col.children));
+                    return acc;
+                }
+
+                const columnId = String(col.colId ?? col.field ?? col.headerName ?? '').trim();
+                if (columnId) {
+                    acc.push(columnId);
+                }
+                return acc;
+            }, []);
+        }
+
+        function extractArrayLiteralAfter(source, marker) {
+            if (typeof source !== 'string' || !source || !marker) {
+                return null;
+            }
+
+            const markerIndex = source.indexOf(marker);
+            if (markerIndex === -1) {
+                return null;
+            }
+
+            const start = source.indexOf('[', markerIndex + marker.length);
+            if (start === -1) {
+                return null;
+            }
+
+            let depth = 0;
+            let inString = false;
+            let stringQuote = '';
+            let escaped = false;
+
+            for (let index = start; index < source.length; index += 1) {
+                const char = source[index];
+
+                if (inString) {
+                    if (escaped) {
+                        escaped = false;
+                        continue;
+                    }
+                    if (char === '\\') {
+                        escaped = true;
+                        continue;
+                    }
+                    if (char === stringQuote) {
+                        inString = false;
+                        stringQuote = '';
+                    }
+                    continue;
+                }
+
+                if (char === '"' || char === '\'' || char === '`') {
+                    inString = true;
+                    stringQuote = char;
+                    continue;
+                }
+
+                if (char === '[') {
+                    depth += 1;
+                    continue;
+                }
+
+                if (char === ']') {
+                    depth -= 1;
+                    if (depth === 0) {
+                        return source.slice(start, index + 1);
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        function extractAgGridRowDataLiteral(source) {
+            return extractArrayLiteralAfter(source, 'const initialRowData =') || extractArrayLiteralAfter(source, 'rowData:');
+        }
+
+        function extractAgGridColumnDefsLiteral(source) {
+            return extractArrayLiteralAfter(source, 'const rawColumnDefs =') || extractArrayLiteralAfter(source, 'columnDefs:');
+        }
+
+        function trySmartUpdateAgGridWrapper(currentRoot, incomingMarkupOrRoot) {
+            if (!currentRoot || !incomingMarkupOrRoot) return false;
+
+            let nextRoot = incomingMarkupOrRoot;
+            let incomingMarkup = '';
+
+            if (typeof incomingMarkupOrRoot === 'string') {
+                incomingMarkup = incomingMarkupOrRoot;
+                const temp = document.createElement('div');
+                temp.innerHTML = incomingMarkupOrRoot;
+                nextRoot = temp.firstElementChild;
+            } else {
+                incomingMarkup = incomingMarkupOrRoot.outerHTML || '';
+            }
+
+            if (!(nextRoot instanceof Element) || currentRoot.id !== nextRoot.id) return false;
+
+            const currentGridMount = getSingleAgGridMount(currentRoot);
+            const nextGridMount = getSingleAgGridMount(nextRoot);
+            if (!currentGridMount || !nextGridMount || !currentGridMount.id || currentGridMount.id !== nextGridMount.id) {
+                return false;
+            }
+
+            const baseCid = currentGridMount.id;
+            const gridApi = window['gridApi_' + baseCid];
+            if (!gridApi) {
+                return false;
+            }
+
+            const rowDataLiteral = extractAgGridRowDataLiteral(incomingMarkup);
+            if (!rowDataLiteral) {
+                return false;
+            }
+
+            const columnDefsLiteral = extractAgGridColumnDefsLiteral(incomingMarkup);
+
+            try {
+                const currentStyle = currentGridMount.getAttribute('style') || '';
+                const nextStyle = nextGridMount.getAttribute('style') || '';
+                if (currentStyle !== nextStyle) {
+                    return false;
+                }
+
+                const currentConfigHash = currentGridMount.getAttribute('data-vl-grid-config-hash') || '';
+                const nextConfigHash = nextGridMount.getAttribute('data-vl-grid-config-hash') || '';
+                if (currentConfigHash !== nextConfigHash) {
+                    return false;
+                }
+
+                const nextData = JSON.parse(rowDataLiteral);
+                const nextColumnDefs = columnDefsLiteral ? JSON.parse(columnDefsLiteral) : [];
+                const currentColumnIds = typeof gridApi.getColumnState === 'function'
+                    ? gridApi.getColumnState().map((col) => String(col.colId || '').trim()).filter(Boolean)
+                    : [];
+                const currentSchema = currentColumnIds.length
+                    ? currentColumnIds
+                    : Array.from(currentGridMount.querySelectorAll('.ag-header-cell-text')).map((node) => (node.textContent || '').trim()).filter(Boolean);
+                const nextColumnSchema = collectAgGridColumnIds(nextColumnDefs);
+                const nextSchema = nextColumnSchema.length
+                    ? nextColumnSchema
+                    : (nextData.length
+                        ? Object.keys(nextData[0]).map((key) => String(key).trim()).filter(Boolean)
+                        : currentSchema);
+
+                if (currentSchema.length !== nextSchema.length || currentSchema.some((text, index) => text !== nextSchema[index])) {
+                    return false;
+                }
+
+                const agGridScrollState = window._vlCaptureAgGridScroll(currentGridMount);
+                if (typeof gridApi.setGridOption === 'function') {
+                    gridApi.setGridOption('rowData', nextData);
+                } else if (typeof gridApi.setRowData === 'function') {
+                    gridApi.setRowData(nextData);
+                } else {
+                    return false;
+                }
+
+                copyElementAttributes(currentRoot, nextRoot);
+                copyElementAttributes(currentGridMount, nextGridMount);
+                window._vlRestoreAgGridScroll(currentGridMount, agGridScrollState);
+                return true;
+            } catch (e) {
+                console.error('Failed to smart update AG Grid wrapper:', e);
+                return false;
+            }
         }
 
         function executeInlineScripts(root) {
@@ -1721,12 +1914,10 @@
                     return () => {};
                 }
 
-                const previousVisibility = root.style.visibility;
-                root.style.visibility = 'hidden';
-
-                return () => {
-                    root.style.visibility = previousVisibility;
-                };
+                // Blank-hiding the grid during restore creates a more noticeable flicker
+                // than the scroll correction itself when reactive wrappers are replaced.
+                // Preserve the visible DOM and let scroll restoration happen in place.
+                return () => {};
             };
 
             window._vlRestoreAgGridScroll = (root, state, onDone) => {
@@ -2323,6 +2514,9 @@
                                     if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('[data-chat-thread="true"]')) {
                                         smartUpdated = trySmartUpdateChatThreadWrapper(el, item.html);
                                     }
+                                    if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('[data-vl-grid-config-hash]')) {
+                                        smartUpdated = trySmartUpdateAgGridWrapper(el, item.html);
+                                    }
                                     
                                     // Slider: Update value property only (preserve drag interaction)
                                     if (widgetType === 'slider') {
@@ -2349,13 +2543,14 @@
                                         const baseCid = item.id.replace('_wrapper', '');
                                         const gridApi = window['gridApi_' + baseCid];
                                         if (gridApi) {
-                                            const rowDataMatch = item.html.match(/rowData:\s*(\[.*?\])/s) || item.html.match(/const initialRowData =\s*(\[.*?\]);/s);
+                                            const columnDefsLiteral = extractAgGridColumnDefsLiteral(item.html);
+                                            const rowDataLiteral = extractAgGridRowDataLiteral(item.html);
                                             const temp = document.createElement('div');
                                             temp.innerHTML = item.html;
 
                                             const currentGridRoot = document.getElementById(baseCid) || el.querySelector(`#${baseCid}`) || el;
                                             const nextGridRoot = temp.querySelector(`#${baseCid}`);
-                                            let canSmartUpdate = !!(rowDataMatch && currentGridRoot && nextGridRoot);
+                                            let canSmartUpdate = !!(rowDataLiteral && currentGridRoot && nextGridRoot);
 
                                             if (canSmartUpdate) {
                                                 const currentStyle = currentGridRoot.getAttribute('style') || '';
@@ -2375,14 +2570,18 @@
 
                                             if (canSmartUpdate) {
                                                 try {
-                                                    const nextData = JSON.parse(rowDataMatch[1]);
+                                                    const nextData = JSON.parse(rowDataLiteral);
+                                                    const nextColumnDefs = columnDefsLiteral ? JSON.parse(columnDefsLiteral) : [];
                                                     const currentColumnIds = typeof gridApi.getColumnState === 'function'
                                                         ? gridApi.getColumnState().map((col) => String(col.colId || '').trim()).filter(Boolean)
                                                         : [];
                                                     const currentSchema = currentColumnIds.length ? currentColumnIds : Array.from(currentGridRoot.querySelectorAll('.ag-header-cell-text')).map((node) => (node.textContent || '').trim()).filter(Boolean);
-                                                    const nextSchema = nextData.length
-                                                        ? Object.keys(nextData[0]).map((key) => String(key).trim()).filter(Boolean)
-                                                        : currentSchema;
+                                                    const nextColumnSchema = collectAgGridColumnIds(nextColumnDefs);
+                                                    const nextSchema = nextColumnSchema.length
+                                                        ? nextColumnSchema
+                                                        : (nextData.length
+                                                            ? Object.keys(nextData[0]).map((key) => String(key).trim()).filter(Boolean)
+                                                            : currentSchema);
                                                     if (currentSchema.length !== nextSchema.length || currentSchema.some((text, index) => text !== nextSchema[index])) {
                                                         canSmartUpdate = false;
                                                     }
@@ -2393,7 +2592,7 @@
 
                                             if (canSmartUpdate) {
                                                 try {
-                                                    const newData = JSON.parse(rowDataMatch[1]);
+                                                    const newData = JSON.parse(rowDataLiteral);
                                                     const agGridScrollState = window._vlCaptureAgGridScroll(currentGridRoot);
 
                                                     if (typeof gridApi.setGridOption === 'function') {
