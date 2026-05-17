@@ -730,7 +730,8 @@ class TextWidgetsMixin:
              showcase: bool = False, title: Optional[str] = None,
              copy_button: bool = True, line_numbers: bool = False,
              wrap_lines: bool = False,
-             theme: str = "dark",
+               theme: str = "auto",
+               syntax_highlighting: Optional[bool] = None,
              cls: str = "", style: str = "", **props):
         """Display code block with syntax highlighting
 
@@ -742,7 +743,9 @@ class TextWidgetsMixin:
             copy_button: If True, show a copy-to-clipboard button (default: True)
             line_numbers: If True, show line numbers
             wrap_lines: If True, wrap long lines instead of horizontal scrolling
-            theme: Color theme - "dark" (default) or "light"
+            theme: Code block theme - "auto" (default), "light", or "dark"
+            syntax_highlighting: If True, force syntax coloring. If False, render as plain code.
+                If None, syntax coloring is enabled only when a language is provided.
             cls: Additional CSS classes
             style: Additional inline CSS
         """
@@ -750,166 +753,144 @@ class TextWidgetsMixin:
         
         cid = self._get_next_cid("code")
         def builder():
+            from ..state import State, ComputedState
+
+            def resolve_dynamic(value):
+                if isinstance(value, (State, ComputedState)):
+                    return value.value
+                if callable(value):
+                    return value()
+                return value
+
             token = rendering_ctx.set(cid)
-            code_text = code() if callable(code) else code
+            code_text = resolve_dynamic(code)
+            resolved_language = resolve_dynamic(language)
+            resolved_showcase = bool(resolve_dynamic(showcase))
+            resolved_title = resolve_dynamic(title)
+            resolved_copy_button = bool(resolve_dynamic(copy_button))
+            resolved_line_numbers = bool(resolve_dynamic(line_numbers))
+            resolved_wrap_lines = bool(resolve_dynamic(wrap_lines))
+            resolved_theme = resolve_dynamic(theme)
+            resolved_syntax_highlighting = resolve_dynamic(syntax_highlighting)
             rendering_ctx.reset(token)
             
             # XSS protection: escape code content
             escaped_code = html_lib.escape(str(code_text))
             
-            lang_class = f"language-{language}" if language else ""
-            
-            # Theme colors
-            if theme == "light":
-                bg_color = "#fafafa"
-                border_color = "var(--vl-border, #e5e7eb)"
-                bar_bg = "#f0f0f0"
-                bar_dot_colors = ("#ff5f57", "#febc2e", "#28c840")
-                title_color = "#6b7280"
-                line_num_color = "#9ca3af"
-                copy_btn_color = "#6b7280"
-                copy_btn_hover = "#374151"
-                hljs_theme_class = "violit-code-light"
-            else:
-                bg_color = "#1e1b2e"
-                border_color = "rgba(124, 58, 237, 0.15)"
-                bar_bg = "#16132a"
-                bar_dot_colors = ("#ff5f57", "#febc2e", "#28c840")
-                title_color = "#6b6b8d"
-                line_num_color = "#4a4a6a"
-                copy_btn_color = "#6b6b8d"
-                copy_btn_hover = "#a5a5c0"
-                hljs_theme_class = "violit-code-dark"
+            normalized_theme = str(resolved_theme or "auto").strip().lower()
+            if normalized_theme not in {"auto", "light", "dark"}:
+                normalized_theme = "auto"
+
+            should_highlight = bool(resolved_language) if resolved_syntax_highlighting is None else bool(resolved_syntax_highlighting)
+
+            language_class = f"language-{resolved_language}" if resolved_language else ""
+            no_highlight_class = "" if should_highlight else " nohighlight"
+            code_classes = " ".join(
+                part for part in ["hljs", language_class, no_highlight_class.strip()] if part
+            )
+            theme_class = f"violit-code-theme-{normalized_theme}"
             
             # --- Build line numbers ---
             line_num_html = ""
-            if line_numbers:
+            if resolved_line_numbers:
                 lines = code_text.split('\n')
                 nums = ''.join(f'<span style="display:block;">{i+1}</span>' for i in range(len(lines)))
-                line_num_html = f'''<div style="
-                    position: absolute; left: 0; top: 0; bottom: 0;
-                    padding: 1rem 0.75rem 1rem 1rem;
-                    text-align: right; color: {line_num_color};
-                    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-                    font-size: 0.8rem; line-height: 1.7;
-                    user-select: none; pointer-events: none;
-                    border-right: 1px solid {border_color};
-                ">{nums}</div>'''
+                line_num_html = f'''<div class="violit-code-line-numbers">{nums}</div>'''
             
-            code_padding_left = "3.5rem" if line_numbers else "1.25rem"
+            code_padding_left = "3.5rem" if resolved_line_numbers else "1.25rem"
             
             # --- Copy button ---
             copy_btn_html = ""
-            if copy_button:
+            if resolved_copy_button:
                 # Unique copy function name to avoid conflicts
                 copy_fn = f"violitCopy_{cid}"
                 copy_btn_html = f'''
-                <button onclick="{copy_fn}(this)" style="
-                    position: absolute; top: 0.6rem; right: 0.6rem;
-                    background: transparent; border: 1px solid {border_color};
-                    border-radius: 0.375rem; padding: 0.3rem 0.5rem;
-                    cursor: pointer; color: {copy_btn_color};
-                    font-size: 0.75rem; font-family: inherit;
-                    transition: all 0.2s; z-index: 2; display: flex;
-                    align-items: center; gap: 0.3rem;
-                " onmouseenter="this.style.color='{copy_btn_hover}';this.style.borderColor='{copy_btn_hover}'"
-                  onmouseleave="this.style.color='{copy_btn_color}';this.style.borderColor='{border_color}'"
-                >
+                <button type="button" class="violit-code-copy-button" onclick="{copy_fn}(this)">
                     <wa-icon name="clipboard" style="font-size: 0.85rem;"></wa-icon>
                     <span>Copy</span>
                 </button>
                 <script>
-                function {copy_fn}(btn) {{
+                async function {copy_fn}(btn) {{
                     const pre = btn.closest('.violit-code-block').querySelector('code');
-                    navigator.clipboard.writeText(pre.textContent).then(() => {{
-                        const icon = btn.querySelector('wa-icon');
-                        const span = btn.querySelector('span');
-                        if (icon) icon.setAttribute('name', 'check');
-                        if (span) span.textContent = 'Copied!';
-                        setTimeout(() => {{
-                            if (icon) icon.setAttribute('name', 'clipboard');
-                            if (span) span.textContent = 'Copy';
-                        }}, 2000);
-                    }});
+                    const text = pre ? pre.textContent : '';
+                    const icon = btn.querySelector('wa-icon');
+                    const span = btn.querySelector('span');
+
+                    function setState(label, iconName) {{
+                        if (icon) icon.setAttribute('name', iconName);
+                        if (span) span.textContent = label;
+                    }}
+
+                    function resetState() {{
+                        window.setTimeout(() => setState('Copy', 'clipboard'), 1800);
+                    }}
+
+                    function legacyCopy(value) {{
+                        const textarea = document.createElement('textarea');
+                        textarea.value = value;
+                        textarea.setAttribute('readonly', '');
+                        textarea.style.position = 'fixed';
+                        textarea.style.top = '-9999px';
+                        textarea.style.left = '-9999px';
+                        document.body.appendChild(textarea);
+                        textarea.focus();
+                        textarea.select();
+                        textarea.setSelectionRange(0, textarea.value.length);
+                        let copied = false;
+                        try {{
+                            copied = document.execCommand('copy');
+                        }} catch (error) {{
+                            copied = false;
+                        }}
+                        document.body.removeChild(textarea);
+                        return copied;
+                    }}
+
+                    let copied = false;
+                    try {{
+                        if (navigator.clipboard && window.isSecureContext) {{
+                            await navigator.clipboard.writeText(text);
+                            copied = true;
+                        }}
+                    }} catch (error) {{
+                        copied = false;
+                    }}
+
+                    if (!copied) {{
+                        copied = legacyCopy(text);
+                    }}
+
+                    if (copied) {{
+                        setState('Copied!', 'check');
+                    }} else {{
+                        setState('Copy failed', 'triangle-exclamation');
+                    }}
+                    resetState();
                 }}
                 </script>
                 '''
             
             # --- Title bar (showcase mode) ---
             title_bar_html = ""
-            if showcase:
-                title_text = f'<span style="margin-left: 0.75rem; font-size: 0.8rem; color: {title_color}; font-family: monospace;">{html_lib.escape(title)}</span>' if title else ''
+            if resolved_showcase:
+                title_text = f'<span class="violit-code-title">{html_lib.escape(str(resolved_title))}</span>' if resolved_title else ''
                 title_bar_html = f'''
-                <div style="
-                    padding: 0.7rem 1rem; background: {bar_bg};
-                    display: flex; align-items: center; gap: 0.5rem;
-                    border-bottom: 1px solid {border_color};
-                ">
-                    <div style="width: 12px; height: 12px; border-radius: 50%; background: {bar_dot_colors[0]};"></div>
-                    <div style="width: 12px; height: 12px; border-radius: 50%; background: {bar_dot_colors[1]};"></div>
-                    <div style="width: 12px; height: 12px; border-radius: 50%; background: {bar_dot_colors[2]};"></div>
+                <div class="violit-code-titlebar">
+                    <div class="violit-code-traffic-dot violit-code-traffic-dot-close"></div>
+                    <div class="violit-code-traffic-dot violit-code-traffic-dot-minimize"></div>
+                    <div class="violit-code-traffic-dot violit-code-traffic-dot-expand"></div>
                     {title_text}
                 </div>
                 '''
             
             # --- Assemble ---
-            # border-radius: if showcase, top corners are 0 (title bar has them)
-            pre_radius = "0" if showcase else "0.625rem"
-            outer_radius = "0.625rem"
-            
-            # Scrollbar colors based on theme
-            if theme == "light":
-                sb_thumb = "rgba(0, 0, 0, 0.15)"
-                sb_thumb_hover = "rgba(0, 0, 0, 0.3)"
-            else:
-                sb_thumb = "rgba(255, 255, 255, 0.15)"
-                sb_thumb_hover = "rgba(255, 255, 255, 0.3)"
-
-            scrollbar_style = f'''
-            <style>
-            .violit-code-block.{hljs_theme_class} *::-webkit-scrollbar {{
-                height: 6px;
-                width: 6px;
-            }}
-            .violit-code-block.{hljs_theme_class} *::-webkit-scrollbar-track {{
-                background: transparent;
-            }}
-            .violit-code-block.{hljs_theme_class} *::-webkit-scrollbar-thumb {{
-                background-color: {sb_thumb};
-                border-radius: 99px;
-                transition: background-color 0.2s;
-            }}
-            .violit-code-block.{hljs_theme_class} *::-webkit-scrollbar-thumb:hover {{
-                background-color: {sb_thumb_hover};
-            }}
-            .violit-code-block.{hljs_theme_class} *::-webkit-scrollbar-corner {{
-                background: transparent;
-            }}
-            </style>
-            '''
-            
             html_output = f'''
-            {scrollbar_style}
-            <div class="violit-code-block {hljs_theme_class}" style="
-                position: relative; border-radius: {outer_radius};
-                overflow: hidden; border: 1px solid {border_color};
-                background: {bg_color};
-            ">
+                        <div class="violit-code-block {theme_class}{' violit-code-showcase' if resolved_showcase else ''}{' violit-code-with-lines' if resolved_line_numbers else ''}{' violit-code-wrap' if resolved_wrap_lines else ''}" style="--vl-code-padding-left: {code_padding_left};">
                 {title_bar_html}
-                <div style="position: relative;">
+                <div class="violit-code-content">
                     {copy_btn_html}
                     {line_num_html}
-                    <pre style="
-                        margin: 0; padding: 1rem {code_padding_left};
-                        padding-left: {code_padding_left}; padding-right: 3.5rem;
-                        overflow-x: auto; font-size: 0.875rem; line-height: 1.7;
-                        background: {bg_color}; border-radius: {pre_radius};
-                        {'white-space: pre-wrap; word-wrap: break-word;' if wrap_lines else ''}
-                    "><code class="hljs {lang_class}" style="
-                        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-                        background: transparent; padding: 0;
-                        {'white-space: pre-wrap;' if wrap_lines else ''}
-                    ">{escaped_code}</code></pre>
+                    <pre class="violit-code-pre"><code class="{code_classes}" data-vl-syntax-highlighting="{'true' if should_highlight else 'false'}">{escaped_code}</code></pre>
                 </div>
             </div>
             <script>
@@ -918,6 +899,13 @@ class TextWidgetsMixin:
                     var el = document.getElementById('{cid}');
                     if (el && typeof hljs !== 'undefined') {{
                         el.querySelectorAll('pre code').forEach(function(block) {{
+                            if (block.dataset.vlSyntaxHighlighting !== 'true') {{
+                                block.classList.add('nohighlight');
+                                return;
+                            }}
+                            if (block.dataset.highlighted) {{
+                                delete block.dataset.highlighted;
+                            }}
                             hljs.highlightElement(block);
                         }});
                     }}
