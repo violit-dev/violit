@@ -28,7 +28,7 @@ import re
 from .app_launcher import AppLauncherMixin
 from .app_runtime import AppRuntimeMixin
 from .app_support import FileWatcher, IntervalHandle, Page, SidebarProxy, print_terminal_splash
-from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx, pending_shared_views_ctx, registration_pass_ctx, widget_key_registration_ctx
+from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx, pending_shared_views_ctx, registration_pass_ctx, widget_key_registration_ctx, auto_widget_id_pass_ctx
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
@@ -855,6 +855,26 @@ class App(
         finally:
             del frame
 
+    def _resolve_auto_widget_anchor(self) -> str:
+        package_root = str(Path(__file__).resolve().parent).replace("\\", "/").lower()
+        frame = inspect.currentframe()
+        fallback_anchor: Optional[str] = None
+        try:
+            caller_frame = frame.f_back if frame is not None else None
+            while caller_frame is not None:
+                filename = os.path.abspath(caller_frame.f_code.co_filename)
+                normalized = filename.replace("\\", "/").lower()
+                anchor = self._sanitize_widget_key(f"{os.path.basename(filename)}_{caller_frame.f_lineno}")
+                if fallback_anchor is None:
+                    fallback_anchor = anchor
+                if not normalized.startswith(package_root):
+                    return anchor
+                caller_frame = caller_frame.f_back
+        finally:
+            del frame
+
+        return fallback_anchor or "auto_widget"
+
     def state(self, default_value, key=None, *, scope: str = 'view', namespace: str | None = None) -> State:
         """Create a reactive state variable.
 
@@ -899,6 +919,14 @@ class App(
         count = store['component_count']
         is_reactive_parent = bool(parent_ctx and parent_ctx.startswith(REACTIVE_PARENT_PREFIXES))
         is_action = action_ctx.get(False)
+        auto_widget_id_pass = auto_widget_id_pass_ctx.get()
+
+        if auto_widget_id_pass is not None and is_reactive_parent and not is_action:
+            anchor = self._resolve_auto_widget_anchor()
+            occurrence_key = (parent_ctx or "", prefix, anchor)
+            occurrence = auto_widget_id_pass.get(occurrence_key, 0)
+            auto_widget_id_pass[occurrence_key] = occurrence + 1
+            return f"{parent_ctx}_{prefix}_{anchor}_{occurrence}"
 
         # Fast path for initial page render: the page is being built from scratch,
         # so phantom-widget prevention and action-specific ID rules are unnecessary.
@@ -1494,6 +1522,7 @@ class App(
         with store['render_lock']:
             registration_token = registration_pass_ctx.set(set())
             widget_key_token = widget_key_registration_ctx.set({})
+            auto_widget_token = auto_widget_id_pass_ctx.set({})
             
             main_html = []
             sidebar_html = []
@@ -1531,6 +1560,7 @@ class App(
 
                 return "".join(main_html), "".join(sidebar_html)
             finally:
+                auto_widget_id_pass_ctx.reset(auto_widget_token)
                 widget_key_registration_ctx.reset(widget_key_token)
                 registration_pass_ctx.reset(registration_token)
 
@@ -1540,6 +1570,7 @@ class App(
         with store['render_lock']:
             registration_token = registration_pass_ctx.set(set())
             widget_key_token = widget_key_registration_ctx.set({})
+            auto_widget_token = auto_widget_id_pass_ctx.set({})
             tracker = store['tracker']
             current_session_id = session_ctx.get()
             current_view_id = view_ctx.get()
@@ -1627,6 +1658,7 @@ class App(
                         unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
                 return res
             finally:
+                auto_widget_id_pass_ctx.reset(auto_widget_token)
                 widget_key_registration_ctx.reset(widget_key_token)
                 registration_pass_ctx.reset(registration_token)
 

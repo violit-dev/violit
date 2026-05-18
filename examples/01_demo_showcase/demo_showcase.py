@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -290,6 +293,16 @@ def filtered_customers() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def resolve_customer_selection(df: pd.DataFrame, selected: Any) -> dict[str, Any]:
+    if df.empty:
+        return {}
+
+    visible_rows = df.to_dict('records')
+    selected_company = str(selected.get('company') or '').strip() if isinstance(selected, dict) else ''
+    matching_row = next((row for row in visible_rows if row.get('company') == selected_company), None)
+    return cast(dict[str, Any], matching_row or visible_rows[0])
+
+
 def normalized_rollout_rows(df: pd.DataFrame | None = None) -> pd.DataFrame:
     current = (df if df is not None else rollout_rows.value).copy()
     if current.empty:
@@ -514,18 +527,10 @@ def customer_radar_page() -> None:
 
     segment_options = ['All', 'Enterprise', 'Growth', 'SMB']
     visible_customers = filtered_customers()
-    selected_company = str(selected_customer.value.get('company') or '').strip() if isinstance(selected_customer.value, dict) else ''
     current_segment_index = segment_options.index(customer_segment.value) if customer_segment.value in segment_options else 0
-
-    if visible_customers.empty:
-        if selected_customer.value:
-            selected_customer.set({})
-    else:
-        visible_rows = visible_customers.to_dict('records')
-        matching_row = next((row for row in visible_rows if row.get('company') == selected_company), None)
-        target_row = matching_row or visible_rows[0]
-        if selected_customer.value != target_row:
-            selected_customer.set(target_row)
+    initial_customer = resolve_customer_selection(visible_customers, selected_customer.value)
+    if not selected_customer.value and initial_customer:
+        selected_customer.set(initial_customer)
 
     controls = app.columns([1.2, 1, 0.8], gap='small')
     with controls[0]:
@@ -546,33 +551,15 @@ def customer_radar_page() -> None:
     @app.reactivity
     def render_customer_radar_results() -> None:
         visible_customers = filtered_customers()
-        selected_company = str(selected_customer.value.get('company') or '').strip() if isinstance(selected_customer.value, dict) else ''
-
-        if visible_customers.empty:
-            if selected_customer.value:
-                selected_customer.set({})
-        else:
-            visible_rows = visible_customers.to_dict('records')
-            matching_row = next((row for row in visible_rows if row.get('company') == selected_company), None)
-            target_row = matching_row or visible_rows[0]
-            if selected_customer.value != target_row:
-                selected_customer.set(target_row)
+        current_customer = resolve_customer_selection(visible_customers, selected_customer.value)
+        if selected_customer.value != current_customer:
+            selected_customer.set(current_customer)
 
         selected_panel, table_panel = app.columns([0.92, 1.4], gap='large', vertical_alignment='top')
 
-        with table_panel:
-            app.dataframe(
-                visible_customers,
-                height=420,
-                hide_index=True,
-                use_container_width=True,
-                on_cell_clicked=on_customer_cell,
-            )
-            compact_label(f'{len(visible_customers)} accounts match the current filters.')
-
         with selected_panel:
-            if selected_customer.value:
-                current = selected_customer.value
+            if current_customer:
+                current = current_customer
                 with app.container(border=True, cls='rounded-[28px] bg-white/90 p-5 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.18)]'):
                     badge_chip(current.get('health', 'Unknown'), variant='warning' if current.get('health') in {'Watch', 'At Risk'} else 'success')
                     app.subheader(current.get('company', 'Account detail'))
@@ -595,6 +582,16 @@ def customer_radar_page() -> None:
                     title='Select an account',
                     variant='info',
                 )
+
+        with table_panel:
+            app.dataframe(
+                visible_customers,
+                height=420,
+                hide_index=True,
+                use_container_width=True,
+                on_cell_clicked=on_customer_cell,
+            )
+            compact_label(f'{len(visible_customers)} accounts match the current filters.')
 
     render_customer_radar_results()
 
