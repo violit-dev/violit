@@ -1,6 +1,8 @@
 """Form Widgets Mixin for Violit"""
 
-from typing import Union, Callable, Optional
+import hashlib
+import re
+from typing import Any, Union, Callable, Optional
 from ..component import Component
 from ..context import rendering_ctx, fragment_ctx
 from ..state import get_session_store
@@ -9,6 +11,25 @@ from ..style_utils import auto_split_widget_cls, merge_cls, merge_style, merge_p
 
 class FormWidgetsMixin:
     """Form-related widgets (form, form_submit_button, button, download_button, link_button, page_link)"""
+
+    @staticmethod
+    def _sanitize_widget_key(value: Any) -> str:
+        raw = str(value)
+        normalized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+
+        if normalized and normalized == raw and len(normalized) <= 64:
+            return normalized
+
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        if not normalized:
+            return f"widget_{digest}"
+        return f"{normalized[:48]}_{digest}"
+
+    def _resolve_widget_cid(self, prefix: str, key=None) -> str:
+        if key is None:
+            return self._get_next_cid(prefix)
+        return f"{prefix}_{self._sanitize_widget_key(key)}"
 
     @staticmethod
     def _wa_button_theme(variant: str):
@@ -26,7 +47,7 @@ class FormWidgetsMixin:
     def button(self, text: Union[str, Callable], on_click: Optional[Callable] = None,
                variant="primary", type="primary",
                disabled=False, use_container_width=False, icon=None,
-               cls: str = "", style: str = "", height: Union[str, int, float] = "auto", **props):
+               cls: str = "", style: str = "", height: Union[str, int, float] = "auto", key=None, **props):
         """Display button
 
         Args:
@@ -41,7 +62,7 @@ class FormWidgetsMixin:
         _variant = _type_map.get(type, variant) if type != "primary" or variant == "primary" else variant
         if type != "primary": _variant = _type_map.get(type, "primary")
 
-        cid = self._get_next_cid("btn")
+        cid = self._resolve_widget_cid("btn", key)
         user_part_cls = props.pop("part_cls", None)
         def builder():
             token = rendering_ctx.set(cid)
@@ -85,7 +106,7 @@ class FormWidgetsMixin:
 
     def download_button(self, label, data, file_name, mime="text/plain", on_click=None,
                          type="primary", disabled=False, use_container_width=False, icon=None,
-                         cls: str = "", style: str = "", **props):
+                         cls: str = "", style: str = "", key=None, **props):
         """Download button (Streamlit-compatible interface)
 
         Args:
@@ -99,7 +120,7 @@ class FormWidgetsMixin:
             use_container_width: If True, button spans full width
             icon: Icon name or emoji
         """
-        cid = self._get_next_cid("download_btn")
+        cid = self._resolve_widget_cid("download_btn", key)
         
         def builder():
             import base64
@@ -241,7 +262,7 @@ class FormWidgetsMixin:
         self._register_component(cid, builder, action=on_click)
 
     def link_button(self, label, url, disabled=False, use_container_width=False, icon=None,
-                     cls: str = "", style: str = "", **props):
+                     cls: str = "", style: str = "", key=None, **props):
         """Display link button
 
         Args:
@@ -249,7 +270,7 @@ class FormWidgetsMixin:
             use_container_width: If True, button spans full width
             icon: Icon name or emoji
         """
-        cid = self._get_next_cid("link_btn")
+        cid = self._resolve_widget_cid("link_btn", key)
 
         def builder():
             icon_html = f'<wa-icon slot="start" name="{icon}"></wa-icon>' if icon and not any(ord(c) > 127 for c in str(icon)) else ''
@@ -270,13 +291,13 @@ class FormWidgetsMixin:
 
         self._register_component(cid, builder)
 
-    def page_link(self, page, label, icon=None, disabled=False, cls: str = "", style: str = "", **props):
+    def page_link(self, page, label, icon=None, disabled=False, cls: str = "", style: str = "", key=None, **props):
         """Display page navigation link
 
         Args:
             disabled: If True, link is grayed out and not clickable
         """
-        cid = self._get_next_cid("page_link")
+        cid = self._resolve_widget_cid("page_link", key)
         
         def builder():
             icon_html = f'<wa-icon name="{icon}"></wa-icon>' if icon else ""
@@ -385,7 +406,7 @@ class FormWidgetsMixin:
             border: If True, show border around form (default: True)
             enter_to_submit: If True, pressing Enter submits the form (default: True)
         """
-        form_id = f"form_{key}" if key else self._get_next_cid("form")
+        form_id = self._resolve_widget_cid("form", key)
         
         class FormContext:
             def __init__(self, app, form_id, clear_on_submit, border, enter_to_submit):
@@ -447,7 +468,7 @@ class FormWidgetsMixin:
 
     def form_submit_button(self, label="Submit", on_click=None,
                             type="primary", disabled=False, use_container_width=False, icon=None,
-                            cls: str = "", style: str = "", **props):
+                            cls: str = "", style: str = "", key=None, **props):
         """Form submit button
 
         Args:
@@ -456,7 +477,7 @@ class FormWidgetsMixin:
             use_container_width: If True, button spans full width
             icon: Icon name or emoji
         """
-        cid = self._get_next_cid("form_submit")
+        cid = self._resolve_widget_cid("form_submit", key)
         
         def action():
             # Collect form data and call on_click

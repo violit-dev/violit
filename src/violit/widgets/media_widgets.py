@@ -63,9 +63,9 @@ def _resolve_local_media_src(app, source: str, fallback_media_type: str) -> str:
 class MediaWidgetsMixin:
     """Media widgets (image, audio, video)"""
     
-    def image(self, image, caption=None, width=None, use_column_width=False, use_container_width=False, cls: str = "", style: str = "", **props):
+    def image(self, image, caption=None, width=None, use_column_width=False, use_container_width=False, cls: str = "", style: str = "", key=None, **props):
         """Display image from various sources"""
-        cid = self._get_next_cid("image")
+        cid = self._resolve_widget_cid("image", key)
         
         def builder():
             # Handle different image sources
@@ -192,9 +192,9 @@ class MediaWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def audio(self, audio, format="audio/mp3", start_time=0, loop=False, autoplay=False, end_time=None, sample_rate=None, cls: str = "", style: str = "", **props):
+    def audio(self, audio, format="audio/mp3", start_time=0, loop=False, autoplay=False, end_time=None, sample_rate=None, cls: str = "", style: str = "", key=None, **props):
         """Display audio player"""
-        cid = self._get_next_cid("audio")
+        cid = self._resolve_widget_cid("audio", key)
         
         def builder():
             # Handle different audio sources
@@ -237,9 +237,9 @@ class MediaWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def video(self, video, format="video/mp4", start_time=0, caption=None, width=None, use_column_width=False, autoplay=False, loop=False, muted=False, cls: str = "", style: str = "", **props):
+    def video(self, video, format="video/mp4", start_time=0, caption=None, width=None, use_column_width=False, autoplay=False, loop=False, muted=False, cls: str = "", style: str = "", key=None, **props):
         """Display video player with various controls and sources"""
-        cid = self._get_next_cid("video")
+        cid = self._resolve_widget_cid("video", key)
         
         def builder():
             # Handle different video sources

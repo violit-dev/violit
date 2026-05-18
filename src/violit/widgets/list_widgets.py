@@ -20,15 +20,15 @@ class ListWidgetsMixin:
                      cls: str = "",
                      style: str = ""):
         """Create a reactive list that updates when items change"""
-        cid = self._get_next_cid("reactive_list")
+        cid = self._resolve_widget_cid("reactive_list", key)
         container_id = container_id or f"{cid}-container"
-        
+
         state_key = key or f"list:{cid}"
         if isinstance(items, State):
             list_state = items
         else:
             list_state = self.state(items or [], key=state_key)
-        
+
         def builder():
             token = rendering_ctx.set(cid)
             current_items = list_state.value

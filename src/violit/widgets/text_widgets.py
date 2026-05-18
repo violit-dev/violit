@@ -863,7 +863,7 @@ class TextWidgetsMixin:
         '''
         return styled_html
 
-    def heading(self, *args, level: int = 1, divider: bool = False, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
+    def heading(self, *args, level: int = 1, divider: bool = False, anchor: str = None, help: str = None, cls: str = "", style: str = "", key: Optional[Union[str, int]] = None):
         """Display heading (h1-h6)
 
         Args:
@@ -873,7 +873,7 @@ class TextWidgetsMixin:
         from ..state import State, ComputedState
         import html as html_lib
         
-        cid = self._get_next_cid("heading")
+        cid = self._resolve_widget_cid("heading", key)
         def builder():
             token = rendering_ctx.set(cid)
             
@@ -903,17 +903,17 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def title(self, *args, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
+    def title(self, *args, anchor: str = None, help: str = None, cls: str = "", style: str = "", key: Optional[Union[str, int]] = None):
         """Display title (h1 with gradient)"""
-        self.heading(*args, level=1, divider=False, anchor=anchor, help=help, cls=cls, style=style)
+        self.heading(*args, level=1, divider=False, anchor=anchor, help=help, cls=cls, style=style, key=key)
 
-    def header(self, *args, divider: bool = True, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
+    def header(self, *args, divider: bool = True, anchor: str = None, help: str = None, cls: str = "", style: str = "", key: Optional[Union[str, int]] = None):
         """Display header (h2)"""
-        self.heading(*args, level=2, divider=divider, anchor=anchor, help=help, cls=cls, style=style)
+        self.heading(*args, level=2, divider=divider, anchor=anchor, help=help, cls=cls, style=style, key=key)
 
-    def subheader(self, *args, divider: bool = False, anchor: str = None, help: str = None, cls: str = "", style: str = ""):
+    def subheader(self, *args, divider: bool = False, anchor: str = None, help: str = None, cls: str = "", style: str = "", key: Optional[Union[str, int]] = None):
         """Display subheader (h3)"""
-        self.heading(*args, level=3, divider=divider, anchor=anchor, help=help, cls=cls, style=style)
+        self.heading(*args, level=3, divider=divider, anchor=anchor, help=help, cls=cls, style=style, key=key)
 
     def text(self, *args, size: str = "medium", muted: bool = False, key: Optional[Union[str, int]] = None, cls: str = "", style: str = ""):
         """Display text paragraph
@@ -1084,7 +1084,7 @@ class TextWidgetsMixin:
              wrap_lines: Any = False,
              theme: Any = "auto",
              syntax_highlighting: Any = None,
-             cls: str = "", style: str = "", **props):
+             cls: str = "", style: str = "", key: Optional[Union[str, int]] = None, **props):
         """Display code block with syntax highlighting
 
         Args:
@@ -1103,7 +1103,7 @@ class TextWidgetsMixin:
         """
         import html as html_lib
         
-        cid = self._get_next_cid("code")
+        cid = self._resolve_widget_cid("code", key)
         def builder():
             from ..state import State, ComputedState
 
@@ -1252,9 +1252,9 @@ class TextWidgetsMixin:
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None, data_vl_init="code-highlight", **props)
         self._register_component(cid, builder)
 
-    def divider(self, cls: str = "", style: str = ""):
+    def divider(self, cls: str = "", style: str = "", key: Optional[Union[str, int]] = None):
         """Display horizontal divider"""
-        cid = self._get_next_cid("divider")
+        cid = self._resolve_widget_cid("divider", key)
         def builder():
             _wd = self._get_widget_defaults("divider")
             _fc = merge_cls(_wd.get("cls", ""), "divider", cls)
@@ -1262,7 +1262,7 @@ class TextWidgetsMixin:
             return Component("wa-divider", id=cid, class_=_fc, style=_fs or None)
         self._register_component(cid, builder)
 
-    def space(self, size="1rem"):
+    def space(self, size="1rem", key: Optional[Union[str, int]] = None):
         """Add vertical space between widgets.
         
         Args:
@@ -1270,12 +1270,12 @@ class TextWidgetsMixin:
         """
         if isinstance(size, (int, float)):
             size = f'{size}rem'
-        cid = self._get_next_cid("space")
+        cid = self._resolve_widget_cid("space", key)
         def builder():
             return Component(None, id=cid, content=f'<div style="height:{size}"></div>')
         self._register_component(cid, builder)
 
-    def latex(self, body, cls: str = "", style: str = ""):
+    def latex(self, body, cls: str = "", style: str = "", key: Optional[Union[str, int]] = None):
         """Display mathematical expression using LaTeX notation (rendered via KaTeX)
         
         Args:
@@ -1284,7 +1284,7 @@ class TextWidgetsMixin:
         from ..state import State, ComputedState
         import json as _json
 
-        cid = self._get_next_cid("latex")
+        cid = self._resolve_widget_cid("latex", key)
         def builder():
             token = rendering_ctx.set(cid)
             if isinstance(body, (State, ComputedState)):

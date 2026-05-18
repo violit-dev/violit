@@ -468,9 +468,9 @@ class ChartWidgetsMixin:
         _fs = merge_style(_wd.get("style", ""), style)
         return Component("div", id=f"{cid}_wrapper", content=html, class_=_fc or None, style=_fs or None)
     
-    def plotly_chart(self, fig: Union['go.Figure', Callable, State], use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def plotly_chart(self, fig: Union['go.Figure', Callable, State], use_container_width=True, render_mode="svg", cls: str = "", style: str = "", key=None, **props):
         """Display Plotly chart with Signal/Lambda support"""
-        cid = self._get_next_cid("plot")
+        cid = self._resolve_widget_cid("plot", key)
         
         def builder():
             import plotly.graph_objects as go
@@ -575,7 +575,7 @@ class ChartWidgetsMixin:
         self._register_component(cid, builder, action=action)
 
 
-    def pyplot(self, fig=None, use_container_width=True, cls: str = "", style: str = "", **props):
+    def pyplot(self, fig=None, use_container_width=True, cls: str = "", style: str = "", key=None, **props):
         """Display Matplotlib figure"""
         import matplotlib
         matplotlib.use('Agg')
@@ -613,7 +613,7 @@ class ChartWidgetsMixin:
         except Exception:
             pass
         
-        cid = self._get_next_cid("pyplot")
+        cid = self._resolve_widget_cid("pyplot", key)
         
         def builder():
             current_fig = self._resolve_chart_data(fig, cid) if fig is not None else plt.gcf()
@@ -643,9 +643,9 @@ class ChartWidgetsMixin:
         
         self._register_component(cid, builder)
 
-    def line_chart(self, data, x=None, y=None, color=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def line_chart(self, data, x=None, y=None, color=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", key=None, **props):
         """Display simple line chart"""
-        cid = self._get_next_cid("line_chart")
+        cid = self._resolve_widget_cid("line_chart", key)
         
         def builder():
             import plotly.graph_objects as go
@@ -695,9 +695,9 @@ class ChartWidgetsMixin:
 
         self._register_component(cid, builder, action=action)
 
-    def bar_chart(self, data, x=None, y=None, color=None, horizontal=False, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def bar_chart(self, data, x=None, y=None, color=None, horizontal=False, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", key=None, **props):
         """Display simple bar chart"""
-        cid = self._get_next_cid("bar_chart")
+        cid = self._resolve_widget_cid("bar_chart", key)
         
         def builder():
             import plotly.graph_objects as go
@@ -751,9 +751,9 @@ class ChartWidgetsMixin:
 
         self._register_component(cid, builder, action=action)
 
-    def area_chart(self, data, x=None, y=None, color=None, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def area_chart(self, data, x=None, y=None, color=None, stack=False, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", key=None, **props):
         """Display area chart"""
-        cid = self._get_next_cid("area_chart")
+        cid = self._resolve_widget_cid("area_chart", key)
         
         def builder():
             import plotly.graph_objects as go
@@ -804,9 +804,9 @@ class ChartWidgetsMixin:
 
         self._register_component(cid, builder, action=action)
 
-    def scatter_chart(self, data, x=None, y=None, color=None, size=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", **props):
+    def scatter_chart(self, data, x=None, y=None, color=None, size=None, width=None, height=400, use_container_width=True, render_mode="svg", cls: str = "", style: str = "", key=None, **props):
         """Display scatter chart"""
-        cid = self._get_next_cid("scatter_chart")
+        cid = self._resolve_widget_cid("scatter_chart", key)
         
         def builder():
             import plotly.graph_objects as go
@@ -859,11 +859,11 @@ class ChartWidgetsMixin:
 
         self._register_component(cid, builder, action=action)
 
-    def bokeh_chart(self, figure, use_container_width=True, cls: str = "", style: str = "", **props):
+    def bokeh_chart(self, figure, use_container_width=True, cls: str = "", style: str = "", key=None, **props):
         """Display Bokeh chart"""
         from bokeh.embed import components
         
-        cid = self._get_next_cid("bokeh_chart")
+        cid = self._resolve_widget_cid("bokeh_chart", key)
         
         def builder():
             current_figure = self._resolve_chart_data(figure, cid)

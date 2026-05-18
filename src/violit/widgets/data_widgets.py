@@ -419,9 +419,9 @@ class DataWidgetsMixin:
                   use_container_width=True, hide_index=False, column_order=None,
                   column_config=None, width=None, toolbar=True,
                   theme: str = "auto", theme_colors: Optional[dict] = None,
-                  cls: str = "", style: str = "", **props):
+                  cls: str = "", style: str = "", key=None, **props):
         """Display read-only interactive dataframe with AG Grid."""
-        cid = self._get_next_cid("df")
+        cid = self._resolve_widget_cid("df", key)
         
         def action(v):
             """Handle cell click events"""
@@ -612,9 +612,9 @@ class DataWidgetsMixin:
         
         self._register_component(cid, builder, action=action if on_cell_clicked else None)
 
-    def table(self, df: Union['pd.DataFrame', Callable, State], cls: str = "", style: str = "", **props):
+    def table(self, df: Union['pd.DataFrame', Callable, State], cls: str = "", style: str = "", key=None, **props):
         """Display static HTML table (Signal support)"""
-        cid = self._get_next_cid("table")
+        cid = self._resolve_widget_cid("table", key)
         def builder():
             import pandas as pd
             # Handle Signal
@@ -1289,11 +1289,11 @@ class DataWidgetsMixin:
 
     def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal",
                 help: str = None, label_visibility: str = "visible", border: bool = True,
-                cls: str = "", style: str = "", height: Union[str, int, float] = "auto"):
+            cls: str = "", style: str = "", height: Union[str, int, float] = "auto", key=None):
         """Display metric value with Signal support"""
         import html as html_lib
         
-        cid = self._get_next_cid("metric")
+        cid = self._resolve_widget_cid("metric", key)
         
         def builder():
             # Handle value and delta signals in a single tracked block
@@ -1360,9 +1360,9 @@ class DataWidgetsMixin:
             
         self._register_component(cid, builder)
 
-    def json(self, body: Any, expanded=True, cls: str = "", style: str = ""):
+    def json(self, body: Any, expanded=True, cls: str = "", style: str = "", key=None):
         """Display JSON data with Signal support"""
-        cid = self._get_next_cid("json")
+        cid = self._resolve_widget_cid("json", key)
         
         def builder():
             from ..state import State, ComputedState
@@ -1397,7 +1397,7 @@ class DataWidgetsMixin:
                 start_date=None, end_date=None,
                 color_map=None, show_legend=True, 
                 show_weekdays=True, show_months=True,
-                cell_size=12, gap=3, on_cell_clicked=None, cls: str = "", style: str = "", **props):
+                cell_size=12, gap=3, on_cell_clicked=None, cls: str = "", style: str = "", key=None, **props):
         """
         Display GitHub-style activity heatmap
         
@@ -1424,7 +1424,7 @@ class DataWidgetsMixin:
         """
         from datetime import date as date_obj, timedelta
         
-        cid = self._get_next_cid("heatmap")
+        cid = self._resolve_widget_cid("heatmap", key)
         
         def action(v):
             """Handle cell click events"""

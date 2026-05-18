@@ -108,10 +108,15 @@ def _should_mark_placeholder_dirty() -> bool:
 
 class LayoutWidgetsMixin:
     """Layout widgets (columns, container, expander, tabs, empty, dialog)"""
+
+    def _resolve_widget_cid(self, prefix: str, key: Any = None) -> str:
+        if key is None:
+            return self._get_next_cid(prefix)
+        return f"{prefix}_{_sanitize_layout_key(key)}"
     
     def columns(self, spec: Union[int, Sequence[Union[int, float]]] = 2, gap="small", vertical_alignment="top", cls: str = "", style: str = "",
                 border: bool = False, width: Union[str, int] = "stretch", equal_height: bool = False,
-                align: Optional[str] = None, justify: Optional[str] = None):
+                align: Optional[str] = None, justify: Optional[str] = None, key: Any = None):
         """Create column layout - spec can be an int (equal width) or list of weights
         
         Args:
@@ -133,7 +138,7 @@ class LayoutWidgetsMixin:
             count = len(spec)
             weights = [f"{w}fr" for w in spec]
 
-        columns_id = self._get_next_cid("columns_container")
+        columns_id = self._resolve_widget_cid("columns_container", key)
         
         # Create individual column objects
         column_objects = []
@@ -210,7 +215,7 @@ class LayoutWidgetsMixin:
     def container(self, border=False, height=None, cls: str = "", style: str = "",
                   fill_height: bool = False, align: Optional[str] = None,
                   justify: Optional[str] = None, spacing: Any = None,
-                  widget_gap: Any = None, **kwargs):
+                  widget_gap: Any = None, key: Any = None, **kwargs):
         """
         Create a container for grouping elements
         
@@ -229,7 +234,7 @@ class LayoutWidgetsMixin:
                 app.text("Content")
                 app.button("Delete")
         """
-        cid = self._get_next_cid("container")
+        cid = self._resolve_widget_cid("container", key)
         
         class ContainerContext:
             def __init__(self, app, container_id, border, height, user_cls, user_style,
@@ -318,7 +323,7 @@ class LayoutWidgetsMixin:
         
         return ContainerContext(self, cid, border, height, cls, style, fill_height, align, justify, spacing, widget_gap, kwargs)
 
-    def expander(self, label, expanded=False, icon=None, cls: str = "", style: str = ""):
+    def expander(self, label, expanded=False, icon=None, cls: str = "", style: str = "", key: Any = None):
         """Create an expandable/collapsible section
         
         Args:
@@ -326,7 +331,7 @@ class LayoutWidgetsMixin:
             expanded: Whether the section is initially expanded
             icon: Optional icon (emoji or string) to display before the label
         """
-        cid = self._get_next_cid("expander")
+        cid = self._resolve_widget_cid("expander", key)
         summary_cid = f"{cid}__summary"
         details_cid = f"{cid}__details"
         
@@ -540,9 +545,9 @@ class LayoutWidgetsMixin:
         
         return TabsManager(self, cid, labels, cls, style)
 
-    def empty(self):
+    def empty(self, key: Any = None):
         """Create an empty container that can be updated later"""
-        cid = self._get_next_cid("empty")
+        cid = self._resolve_widget_cid("empty", key)
         _app = self
 
         # Register the empty placeholder builder.
@@ -627,7 +632,7 @@ class LayoutWidgetsMixin:
 
         return EmptyContainer()
 
-    def dialog(self, title, width="small"):
+    def dialog(self, title, width="small", key: Any = None):
         """Create a modal dialog (decorator)
         
         Args:
@@ -638,7 +643,8 @@ class LayoutWidgetsMixin:
         dialog_width = _width_map.get(width, width)
         
         def decorator(func):
-            dialog_id = f"dialog_{func.__name__}"
+            dialog_prefix = f"dialog_{func.__name__}"
+            dialog_id = self._resolve_widget_cid(dialog_prefix, key) if key is not None else dialog_prefix
             modal_id = f"{dialog_id}_modal"
 
             def builder():
@@ -702,7 +708,7 @@ class LayoutWidgetsMixin:
             return open_dialog
         return decorator
     
-    def list_container(self, id: Optional[str] = None, gap: str = None, **style_props):
+    def list_container(self, id: Optional[str] = None, gap: str = None, key: Any = None, **style_props):
         """Create a vertical flex container for lists
         
         General list layout container using predefined styles.
@@ -717,7 +723,7 @@ class LayoutWidgetsMixin:
                 for post in posts:
                     app.styled_card(...)
         """
-        cid = id or self._get_next_cid("list_container")
+        cid = id or self._resolve_widget_cid("list_container", key)
         
         class ListContainerContext:
             def __init__(self, app, container_id, gap, style_props):
@@ -771,7 +777,7 @@ class LayoutWidgetsMixin:
         
         return ListContainerContext(self, cid, gap, style_props)
 
-    def popover(self, label, use_container_width=False, disabled=False, help=None, cls: str = "", style: str = ""):
+    def popover(self, label, use_container_width=False, disabled=False, help=None, cls: str = "", style: str = "", key: Any = None):
         """Create a popover container triggered by a button click.
         
         Args:
@@ -787,7 +793,7 @@ class LayoutWidgetsMixin:
                 app.text("Popover content")
                 app.slider("Volume", 0, 100, 50)
         """
-        cid = self._get_next_cid("popover")
+        cid = self._resolve_widget_cid("popover", key)
         
         class PopoverContext:
             def __init__(self, app, popover_id, label, use_container_width, disabled, help_text, user_cls, user_style):

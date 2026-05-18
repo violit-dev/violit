@@ -80,24 +80,24 @@ class StatusWidgetsMixin:
                 return
             store.setdefault('client_command_queue', []).append(command)
 
-    def success(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
+    def success(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = "", key=None): 
         """Display success alert"""
-        self.alert(*args, variant="success", icon=icon, show_icon=show_icon, cls=cls, style=style)
+        self.alert(*args, variant="success", icon=icon, show_icon=show_icon, cls=cls, style=style, key=key)
     
-    def warning(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
+    def warning(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = "", key=None): 
         """Display warning alert"""
-        self.alert(*args, variant="warning", icon=icon, show_icon=show_icon, cls=cls, style=style)
+        self.alert(*args, variant="warning", icon=icon, show_icon=show_icon, cls=cls, style=style, key=key)
     
-    def error(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
+    def error(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = "", key=None): 
         """Display error alert"""
-        self.alert(*args, variant="danger", icon=icon, show_icon=show_icon, cls=cls, style=style)
+        self.alert(*args, variant="danger", icon=icon, show_icon=show_icon, cls=cls, style=style, key=key)
     
-    def info(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = ""): 
+    def info(self, *args, icon: Optional[Union[str, bool]] = None, show_icon: bool = True, cls: str = "", style: str = "", key=None): 
         """Display info alert"""
-        self.alert(*args, variant="primary", icon=icon, show_icon=show_icon, cls=cls, style=style)
+        self.alert(*args, variant="primary", icon=icon, show_icon=show_icon, cls=cls, style=style, key=key)
     
     def alert(self, *args, variant="primary", icon: Optional[Union[str, bool]] = None,
-              show_icon: bool = True, cls: str = "", style: str = ""):
+              show_icon: bool = True, cls: str = "", style: str = "", key=None):
         """Display alert message.
 
         Each positional argument may be a plain value, State, ComputedState,
@@ -107,7 +107,7 @@ class StatusWidgetsMixin:
         """
         import html as html_lib
 
-        cid = self._get_next_cid("alert")
+        cid = self._resolve_widget_cid("alert", key)
         def builder():
             token = rendering_ctx.set(cid)
             try:
@@ -178,7 +178,7 @@ class StatusWidgetsMixin:
     }
 
     def callout(self, body, title=None, variant="info", icon=None,
-                allow_html=False, cls: str = "", style: str = ""):
+                allow_html=False, cls: str = "", style: str = "", key=None):
         """Display a callout / admonition box with colored left-border accent.
 
         Args:
@@ -198,7 +198,7 @@ class StatusWidgetsMixin:
         import html as html_lib
         from ..state import State, ComputedState
 
-        cid = self._get_next_cid("callout")
+        cid = self._resolve_widget_cid("callout", key)
         v = self._CALLOUT_VARIANTS.get(variant, self._CALLOUT_VARIANTS["info"])
         icon_name = icon or v["icon"]
 
@@ -269,7 +269,7 @@ class StatusWidgetsMixin:
         """Shortcut for callout(variant='note')"""
         self.callout(body, title=title, variant="note", **kwargs)
 
-    def toast(self, *args, icon="circle-info", variant="primary"):
+    def toast(self, *args, icon="circle-info", variant="primary", key=None):
         """Display toast notification (Signal support via evaluation)"""
         import json
         from ..state import State, ComputedState
@@ -278,7 +278,7 @@ class StatusWidgetsMixin:
         is_dynamic = any(isinstance(a, (State, ComputedState, Callable)) for a in args)
         
         if is_dynamic:
-            cid = self._get_next_cid("toast_trigger")
+            cid = self._resolve_widget_cid("toast_trigger", key)
             def builder():
                 token = rendering_ctx.set(cid)
                 parts = []
@@ -314,12 +314,12 @@ class StatusWidgetsMixin:
         """Display snow animation"""
         self._enqueue_client_command('effect.play', {'effect': 'snow'})
 
-    def exception(self, exception: Exception, cls: str = "", style: str = ""):
+    def exception(self, exception: Exception, cls: str = "", style: str = "", key=None):
         """Display exception with traceback"""
         import traceback
         import html as html_lib
         
-        cid = self._get_next_cid("exception")
+        cid = self._resolve_widget_cid("exception", key)
         tb = "".join(traceback.format_exception(type(exception), exception, exception.__traceback__))
         
         def builder():
@@ -341,12 +341,12 @@ class StatusWidgetsMixin:
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def progress(self, value=0, *args, cls: str = "", style: str = ""):
+    def progress(self, value=0, *args, cls: str = "", style: str = "", key=None):
         """Display progress bar with Signal support"""
         import html as html_lib
         from ..state import State, ComputedState
         
-        cid = self._get_next_cid("progress")
+        cid = self._resolve_widget_cid("progress", key)
         
         def builder():
             # Handle Signal
@@ -394,12 +394,12 @@ class StatusWidgetsMixin:
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
 
-    def spinner(self, *args, cls: str = "", style: str = ""):
+    def spinner(self, *args, cls: str = "", style: str = "", key=None):
         """Display loading spinner"""
         import html as html_lib
         from ..state import State, ComputedState
         
-        cid = self._get_next_cid("spinner")
+        cid = self._resolve_widget_cid("spinner", key)
         
         def builder():
             parts = []
@@ -432,10 +432,10 @@ class StatusWidgetsMixin:
             return Component("div", id=cid, content=html_output, class_=_fc or None, style=_fs or None)
         self._register_component(cid, builder)
     
-    def status(self, label: str, state: str = "running", expanded: bool = True, cls: str = "", style: str = ""):
+    def status(self, label: str, state: str = "running", expanded: bool = True, cls: str = "", style: str = "", key=None):
         from ..context import fragment_ctx
         
-        cid = self._get_next_cid("status")
+        cid = self._resolve_widget_cid("status", key)
         
         class StatusContext:
             def __init__(self, app, status_id, label, state, expanded, user_cls="", user_style=""):

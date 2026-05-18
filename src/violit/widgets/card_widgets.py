@@ -15,7 +15,7 @@ class CardWidgetsMixin:
     def _wa_badge_variant(variant: str) -> str:
         return "brand" if variant == "primary" else variant
     
-    def card(self, content=None, header=None, footer=None, cls: str = "", style: str = "", **kwargs):
+    def card(self, content=None, header=None, footer=None, cls: str = "", style: str = "", key=None, **kwargs):
         """
         Create a Web Awesome card component
         
@@ -44,7 +44,7 @@ class CardWidgetsMixin:
             with app.card(data_post_id="123", class_="custom-card"):
                 app.text("Content")
         """
-        cid = self._get_next_cid("card")
+        cid = self._resolve_widget_cid("card", key)
         
         # Convert kwargs to HTML attributes
         attrs = []
@@ -102,7 +102,7 @@ class CardWidgetsMixin:
             
             self._register_component(cid, builder)
     
-    def badge(self, text, variant="neutral", pill=False, pulse=False, cls: str = "", style: str = ""):
+    def badge(self, text, variant="neutral", pill=False, pulse=False, cls: str = "", style: str = "", key=None):
         """
         Create a Web Awesome badge component
         
@@ -116,7 +116,7 @@ class CardWidgetsMixin:
             app.badge("LIVE", variant="danger", pulse=True)
             app.badge("New", variant="primary", pill=True)
         """
-        cid = self._get_next_cid("badge")
+        cid = self._resolve_widget_cid("badge", key)
         
         def builder():
             import html as html_lib
@@ -142,7 +142,7 @@ class CardWidgetsMixin:
 
         self._register_component(cid, builder)
     
-    def icon(self, name, size=None, label=None, cls: str = "", style: str = ""):
+    def icon(self, name, size=None, label=None, cls: str = "", style: str = "", key=None):
         """
         Create a Web Awesome icon component
         
@@ -155,7 +155,7 @@ class CardWidgetsMixin:
             app.icon("clock")
             app.icon("heart-fill", size="large", label="Favorite")
         """
-        cid = self._get_next_cid("icon")
+        cid = self._resolve_widget_cid("icon", key)
         
         def builder():
             token = rendering_ctx.set(cid)
@@ -187,7 +187,7 @@ class CardWidgetsMixin:
     
     # ============= Predefined Card Themes =============
     
-    def live_card(self, content, timestamp=None, post_id=None, cls: str = "", style: str = ""):
+    def live_card(self, content, timestamp=None, post_id=None, cls: str = "", style: str = "", key=None):
         """
         Create a LIVE card with danger badge and pulse animation
         
@@ -218,6 +218,7 @@ class CardWidgetsMixin:
             footer=footer,
             cls=cls,
             style=merge_style("width: 100%;", style),
+            key=key,
             **kwargs
         )
     
@@ -232,7 +233,8 @@ class CardWidgetsMixin:
                     data_id: str = None,
                     return_html: bool = False,
                     cls: str = "",
-                    style: str = ""):
+                    style: str = "",
+                    key=None):
         """Styled card with various preset styles
         
         Args:
@@ -355,6 +357,7 @@ class CardWidgetsMixin:
             footer=footer_html,
             cls=cls,
             style=style,
+            key=key,
             **kwargs
         )
     
@@ -368,7 +371,8 @@ class CardWidgetsMixin:
                           footer_text: str = None,
                           data_id: str = None,
                           cls: str = "",
-                          style: str = ""):
+                          style: str = "",
+                          key=None):
         """
         Card widget with action buttons
         
@@ -471,9 +475,9 @@ class CardWidgetsMixin:
 </div>'''
         
         # Render with markdown
-        self.markdown(html_content)
+        self.markdown(html_content, key=key)
     
-    def info_card(self, content, title=None, cls: str = "", style: str = ""):
+    def info_card(self, content, title=None, cls: str = "", style: str = "", key=None):
         """
         Create an info card with primary variant
         
@@ -492,10 +496,11 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=style
+            style=style,
+            key=key
         )
     
-    def success_card(self, content, title=None, cls: str = "", style: str = ""):
+    def success_card(self, content, title=None, cls: str = "", style: str = "", key=None):
         """
         Create a success card with success variant
         
@@ -514,10 +519,11 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=style
+            style=style,
+            key=key
         )
     
-    def warning_card(self, content, title=None, cls: str = "", style: str = ""):
+    def warning_card(self, content, title=None, cls: str = "", style: str = "", key=None):
         """
         Create a warning card with warning variant
         
@@ -536,10 +542,11 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=style
+            style=style,
+            key=key
         )
     
-    def danger_card(self, content, title=None, cls: str = "", style: str = ""):
+    def danger_card(self, content, title=None, cls: str = "", style: str = "", key=None):
         """
         Create a danger card with danger variant
         
@@ -558,7 +565,8 @@ class CardWidgetsMixin:
             content=f'<div style="line-height: 1.6;">{content}</div>',
             header=header,
             cls=cls,
-            style=style
+            style=style,
+            key=key
         )
 
 

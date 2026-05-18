@@ -23,6 +23,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 import inspect
 import os
 from pathlib import Path
+import re
 
 from .app_launcher import AppLauncherMixin
 from .app_runtime import AppRuntimeMixin
@@ -712,6 +713,25 @@ class App(
     def _get_widget_defaults(self, widget_type: str) -> Dict[str, Any]:
         """Get default cls/style/part_cls for a widget type (internal helper)."""
         return self._widget_defaults.get(widget_type, {})
+
+    @staticmethod
+    def _sanitize_widget_key(value: Any) -> str:
+        raw = str(value)
+        normalized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+
+        if normalized and normalized == raw and len(normalized) <= 64:
+            return normalized
+
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        if not normalized:
+            return f"widget_{digest}"
+        return f"{normalized[:48]}_{digest}"
+
+    def _resolve_widget_cid(self, prefix: str, key: Any = None) -> str:
+        if key is None:
+            return self._get_next_cid(prefix)
+        return f"{prefix}_{self._sanitize_widget_key(key)}"
 
     def _resolve_state_name(self, key=None, *, stack_depth: int = 1) -> str:
         if key is not None:
