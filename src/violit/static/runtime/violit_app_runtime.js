@@ -1407,10 +1407,24 @@
             }
         };
 
+        violitRuntime.markAgGridSurfaceReady = function(surfaceId) {
+            if (!surfaceId) {
+                return;
+            }
+            const surface = document.getElementById(surfaceId);
+            if (!surface) {
+                return;
+            }
+            surface.setAttribute('data-vl-ag-grid-mounted', 'true');
+        };
+
         violitRuntime.registerInitializer('ag-grid-surface', function(element) {
             const config = violitRuntime.readJsonAttr(element, 'data-vl-ag-grid-config', null);
             if (!config) {
                 return;
+            }
+            if (window[config.apiKey]) {
+                violitRuntime.markAgGridSurfaceReady(config.surfaceId || element.id || '');
             }
             violitRuntime.bindAgGridSurface(config);
         });
