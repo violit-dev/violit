@@ -949,6 +949,18 @@
                 if (!validPanels.has(panelName)) return;
                 sessionStorage.setItem(config.storageKey, panelName);
                 syncServer(panelName);
+
+                requestAnimationFrame(function() {
+                    requestAnimationFrame(function() {
+                        const panel = group.querySelector(`wa-tab-panel[name="${panelName}"]`);
+                        if (!(panel instanceof Element)) {
+                            return;
+                        }
+                        panel.querySelectorAll('[data-vl-grid-config-hash]').forEach((gridMount) => {
+                            requestAgGridLayoutRefresh(gridMount, { fitColumns: true });
+                        });
+                    });
+                });
             });
         });
 
@@ -2044,14 +2056,28 @@
             }
         }
 
-        function requestAgGridLayoutRefresh(gridMount) {
+        function requestAgGridLayoutRefresh(gridMount, options) {
             if (!(gridMount instanceof Element)) {
                 return;
             }
 
+            const config = options && typeof options === 'object' ? options : {};
+            const shouldFitColumns = config.fitColumns === true;
+
             requestAnimationFrame(() => {
                 window.dispatchEvent(new Event('resize'));
                 void gridMount.offsetWidth;
+
+                if (shouldFitColumns && gridMount.id) {
+                    const gridApi = window['gridApi_' + gridMount.id];
+                    if (gridApi && typeof gridApi.sizeColumnsToFit === 'function') {
+                        try {
+                            gridApi.sizeColumnsToFit();
+                        } catch (error) {
+                            debugLog('[ag-grid] sizeColumnsToFit failed during layout refresh', error);
+                        }
+                    }
+                }
             });
         }
 
