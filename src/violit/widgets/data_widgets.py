@@ -32,7 +32,10 @@ class DataWidgetsMixin:
     def _resolve_widget_cid(self, widget_type: str, key=None) -> str:
         if key is None:
             return self._get_next_cid(widget_type)
-        return f"{widget_type}_{self._sanitize_widget_key(key)}"
+        cid = f"{widget_type}_{self._sanitize_widget_key(key)}"
+        if hasattr(self, "_remember_widget_key"):
+            self._remember_widget_key(cid, key)
+        return cid
 
     @staticmethod
     def _clone_editor_state_value(value: Any):
@@ -256,6 +259,7 @@ class DataWidgetsMixin:
                 }}
 
                 #{cid}_surface[data-vl-ag-grid-mounted="true"] #{cid}_shell {{
+                    display: none;
                     opacity: 0;
                     visibility: hidden;
                     pointer-events: none;
@@ -505,14 +509,15 @@ class DataWidgetsMixin:
             }})();</script>
             '''
     
-    def dataframe(self, df: Union['pd.DataFrame', Callable, State], height=400, 
+    def dataframe(self, df: Union['pd.DataFrame', Callable, State], height=400,
                   column_defs=None, grid_options=None, on_cell_clicked=None,
                   use_container_width=True, hide_index=False, column_order=None,
                   column_config=None, width=None, toolbar=True,
+                  key=None,
                   theme: str = "auto", theme_colors: Optional[dict] = None,
                   cls: str = "", style: str = "", **props):
         """Display read-only interactive dataframe with AG Grid."""
-        cid = self._get_next_cid("df")
+        cid = self._resolve_widget_cid("df", key)
         
         def action(v):
             """Handle cell click events"""

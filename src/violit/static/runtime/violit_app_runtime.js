@@ -1147,6 +1147,13 @@
             }
         });
 
+        function getMountedAgGridSurfaceRegistry() {
+            if (!window._vlMountedAgGridSurfaces) {
+                window._vlMountedAgGridSurfaces = Object.create(null);
+            }
+            return window._vlMountedAgGridSurfaces;
+        }
+
         violitRuntime.bindAgGridSurface = function(config = {}) {
             if (!config || !config.apiKey) {
                 return;
@@ -1216,6 +1223,7 @@
             if (!surfaceId) {
                 return;
             }
+            getMountedAgGridSurfaceRegistry()[surfaceId] = true;
             const surface = document.getElementById(surfaceId);
             if (!surface) {
                 return;
@@ -1223,11 +1231,29 @@
             surface.setAttribute('data-vl-ag-grid-mounted', 'true');
         };
 
+        violitRuntime.restoreAgGridSurfaceMountedState = function(surfaceOrId) {
+            const surface = typeof surfaceOrId === 'string'
+                ? document.getElementById(surfaceOrId)
+                : surfaceOrId;
+            if (!surface || !surface.id) {
+                return false;
+            }
+
+            const registry = getMountedAgGridSurfaceRegistry();
+            if (!registry[surface.id]) {
+                return false;
+            }
+
+            surface.setAttribute('data-vl-ag-grid-mounted', 'true');
+            return true;
+        };
+
         violitRuntime.registerInitializer('ag-grid-surface', function(element) {
             const config = violitRuntime.readJsonAttr(element, 'data-vl-ag-grid-config', null);
             if (!config) {
                 return;
             }
+            violitRuntime.restoreAgGridSurfaceMountedState(config.surfaceId || element.id || '');
             if (window[config.apiKey]) {
                 violitRuntime.markAgGridSurfaceReady(config.surfaceId || element.id || '');
             }
@@ -1701,6 +1727,10 @@
         function copyElementAttributes(target, source) {
             if (!target || !source) return;
 
+            const shouldPreserveAgGridMounted =
+                target.getAttribute('data-vl-ag-grid-mounted') === 'true'
+                || !!(target.id && window._vlMountedAgGridSurfaces && window._vlMountedAgGridSurfaces[target.id]);
+
             Array.from(target.getAttributeNames()).forEach((name) => {
                 if (name !== 'id') {
                     target.removeAttribute(name);
@@ -1712,6 +1742,11 @@
                     target.setAttribute(name, source.getAttribute(name));
                 }
             });
+
+            if (shouldPreserveAgGridMounted && target.classList && target.classList.contains('vl-ag-grid-surface')) {
+                target.setAttribute('data-vl-ag-grid-mounted', 'true');
+                getMountedAgGridSurfaceRegistry()[target.id] = true;
+            }
         }
 
         if (typeof window._vlFindAgGridViewport !== 'function') {
@@ -1969,9 +2004,14 @@
                 return false;
             }
 
-            if (!isDedicatedAgGridWrapper(currentRoot, currentGridMount) || !isDedicatedAgGridWrapper(nextRoot, nextGridMount)) {
+            const currentGridSurface = currentGridMount.closest('.vl-ag-grid-surface');
+            const nextGridSurface = nextGridMount.closest('.vl-ag-grid-surface');
+            if (!currentGridSurface || !nextGridSurface || !currentGridSurface.id || currentGridSurface.id !== nextGridSurface.id) {
                 return false;
             }
+
+            const isDedicatedWrapper = isDedicatedAgGridWrapper(currentRoot, currentGridMount)
+                && isDedicatedAgGridWrapper(nextRoot, nextGridMount);
 
             const baseCid = currentGridMount.id;
             const gridApi = window['gridApi_' + baseCid];
@@ -2027,8 +2067,17 @@
                     return false;
                 }
 
-                copyElementAttributes(currentRoot, nextRoot);
+                copyElementAttributes(currentGridSurface, nextGridSurface);
                 copyElementAttributes(currentGridMount, nextGridMount);
+
+                if (!isDedicatedWrapper) {
+                    nextGridSurface.replaceWith(currentGridSurface);
+                    currentRoot.replaceWith(nextRoot);
+                    window._vlRestoreAgGridScroll(currentGridMount, agGridScrollState);
+                    return true;
+                }
+
+                copyElementAttributes(currentRoot, nextRoot);
                 window._vlRestoreAgGridScroll(currentGridMount, agGridScrollState);
                 return true;
             } catch (e) {
@@ -2037,9 +2086,12 @@
             }
         }
 
-        function executeInlineScripts(root) {
+        function executeInlineScripts(root, skipSubtree) {
             if (!root || !root.querySelectorAll) return;
             root.querySelectorAll('script').forEach((s) => {
+                if (skipSubtree instanceof Element && skipSubtree.contains(s)) {
+                    return;
+                }
                 const script = document.createElement('script');
                 script.textContent = s.textContent;
                 document.body.appendChild(script);
