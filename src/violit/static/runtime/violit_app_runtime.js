@@ -1981,6 +1981,80 @@
             return extractArrayLiteralAfter(source, 'const rawColumnDefs =') || extractArrayLiteralAfter(source, 'columnDefs:');
         }
 
+        function getAgGridStructureHash(gridMount) {
+            if (!(gridMount instanceof Element)) {
+                return '';
+            }
+
+            return gridMount.getAttribute('data-vl-grid-structure-hash')
+                || gridMount.getAttribute('data-vl-grid-config-hash')
+                || '';
+        }
+
+        function parseInlineStyleMap(styleText) {
+            const declarations = Object.create(null);
+            if (typeof styleText !== 'string' || !styleText.trim()) {
+                return declarations;
+            }
+
+            styleText.split(';').forEach((entry) => {
+                const separatorIndex = entry.indexOf(':');
+                if (separatorIndex === -1) {
+                    return;
+                }
+                const property = entry.slice(0, separatorIndex).trim().toLowerCase();
+                const value = entry.slice(separatorIndex + 1).trim();
+                if (!property) {
+                    return;
+                }
+                declarations[property] = value;
+            });
+
+            return declarations;
+        }
+
+        function stylesMatchExceptAllowedKeys(currentStyle, nextStyle, allowedKeys) {
+            const currentMap = parseInlineStyleMap(currentStyle);
+            const nextMap = parseInlineStyleMap(nextStyle);
+            const allowed = new Set(Array.isArray(allowedKeys) ? allowedKeys.map((key) => String(key).trim().toLowerCase()) : []);
+            const keys = new Set([...Object.keys(currentMap), ...Object.keys(nextMap)]);
+
+            for (const key of keys) {
+                if ((currentMap[key] || '') === (nextMap[key] || '')) {
+                    continue;
+                }
+                if (!allowed.has(key)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        function syncWrapperStyleBlocks(currentRoot, nextRoot) {
+            if (!(currentRoot instanceof Element) || !(nextRoot instanceof Element)) {
+                return;
+            }
+
+            const currentStyles = Array.from(currentRoot.children).filter((child) => child.tagName && child.tagName.toUpperCase() === 'STYLE');
+            const nextStyles = Array.from(nextRoot.children).filter((child) => child.tagName && child.tagName.toUpperCase() === 'STYLE');
+            const count = Math.min(currentStyles.length, nextStyles.length);
+            for (let index = 0; index < count; index += 1) {
+                currentStyles[index].textContent = nextStyles[index].textContent;
+            }
+        }
+
+        function requestAgGridLayoutRefresh(gridMount) {
+            if (!(gridMount instanceof Element)) {
+                return;
+            }
+
+            requestAnimationFrame(() => {
+                window.dispatchEvent(new Event('resize'));
+                void gridMount.offsetWidth;
+            });
+        }
+
         function trySmartUpdateAgGridWrapper(currentRoot, incomingMarkupOrRoot) {
             if (!currentRoot || !incomingMarkupOrRoot) return false;
 
@@ -2029,13 +2103,13 @@
             try {
                 const currentStyle = currentGridMount.getAttribute('style') || '';
                 const nextStyle = nextGridMount.getAttribute('style') || '';
-                if (currentStyle !== nextStyle) {
+                if (!stylesMatchExceptAllowedKeys(currentStyle, nextStyle, ['width'])) {
                     return false;
                 }
 
-                const currentConfigHash = currentGridMount.getAttribute('data-vl-grid-config-hash') || '';
-                const nextConfigHash = nextGridMount.getAttribute('data-vl-grid-config-hash') || '';
-                if (currentConfigHash !== nextConfigHash) {
+                const currentStructureHash = getAgGridStructureHash(currentGridMount);
+                const nextStructureHash = getAgGridStructureHash(nextGridMount);
+                if (currentStructureHash !== nextStructureHash) {
                     return false;
                 }
 
@@ -2069,6 +2143,8 @@
 
                 copyElementAttributes(currentGridSurface, nextGridSurface);
                 copyElementAttributes(currentGridMount, nextGridMount);
+                syncWrapperStyleBlocks(currentRoot, nextRoot);
+                requestAgGridLayoutRefresh(currentGridMount);
 
                 if (!isDedicatedWrapper) {
                     nextGridSurface.replaceWith(currentGridSurface);
@@ -3765,15 +3841,15 @@
                                             if (canSmartUpdate) {
                                                 const currentStyle = currentGridRoot.getAttribute('style') || '';
                                                 const nextStyle = nextGridRoot.getAttribute('style') || '';
-                                                if (currentStyle !== nextStyle) {
+                                                if (!stylesMatchExceptAllowedKeys(currentStyle, nextStyle, ['width'])) {
                                                     canSmartUpdate = false;
                                                 }
                                             }
 
                                             if (canSmartUpdate) {
-                                                const currentConfigHash = currentGridRoot.getAttribute('data-vl-grid-config-hash') || '';
-                                                const nextConfigHash = nextGridRoot.getAttribute('data-vl-grid-config-hash') || '';
-                                                if (currentConfigHash !== nextConfigHash) {
+                                                const currentStructureHash = getAgGridStructureHash(currentGridRoot);
+                                                const nextStructureHash = getAgGridStructureHash(nextGridRoot);
+                                                if (currentStructureHash !== nextStructureHash) {
                                                     canSmartUpdate = false;
                                                 }
                                             }
@@ -3811,6 +3887,8 @@
                                                         gridApi.setRowData(newData);
                                                     }
 
+                                                    copyElementAttributes(currentGridRoot, nextGridRoot);
+                                                    requestAgGridLayoutRefresh(currentGridRoot);
                                                     window._vlRestoreAgGridScroll(currentGridRoot, agGridScrollState);
                                                     smartUpdated = true;
                                                 } catch (e) {

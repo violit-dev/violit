@@ -209,7 +209,7 @@ class DataWidgetsMixin:
     def _build_ag_grid_surface_html(self, *, cid: str, height_css: str, width_css: str, grid_style: str,
                                     script_body: str, toolbar_config: dict[str, Any],
                                     toolbar_extra_actions_html: str = "", bottom_html: str = "",
-                                    grid_config_hash: str = "") -> str:
+                                    grid_config_hash: str = "", grid_structure_hash: str = "") -> str:
         toolbar_html = ""
         if toolbar_config.get("enabled"):
             search_html = ""
@@ -500,7 +500,7 @@ class DataWidgetsMixin:
                         </div>
                         <div id="{cid}_shell_footer" class="vl-ag-grid-shell__line"></div>
                     </div>
-                    <div id="{cid}" data-vl-grid-config-hash="{grid_config_hash}" style="height: {height_css}; width: {width_css}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
+                    <div id="{cid}" data-vl-grid-config-hash="{grid_config_hash}" data-vl-grid-structure-hash="{grid_structure_hash}" style="height: {height_css}; width: {width_css}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
                 </div>
                 {bottom_html}
             </div>
@@ -634,15 +634,24 @@ class DataWidgetsMixin:
                 "fullscreenTargetId": f"{cid}_surface",
                 "csvFileName": toolbar_config.get("csv_file_name", "dataframe.csv"),
             }
-            grid_config_hash = hashlib.sha1(
+            grid_structure_hash = hashlib.sha1(
                 json.dumps(
                     {
                         "cols": cols,
                         "grid_options": extra_options,
                         "toolbar": toolbar_config,
-                        "width": container_width,
                         "height": resolved_height,
                         "hide_index": current_hide_index,
+                    },
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest()
+            grid_config_hash = hashlib.sha1(
+                json.dumps(
+                    {
+                        "structure": grid_structure_hash,
+                        "width": container_width,
                     },
                     sort_keys=True,
                     default=str,
@@ -655,6 +664,7 @@ class DataWidgetsMixin:
                 grid_style=grid_style,
                 toolbar_config=toolbar_config,
                 grid_config_hash=grid_config_hash,
+                grid_structure_hash=grid_structure_hash,
                 script_body=f'''
                 function initGrid() {{
                     const opt = {{ 
