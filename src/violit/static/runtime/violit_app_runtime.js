@@ -1820,6 +1820,36 @@
             return mounts.length === 1 ? mounts[0] : null;
         }
 
+        function getSignificantElementChildren(root) {
+            if (!(root instanceof Element)) return [];
+            return Array.from(root.children).filter((child) => {
+                const tag = child.tagName ? child.tagName.toUpperCase() : '';
+                return tag !== 'STYLE' && tag !== 'SCRIPT';
+            });
+        }
+
+        function isDedicatedAgGridWrapper(root, gridMount) {
+            if (!(root instanceof Element) || !(gridMount instanceof Element)) {
+                return false;
+            }
+
+            if (root === gridMount || root.classList.contains('vl-ag-grid-surface')) {
+                return true;
+            }
+
+            const significantChildren = getSignificantElementChildren(root);
+            if (significantChildren.length !== 1) {
+                return false;
+            }
+
+            const soleChild = significantChildren[0];
+            if (soleChild === gridMount || soleChild.classList.contains('vl-ag-grid-surface')) {
+                return true;
+            }
+
+            return false;
+        }
+
         function collectAgGridColumnIds(defs) {
             if (!Array.isArray(defs)) {
                 return [];
@@ -1936,6 +1966,10 @@
             const currentGridMount = getSingleAgGridMount(currentRoot);
             const nextGridMount = getSingleAgGridMount(nextRoot);
             if (!currentGridMount || !nextGridMount || !currentGridMount.id || currentGridMount.id !== nextGridMount.id) {
+                return false;
+            }
+
+            if (!isDedicatedAgGridWrapper(currentRoot, currentGridMount) || !isDedicatedAgGridWrapper(nextRoot, nextGridMount)) {
                 return false;
             }
 
