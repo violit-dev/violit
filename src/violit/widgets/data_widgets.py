@@ -73,39 +73,6 @@ class DataWidgetsMixin:
         return isinstance(current_value, pd.DataFrame) or isinstance(seed_value, pd.DataFrame)
 
     @staticmethod
-    def _infer_data_editor_column_type(series: Any) -> Optional[str]:
-        try:
-            import pandas as pd  # type: ignore
-        except Exception:
-            pd = None
-
-        dtype = getattr(series, "dtype", None)
-        if pd is not None:
-            try:
-                if pd.api.types.is_bool_dtype(dtype):
-                    return "boolean"
-                if pd.api.types.is_numeric_dtype(dtype):
-                    return "number"
-                if pd.api.types.is_datetime64_any_dtype(dtype):
-                    return "date"
-            except Exception:
-                pass
-
-        sample_values = []
-        if hasattr(series, "dropna"):
-            try:
-                non_null = series.dropna()
-                sample_values = list(non_null.head(5)) if hasattr(non_null, "head") else list(non_null)[:5]
-            except Exception:
-                sample_values = []
-
-        if sample_values and all(isinstance(value, bool) for value in sample_values):
-            return "boolean"
-        if sample_values and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in sample_values):
-            return "number"
-        return None
-
-    @staticmethod
     def _build_ag_grid_theme_style(theme: str = "auto", theme_colors: Optional[dict] = None) -> str:
         mode = (theme or "auto").lower()
         if mode == "dark":
@@ -271,7 +238,6 @@ class DataWidgetsMixin:
         runtime_config = html_lib.escape(json.dumps({
             "apiKey": f"gridApi_{cid}",
             "surfaceId": f"{cid}_surface",
-            "shellId": f"{cid}_shell",
             "searchInputId": f"{cid}_toolbar_search" if toolbar_config.get("search") else None,
             "csvButtonId": f"{cid}_toolbar_csv" if toolbar_config.get("export_csv") else None,
             "fullscreenButtonId": f"{cid}_toolbar_fullscreen" if toolbar_config.get("fullscreen") else None,
@@ -286,16 +252,6 @@ class DataWidgetsMixin:
                     flex-direction: column;
                     gap: 0.625rem;
                     max-width: 100%;
-                }}
-
-                #{cid}_surface[data-vl-ag-grid-mounted="true"] #{cid}_shell {{
-                    opacity: 0;
-                    visibility: hidden;
-                    pointer-events: none;
-                }}
-
-                #{cid}_surface[data-vl-ag-grid-mounted="true"] #{cid} {{
-                    opacity: 1;
                 }}
 
                 #{cid}_toolbar {{
@@ -414,123 +370,10 @@ class DataWidgetsMixin:
                     width: 100% !important;
                     height: calc(100vh - 6rem) !important;
                 }}
-
-                #{cid}_frame {{
-                    position: relative;
-                    width: {width_css};
-                    max-width: 100%;
-                    min-height: {height_css};
-                }}
-
-                #{cid} {{
-                    position: relative;
-                    z-index: 1;
-                    opacity: 0;
-                    transition: opacity 0.18s ease;
-                }}
-
-                #{cid}_shell {{
-                    position: absolute;
-                    inset: 0;
-                    z-index: 2;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.7rem;
-                    padding: 0.95rem;
-                    border: 1px solid var(--vl-border);
-                    border-radius: 0.95rem;
-                    background: color-mix(in srgb, var(--vl-bg-card), var(--vl-primary) 2%);
-                    overflow: hidden;
-                    transition: opacity 0.22s ease, visibility 0.22s ease;
-                }}
-
-                #{cid}_shell::after {{
-                    content: '';
-                    position: absolute;
-                    inset: 0;
-                    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.34) 50%, transparent 100%);
-                    transform: translateX(-100%);
-                    animation: vl-ag-grid-shell-sheen 1.25s ease-in-out infinite;
-                    pointer-events: none;
-                }}
-
-                #{cid}_shell_header {{
-                    display: grid;
-                    grid-template-columns: repeat(4, minmax(0, 1fr));
-                    gap: 0.55rem;
-                }}
-
-                #{cid}_shell_body {{
-                    display: grid;
-                    gap: 0.5rem;
-                    flex: 1 1 auto;
-                    align-content: start;
-                }}
-
-                #{cid}_shell_footer {{
-                    width: 28%;
-                    min-width: 9rem;
-                    height: 0.9rem;
-                }}
-
-                #{cid}_shell .vl-ag-grid-shell__line {{
-                    height: 0.92rem;
-                    border-radius: 999px;
-                    background: color-mix(in srgb, var(--vl-text), transparent 88%);
-                }}
-
-                #{cid}_shell .vl-ag-grid-shell__line--header {{
-                    height: 1.05rem;
-                    background: color-mix(in srgb, var(--vl-text), transparent 84%);
-                }}
-
-                #{cid}_shell .vl-ag-grid-shell__row {{
-                    display: grid;
-                    grid-template-columns: 1.5fr 0.9fr 1fr 0.8fr;
-                    gap: 0.55rem;
-                }}
-
-                #{cid}_shell .vl-ag-grid-shell__row .vl-ag-grid-shell__line:nth-child(2n) {{
-                    opacity: 0.78;
-                }}
-
-                @keyframes vl-ag-grid-shell-sheen {{
-                    100% {{
-                        transform: translateX(100%);
-                    }}
-                }}
             </style>
-            <div id="{cid}_surface" class="vl-ag-grid-surface" data-vl-init="ag-grid-surface" data-vl-ag-grid-config="{runtime_config}" data-vl-ag-grid-mounted="false">
+            <div id="{cid}_surface" class="vl-ag-grid-surface" data-vl-init="ag-grid-surface" data-vl-ag-grid-config="{runtime_config}">
                 {toolbar_html}
-                <div id="{cid}_frame">
-                    <div id="{cid}_shell" aria-hidden="true">
-                        <div id="{cid}_shell_header">
-                            <div class="vl-ag-grid-shell__line vl-ag-grid-shell__line--header"></div>
-                            <div class="vl-ag-grid-shell__line vl-ag-grid-shell__line--header"></div>
-                            <div class="vl-ag-grid-shell__line vl-ag-grid-shell__line--header"></div>
-                            <div class="vl-ag-grid-shell__line vl-ag-grid-shell__line--header"></div>
-                        </div>
-                        <div id="{cid}_shell_body">
-                            <div class="vl-ag-grid-shell__row">
-                                <div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div>
-                            </div>
-                            <div class="vl-ag-grid-shell__row">
-                                <div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div>
-                            </div>
-                            <div class="vl-ag-grid-shell__row">
-                                <div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div>
-                            </div>
-                            <div class="vl-ag-grid-shell__row">
-                                <div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div>
-                            </div>
-                            <div class="vl-ag-grid-shell__row">
-                                <div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div><div class="vl-ag-grid-shell__line"></div>
-                            </div>
-                        </div>
-                        <div id="{cid}_shell_footer" class="vl-ag-grid-shell__line"></div>
-                    </div>
-                    <div id="{cid}" data-vl-grid-config-hash="{grid_config_hash}" style="height: {height_css}; width: {width_css}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
-                </div>
+                <div id="{cid}" data-vl-grid-config-hash="{grid_config_hash}" style="height: {height_css}; width: {width_css}; {grid_style};" class="ag-theme-alpine vl-ag-grid"></div>
                 {bottom_html}
             </div>
             <script>(function(){{
@@ -543,9 +386,9 @@ class DataWidgetsMixin:
                   use_container_width=True, hide_index=False, column_order=None,
                   column_config=None, width=None, toolbar=True,
                   theme: str = "auto", theme_colors: Optional[dict] = None,
-                  cls: str = "", style: str = "", key=None, **props):
+                  cls: str = "", style: str = "", **props):
         """Display read-only interactive dataframe with AG Grid."""
-        cid = self._resolve_widget_cid("df", key)
+        cid = self._get_next_cid("df")
         
         def action(v):
             """Handle cell click events"""
@@ -644,7 +487,7 @@ class DataWidgetsMixin:
                         rowData: params.data,
                         rowIndex: params.rowIndex
                     }};
-                    {f"window.sendAction('{cid}', cellData);" if self.mode == 'ws' else f"if (window.violitRuntime && typeof window.violitRuntime.postLiteAction === 'function') {{ window.violitRuntime.postLiteAction('{cid}', cellData); }} else if (window.htmx && typeof window.htmx.ajax === 'function') {{ htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(cellData), _csrf_token: window._csrf_token || '', _vl_view_id: window._vlViewId || ''}}, swap: 'none'}}); }}"}
+                    {f"window.sendAction('{cid}', cellData);" if self.mode == 'ws' else f"htmx.ajax('POST', '/action/{cid}', {{values: {{value: JSON.stringify(cellData)}}, swap: 'none'}});"}
                 }},
                 '''
             
@@ -701,9 +544,6 @@ class DataWidgetsMixin:
                         el.dataset.vlAgGridMounted = 'true';
                         const gridApi = agGrid.createGrid(el, opt);
                         window['gridApi_{cid}'] = gridApi;
-                        if (window.violitRuntime && typeof window.violitRuntime.markAgGridSurfaceReady === 'function') {{
-                            window.violitRuntime.markAgGridSurfaceReady('{cid}_surface');
-                        }}
                         if (window.violitRuntime && typeof window.violitRuntime.bindAgGridSurface === 'function') {{
                             window.violitRuntime.bindAgGridSurface({json.dumps(toolbar_bind_config)});
                         }}
@@ -739,9 +579,9 @@ class DataWidgetsMixin:
         
         self._register_component(cid, builder, action=action if on_cell_clicked else None)
 
-    def table(self, df: Union['pd.DataFrame', Callable, State], cls: str = "", style: str = "", key=None, **props):
+    def table(self, df: Union['pd.DataFrame', Callable, State], cls: str = "", style: str = "", **props):
         """Display static HTML table (Signal support)"""
-        cid = self._resolve_widget_cid("table", key)
+        cid = self._get_next_cid("table")
         def builder():
             import pandas as pd
             # Handle Signal
@@ -975,9 +815,7 @@ class DataWidgetsMixin:
                 if column_name in disabled_columns:
                     column_editable = False
 
-                explicit_editor_type = current_config.pop("type", current_config.pop("editor", None))
-                inferred_editor_type = self._infer_data_editor_column_type(source_df[column_name]) if column_name in source_df.columns else None
-                editor_type = explicit_editor_type or inferred_editor_type or "text"
+                editor_type = current_config.pop("type", current_config.pop("editor", "text"))
                 editor_options = current_config.pop("options", current_config.pop("values", None))
                 number_min = current_config.pop("min", None)
                 number_max = current_config.pop("max", None)
@@ -1307,9 +1145,6 @@ class DataWidgetsMixin:
                         onGridReady: (params) => {{
                             // Store API when grid is ready
                             window['gridApi_{cid}'] = params.api;
-                            if (window.violitRuntime && typeof window.violitRuntime.markAgGridSurfaceReady === 'function') {{
-                                window.violitRuntime.markAgGridSurfaceReady('{cid}_surface');
-                            }}
                             syncDeleteSelectedButtonState();
                         }},
                         ...mergedGridOptions
@@ -1322,9 +1157,6 @@ class DataWidgetsMixin:
                         el.dataset.vlAgGridMounted = 'true';
                         const gridApi = agGrid.createGrid(el, gridOptions);
                         window['gridApi_{cid}'] = gridApi;
-                        if (window.violitRuntime && typeof window.violitRuntime.markAgGridSurfaceReady === 'function') {{
-                            window.violitRuntime.markAgGridSurfaceReady('{cid}_surface');
-                        }}
                         if (window.violitRuntime && typeof window.violitRuntime.bindAgGridSurface === 'function') {{
                             window.violitRuntime.bindAgGridSurface({json.dumps(toolbar_bind_config)});
                         }}
@@ -1422,11 +1254,11 @@ class DataWidgetsMixin:
 
     def metric(self, label: str, value: Union[str, int, float, State, Callable], delta: Optional[Union[str, State, Callable]] = None, delta_color: str = "normal",
                 help: str = None, label_visibility: str = "visible", border: bool = True,
-            cls: str = "", style: str = "", height: Union[str, int, float] = "auto", key=None):
+                cls: str = "", style: str = "", height: Union[str, int, float] = "auto"):
         """Display metric value with Signal support"""
         import html as html_lib
         
-        cid = self._resolve_widget_cid("metric", key)
+        cid = self._get_next_cid("metric")
         
         def builder():
             # Handle value and delta signals in a single tracked block
@@ -1493,9 +1325,9 @@ class DataWidgetsMixin:
             
         self._register_component(cid, builder)
 
-    def json(self, body: Any, expanded=True, cls: str = "", style: str = "", key=None):
+    def json(self, body: Any, expanded=True, cls: str = "", style: str = ""):
         """Display JSON data with Signal support"""
-        cid = self._resolve_widget_cid("json", key)
+        cid = self._get_next_cid("json")
         
         def builder():
             from ..state import State, ComputedState
@@ -1530,7 +1362,7 @@ class DataWidgetsMixin:
                 start_date=None, end_date=None,
                 color_map=None, show_legend=True, 
                 show_weekdays=True, show_months=True,
-                cell_size=12, gap=3, on_cell_clicked=None, cls: str = "", style: str = "", key=None, **props):
+                cell_size=12, gap=3, on_cell_clicked=None, cls: str = "", style: str = "", **props):
         """
         Display GitHub-style activity heatmap
         
@@ -1557,7 +1389,7 @@ class DataWidgetsMixin:
         """
         from datetime import date as date_obj, timedelta
         
-        cid = self._resolve_widget_cid("heatmap", key)
+        cid = self._get_next_cid("heatmap")
         
         def action(v):
             """Handle cell click events"""

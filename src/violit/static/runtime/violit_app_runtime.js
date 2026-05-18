@@ -170,127 +170,6 @@
             });
         }
 
-        function collectPersistedExpanderDetails(root) {
-            if (!(root instanceof Element)) return [];
-            const matches = [];
-            const ownInit = root.getAttribute ? (root.getAttribute('data-vl-init') || '') : '';
-            if (
-                root.tagName
-                && root.tagName.toLowerCase() === 'wa-details'
-                && ownInit.split(/\s+/).includes('expander-persistence')
-            ) {
-                matches.push(root);
-            }
-            root.querySelectorAll('wa-details[data-vl-init~="expander-persistence"]').forEach(function(details) {
-                if (!matches.includes(details)) {
-                    matches.push(details);
-                }
-            });
-            return matches;
-        }
-
-        function readPersistedExpanderConfig(details) {
-            if (!(details instanceof Element)) return null;
-            const rawConfig = details.getAttribute('data-vl-expander-config');
-            if (!rawConfig) return null;
-            try {
-                return JSON.parse(rawConfig);
-            } catch (error) {
-                return null;
-            }
-        }
-
-        function preserveIncomingExpanderOpenState(currentRoot, nextRoot) {
-            if (!(currentRoot instanceof Element) || !(nextRoot instanceof Element)) {
-                return false;
-            }
-
-            const currentDetails = collectPersistedExpanderDetails(currentRoot);
-            const nextDetails = collectPersistedExpanderDetails(nextRoot);
-            if (!currentDetails.length || !nextDetails.length) {
-                return false;
-            }
-
-            const currentByStorageKey = new Map();
-            currentDetails.forEach(function(details) {
-                const config = readPersistedExpanderConfig(details);
-                if (config && config.storageKey) {
-                    currentByStorageKey.set(config.storageKey, { details, config });
-                }
-            });
-
-            let mutated = false;
-            nextDetails.forEach(function(details) {
-                const nextConfig = readPersistedExpanderConfig(details);
-                if (!nextConfig || !nextConfig.storageKey) {
-                    return;
-                }
-                const currentMatch = currentByStorageKey.get(nextConfig.storageKey);
-                if (!currentMatch) {
-                    return;
-                }
-
-                const storedOpen = sessionStorage.getItem(nextConfig.storageKey);
-                const preservedOpen = storedOpen === null ? currentMatch.details.open === true : storedOpen === 'true';
-
-                if (preservedOpen) {
-                    details.setAttribute('open', '');
-                } else {
-                    details.removeAttribute('open');
-                }
-
-                nextConfig.serverOpen = preservedOpen;
-                details.setAttribute('data-vl-expander-config', JSON.stringify(nextConfig));
-                mutated = true;
-            });
-
-            return mutated;
-        }
-
-        function preserveIncomingExpanderStatesInHtml(html) {
-            if (typeof html !== 'string' || html.indexOf('expander-persistence') === -1) {
-                return html;
-            }
-
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
-            Array.from(temp.children).forEach(function(nextRoot) {
-                if (!(nextRoot instanceof Element) || !nextRoot.id) {
-                    return;
-                }
-                const currentRoot = document.getElementById(nextRoot.id);
-                if (currentRoot) {
-                    preserveIncomingExpanderOpenState(currentRoot, nextRoot);
-                }
-            });
-            return temp.innerHTML;
-        }
-
-        function blurFocusedWaButtonHost() {
-            const activeElement = document.activeElement;
-            if (!(activeElement instanceof Element)) {
-                return;
-            }
-
-            const buttonHost = activeElement.closest('wa-button');
-            if (!(buttonHost instanceof HTMLElement)) {
-                return;
-            }
-
-            const shadowActive = buttonHost.shadowRoot ? buttonHost.shadowRoot.activeElement : null;
-            if (shadowActive && typeof shadowActive.blur === 'function') {
-                try {
-                    shadowActive.blur();
-                } catch (error) {}
-            }
-
-            if (typeof buttonHost.blur === 'function') {
-                try {
-                    buttonHost.blur();
-                } catch (error) {}
-            }
-        }
-
         function trySmartUpdateTextLikeWidget(currentRoot, incomingMarkupOrRoot) {
             const currentHost = getTextLikeHost(currentRoot);
             if (!currentHost) return false;
@@ -451,9 +330,6 @@
                 return false;
             }
 
-            const preservedHostClass = currentHost.getAttribute('class') || '';
-            const preservedHostStyle = currentHost.getAttribute('style') || '';
-
             syncElementAttributes(currentRoot, nextRoot);
             syncElementAttributes(currentHost, nextHost);
 
@@ -467,17 +343,6 @@
                 syncSelectorText(currentHost, nextHost, '[data-range-start]');
                 syncSelectorText(currentHost, nextHost, '[data-range-end]');
                 syncSelectorText(currentHost, nextHost, '[data-range-span]');
-            } else if (currentInit.startsWith('cw-js-widget-')) {
-                const nextHostClass = nextHost.getAttribute('class') || '';
-                const mergedHostClass = Array.from(new Set((nextHostClass + ' ' + preservedHostClass).split(/\s+/).filter(Boolean))).join(' ');
-                if (mergedHostClass) {
-                    currentHost.setAttribute('class', mergedHostClass);
-                }
-
-                const nextHostStyle = nextHost.getAttribute('style') || '';
-                if (!nextHostStyle && preservedHostStyle) {
-                    currentHost.setAttribute('style', preservedHostStyle);
-                }
             } else if (currentInit === 'cw-sortable-board') {
                 syncSelectorInnerHtml(currentHost, nextHost, '.cw-widget-header');
                 const currentList = currentHost.querySelector('[data-board-list]');
@@ -574,11 +439,11 @@
             if (!element || !key) {
                 return false;
             }
-            const boundKeys = element._vlBoundKeys || (element._vlBoundKeys = Object.create(null));
-            if (boundKeys[key]) {
+            const attrName = `data-vl-bound-${key}`;
+            if (element.hasAttribute(attrName)) {
                 return true;
             }
-            boundKeys[key] = true;
+            element.setAttribute(attrName, 'true');
             return false;
         };
 
@@ -630,20 +495,6 @@
                 restoreViewportScroll(scrollRestore);
             }
             return { response, html };
-        };
-
-        violitRuntime.emitAction = function(cid, value, options = {}) {
-            if (!cid) {
-                return null;
-            }
-            if (typeof window.sendAction === 'function') {
-                window.sendAction(cid, value);
-                return null;
-            }
-            if (typeof violitRuntime.postLiteAction === 'function') {
-                return violitRuntime.postLiteAction(cid, value, options);
-            }
-            return null;
         };
 
         violitRuntime.initElement = function(element) {
@@ -908,11 +759,6 @@
 
             const bindSubmitOnEnter = function(attempts) {
                 if (!submitOnEnter) return;
-                const hostBindingKey = `submit-enter-host-${config.cid}`;
-                const hostBoundKeys = element._vlBoundKeys || (element._vlBoundKeys = Object.create(null));
-                if (hostBoundKeys[hostBindingKey]) {
-                    return;
-                }
                 const target = violitRuntime.resolveControlTarget(element) || (attempts >= 10 ? element : null);
                 if (!target) {
                     setTimeout(function() { bindSubmitOnEnter(attempts + 1); }, 80);
@@ -949,7 +795,6 @@
                         });
                     }
                 });
-                hostBoundKeys[hostBindingKey] = true;
             };
 
             bindSubmitOnEnter(0);
@@ -999,14 +844,7 @@
             const armPersistenceFromSummaryInteraction = function(event) {
                 const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
                 const fromSummary = path.some(function(node) {
-                    if (!node) return false;
-                    if (node.tagName === 'SUMMARY') return true;
-                    if (typeof node.getAttribute !== 'function') return false;
-                    if (node.getAttribute('slot') === 'summary') return true;
-                    const partAttr = node.getAttribute('part') || '';
-                    if (!partAttr) return false;
-                    const parts = partAttr.split(/\s+/);
-                    return parts.includes('header') || parts.includes('summary');
+                    return !!(node && typeof node.getAttribute === 'function' && node.getAttribute('slot') === 'summary');
                 });
 
                 if (!fromSummary) return;
@@ -1072,29 +910,10 @@
             const actionCid = typeof config.actionCid === 'string' ? config.actionCid : '';
             const shouldSyncServer = config.syncServer === true;
 
-            const activePanelStyle = 'display:block;height:auto;overflow:visible;pointer-events:auto;opacity:1;visibility:visible;';
-            const inactivePanelStyle = 'display:block;height:0;overflow:hidden;pointer-events:none;opacity:0;visibility:hidden;';
-
-            const syncPanelVisibility = function(panelName) {
-                group.querySelectorAll('wa-tab-panel[name]').forEach(function(panel) {
-                    const isActive = panel.getAttribute('name') === panelName;
-                    panel.style.cssText = isActive ? activePanelStyle : inactivePanelStyle;
-                    panel.setAttribute('data-vl-tab-state', isActive ? 'active' : 'collapsed');
-                    panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
-                    if (isActive) {
-                        panel.setAttribute('active', '');
-                    } else {
-                        panel.removeAttribute('active');
-                    }
-                });
-            };
-
             const applyActivePanel = function(panelName) {
                 if (!panelName || !validPanels.has(panelName)) return false;
-                syncPanelVisibility(panelName);
                 group.setAttribute('active', panelName);
                 requestAnimationFrame(function() {
-                    syncPanelVisibility(panelName);
                     group.setAttribute('active', panelName);
                     if (typeof group.updateActiveTab === 'function') {
                         group.updateActiveTab();
@@ -1115,28 +934,9 @@
                 }
             };
 
-            const reapplyActivePanelWhenDefined = function(panelName) {
-                if (!panelName || !validPanels.has(panelName)) return;
-                if (!window.customElements || typeof window.customElements.whenDefined !== 'function') {
-                    return;
-                }
-                Promise.all([
-                    window.customElements.whenDefined('wa-tab-group').catch(function() {}),
-                    window.customElements.whenDefined('wa-tab-panel').catch(function() {}),
-                ]).then(function() {
-                    requestAnimationFrame(function() {
-                        applyActivePanel(panelName);
-                        requestAnimationFrame(function() {
-                            applyActivePanel(panelName);
-                        });
-                    });
-                });
-            };
-
             const storedPanel = sessionStorage.getItem(config.storageKey);
             const initialPanel = validPanels.has(storedPanel) ? storedPanel : (validPanels.has(serverPanel) ? serverPanel : defaultPanel);
             applyActivePanel(initialPanel);
-            reapplyActivePanelWhenDefined(initialPanel);
             sessionStorage.setItem(config.storageKey, initialPanel);
             syncServer(initialPanel);
 
@@ -1147,7 +947,6 @@
             group.addEventListener('wa-tab-show', function(event) {
                 const panelName = event.detail && event.detail.name;
                 if (!validPanels.has(panelName)) return;
-                syncPanelVisibility(panelName);
                 sessionStorage.setItem(config.storageKey, panelName);
                 syncServer(panelName);
             });
@@ -1191,7 +990,13 @@
                 window._vlQueueDeferredAction(cid, value);
                 return;
             }
-            violitRuntime.emitAction(cid, value);
+            if (typeof window.sendAction === 'function') {
+                window.sendAction(cid, value);
+                return;
+            }
+            if (mode === 'lite') {
+                violitRuntime.postLiteAction(cid, value);
+            }
         };
 
         violitRuntime.deferHydration = function(target, hydrate, options = {}) {
@@ -1407,24 +1212,10 @@
             }
         };
 
-        violitRuntime.markAgGridSurfaceReady = function(surfaceId) {
-            if (!surfaceId) {
-                return;
-            }
-            const surface = document.getElementById(surfaceId);
-            if (!surface) {
-                return;
-            }
-            surface.setAttribute('data-vl-ag-grid-mounted', 'true');
-        };
-
         violitRuntime.registerInitializer('ag-grid-surface', function(element) {
             const config = violitRuntime.readJsonAttr(element, 'data-vl-ag-grid-config', null);
             if (!config) {
                 return;
-            }
-            if (window[config.apiKey]) {
-                violitRuntime.markAgGridSurfaceReady(config.surfaceId || element.id || '');
             }
             violitRuntime.bindAgGridSurface(config);
         });
@@ -1541,7 +1332,6 @@
                             const agGridScrollState = window._vlCaptureAgGridScroll
                                 ? window._vlCaptureAgGridScroll(currentRoot)
                                 : null;
-                            preserveIncomingExpanderOpenState(currentRoot, incomingRoot);
                             purgePlotly(currentRoot);
                             currentRoot.outerHTML = incomingRoot.outerHTML;
                             updatedRoot = document.getElementById(targetId);
@@ -1897,16 +1687,14 @@
         function copyElementAttributes(target, source) {
             if (!target || !source) return;
 
-            const preserve = new Set(['id', 'data-vl-ag-grid-mounted']);
-
             Array.from(target.getAttributeNames()).forEach((name) => {
-                if (!preserve.has(name)) {
+                if (name !== 'id') {
                     target.removeAttribute(name);
                 }
             });
 
             Array.from(source.getAttributeNames()).forEach((name) => {
-                if (!preserve.has(name)) {
+                if (name !== 'id') {
                     target.setAttribute(name, source.getAttribute(name));
                 }
             });
@@ -3118,25 +2906,15 @@
             mo.observe(document.body, { childList: true, subtree: true });
         }
 
-        const scheduleDocumentScopeInit = function() {
-            if (window.violitRuntime && typeof window.violitRuntime.scheduleScopeInit === 'function') {
-                window.violitRuntime.scheduleScopeInit(document);
-            }
-        };
-
-        const initializeDomReadyRuntime = function() {
+        // Initialize Resizer
+        document.addEventListener('DOMContentLoaded', function() {
             syncSidebarWidthFromStorage();
             setupSidebarResizer();
             window._vlLoadLib('Plotly', setupPlotlyResizer);
-            scheduleDocumentScopeInit();
-        };
-
-        // Initialize Resizer and custom element bindings once the DOM exists.
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeDomReadyRuntime, { once: true });
-        } else {
-            initializeDomReadyRuntime();
-        }
+            if (window.violitRuntime && typeof window.violitRuntime.scheduleScopeInit === 'function') {
+                window.violitRuntime.scheduleScopeInit(document);
+            }
+        });
 
         if (mode === 'ws') {
             // Interval infrastructure
@@ -4000,20 +3778,16 @@
                                     // Default: Full DOM replacement
                                     if (!smartUpdated) {
                                         const agGridScrollState = window._vlCaptureAgGridScroll(el);
-                                        const temp = document.createElement('div');
-                                        temp.innerHTML = item.html;
-                                        const nextRoot = temp.firstElementChild;
-                                        if (nextRoot) {
-                                            preserveIncomingExpanderOpenState(el, nextRoot);
-                                        }
                                         purgePlotly(el);
-                                        el.outerHTML = nextRoot ? temp.innerHTML : item.html;
+                                        el.outerHTML = item.html;
                                         
                                         const newEl = document.getElementById(item.id);
                                         const revealGrid = window._vlHideAgGridDuringScrollRestore(newEl, agGridScrollState);
                                         window._vlRestoreAgGridScroll(newEl, agGridScrollState, revealGrid);
                                         
                                         // Execute scripts
+                                        const temp = document.createElement('div');
+                                        temp.innerHTML = item.html;
                                         executeInlineScripts(temp);
 
                                         if (isNavigation && newEl && newEl.classList.contains('page-container')) {
@@ -4183,28 +3957,14 @@
             }
         } else {
              // Lite Mode (HTMX) specifics
-            const initializeLiteModeRuntime = () => {
+            document.addEventListener('DOMContentLoaded', () => {
                 connectLiteStream();
 
-                if (document.body && document.body.dataset.vlLiteRuntimeBound !== 'true') {
-                    document.body.dataset.vlLiteRuntimeBound = 'true';
-
-                    document.body.addEventListener('htmx:beforeSwap', function(evt) {
-                        blurFocusedWaButtonHost();
-                        if (evt.detail.target) {
-                            purgePlotly(evt.detail.target);
-                        }
-                        if (typeof evt.detail.serverResponse === 'string' && evt.detail.serverResponse) {
-                            evt.detail.serverResponse = preserveIncomingExpanderStatesInHtml(evt.detail.serverResponse);
-                        }
-                    });
-
-                    // HTMX swaps can inject whole page/widget trees in lite mode.
-                    // Re-run custom initializers so input-control bindings exist on the new DOM.
-                    document.body.addEventListener('htmx:afterSettle', function() {
-                        scheduleDocumentScopeInit();
-                    });
-                }
+                document.body.addEventListener('htmx:beforeSwap', function(evt) {
+                    if (evt.detail.target) {
+                        purgePlotly(evt.detail.target);
+                    }
+                });
                 
                 // Hot reload support for lite mode: poll server health
                 let serverAlive = true;
@@ -4240,13 +4000,7 @@
                         });
                 };
                 setInterval(checkServerHealth, 2000);
-            };
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initializeLiteModeRuntime, { once: true });
-            } else {
-                initializeLiteModeRuntime();
-            }
+            });
         }
         
         function toggleSidebar() {
