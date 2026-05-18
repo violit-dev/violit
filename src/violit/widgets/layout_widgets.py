@@ -493,6 +493,7 @@ class LayoutWidgetsMixin:
                     panels = []
                     for i, tab_obj in enumerate(self.tab_objects):
                         panel_name = self.panel_names[i]
+                        is_active_panel = panel_name == active_panel
                         # Render tab content
                         tab_htmls = []
                         # Check static
@@ -503,7 +504,18 @@ class LayoutWidgetsMixin:
                             tab_htmls.append(b().render())
                         
                         panel_content = "".join(tab_htmls)
-                        panels.append(f'<wa-tab-panel name="{panel_name}">{panel_content}</wa-tab-panel>')
+                        panel_attr = 'active' if is_active_panel else ''
+                        panel_state = 'active' if is_active_panel else 'collapsed'
+                        panel_style = (
+                            'display:block;height:auto;overflow:visible;pointer-events:auto;opacity:1;visibility:visible;'
+                            if is_active_panel else
+                            'display:block;height:0;overflow:hidden;pointer-events:none;opacity:0;visibility:hidden;'
+                        )
+                        panel_aria_hidden = 'false' if is_active_panel else 'true'
+                        panels.append(
+                            f'<wa-tab-panel name="{panel_name}" {panel_attr} data-vl-tab-state="{panel_state}" '
+                            f'aria-hidden="{panel_aria_hidden}" style="{panel_style}">{panel_content}</wa-tab-panel>'
+                        )
 
                     tabs_config = html_lib.escape(json.dumps({
                         "storageKey": f"vl_active_tab:{self.tabs_id}",

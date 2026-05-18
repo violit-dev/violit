@@ -1072,10 +1072,29 @@
             const actionCid = typeof config.actionCid === 'string' ? config.actionCid : '';
             const shouldSyncServer = config.syncServer === true;
 
+            const activePanelStyle = 'display:block;height:auto;overflow:visible;pointer-events:auto;opacity:1;visibility:visible;';
+            const inactivePanelStyle = 'display:block;height:0;overflow:hidden;pointer-events:none;opacity:0;visibility:hidden;';
+
+            const syncPanelVisibility = function(panelName) {
+                group.querySelectorAll('wa-tab-panel[name]').forEach(function(panel) {
+                    const isActive = panel.getAttribute('name') === panelName;
+                    panel.style.cssText = isActive ? activePanelStyle : inactivePanelStyle;
+                    panel.setAttribute('data-vl-tab-state', isActive ? 'active' : 'collapsed');
+                    panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+                    if (isActive) {
+                        panel.setAttribute('active', '');
+                    } else {
+                        panel.removeAttribute('active');
+                    }
+                });
+            };
+
             const applyActivePanel = function(panelName) {
                 if (!panelName || !validPanels.has(panelName)) return false;
+                syncPanelVisibility(panelName);
                 group.setAttribute('active', panelName);
                 requestAnimationFrame(function() {
+                    syncPanelVisibility(panelName);
                     group.setAttribute('active', panelName);
                     if (typeof group.updateActiveTab === 'function') {
                         group.updateActiveTab();
@@ -1096,9 +1115,28 @@
                 }
             };
 
+            const reapplyActivePanelWhenDefined = function(panelName) {
+                if (!panelName || !validPanels.has(panelName)) return;
+                if (!window.customElements || typeof window.customElements.whenDefined !== 'function') {
+                    return;
+                }
+                Promise.all([
+                    window.customElements.whenDefined('wa-tab-group').catch(function() {}),
+                    window.customElements.whenDefined('wa-tab-panel').catch(function() {}),
+                ]).then(function() {
+                    requestAnimationFrame(function() {
+                        applyActivePanel(panelName);
+                        requestAnimationFrame(function() {
+                            applyActivePanel(panelName);
+                        });
+                    });
+                });
+            };
+
             const storedPanel = sessionStorage.getItem(config.storageKey);
             const initialPanel = validPanels.has(storedPanel) ? storedPanel : (validPanels.has(serverPanel) ? serverPanel : defaultPanel);
             applyActivePanel(initialPanel);
+            reapplyActivePanelWhenDefined(initialPanel);
             sessionStorage.setItem(config.storageKey, initialPanel);
             syncServer(initialPanel);
 
@@ -1109,6 +1147,7 @@
             group.addEventListener('wa-tab-show', function(event) {
                 const panelName = event.detail && event.detail.name;
                 if (!validPanels.has(panelName)) return;
+                syncPanelVisibility(panelName);
                 sessionStorage.setItem(config.storageKey, panelName);
                 syncServer(panelName);
             });

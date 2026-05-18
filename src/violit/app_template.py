@@ -136,6 +136,24 @@ HTML_TEMPLATE = r"""
             width: 100%;
             caret-color: transparent;
         }
+        wa-tab-panel {
+            display: block;
+            width: 100%;
+        }
+        wa-tab-panel[active] {
+            height: auto !important;
+            overflow: visible !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+            opacity: 1 !important;
+        }
+        wa-tab-panel:not([active]) {
+            height: 0 !important;
+            overflow: hidden !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            opacity: 0 !important;
+        }
         
         .fragment { display: flex; flex-direction: column; gap: var(--vl-widget-gap, %WIDGET_GAP%); width: 100%; }
         .page-container { display: flex; flex-direction: column; gap: var(--vl-widget-gap, %WIDGET_GAP%); width: 100%; }
