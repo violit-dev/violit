@@ -1160,7 +1160,7 @@ class ChatWidgetsMixin:
         artifacts_collapsed: bool = True,
         key: Optional[str] = None,
     ):
-        cid = f"chat_message_{_sanitize_chat_key(key)}" if key is not None else self._get_next_cid("chat_message")
+        cid = self._resolve_widget_cid("chat_message", key)
         
         class ChatMessageContext:
             def __init__(self, app, message_id, name, avatar, user_cls="", user_style="", thinking=False, thinking_label="Thinking...", phase=None, status_text="", summary="", trace=None, artifacts=None, error_text="", trace_collapsed=True, artifacts_collapsed=True, key=None):
@@ -1331,6 +1331,7 @@ class ChatWidgetsMixin:
         cls: str = "",
         style: str = "",
         border: bool = False,
+        key: Any = None,
         **kwargs,
     ):
         """Create a dedicated chat conversation surface.
@@ -1342,7 +1343,7 @@ class ChatWidgetsMixin:
         stacks inside `chat_thread(...)` stay pinned to the latest message by
         default.
         """
-        cid = self._get_next_cid("chat_thread")
+        cid = self._resolve_widget_cid("chat_thread", key)
         scroll_mode = self._resolve_chat_scroll_mode(auto_scroll)
         surface_style = merge_style(
             """
@@ -1361,6 +1362,7 @@ class ChatWidgetsMixin:
             height=height,
             cls=surface_cls,
             style=surface_style,
+            key=key,
             data_chat_thread="true",
             data_chat_thread_id=cid,
             data_chat_scroll_mode=scroll_mode,
@@ -1598,10 +1600,11 @@ class ChatWidgetsMixin:
         cls: str = "",
         style: str = "",
         border: bool = False,
+        key: Any = None,
     ):
         """Render plain chat history without agent-specific metadata."""
         items = messages.value if hasattr(messages, "value") else messages
-        with self.chat_thread(height=height, cls=cls, style=style, border=border):
+        with self.chat_thread(height=height, cls=cls, style=style, border=border, key=key):
             for index, item in enumerate(items or []):
                 role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
                 phase = _normalize_chat_phase(item)
@@ -1668,6 +1671,7 @@ class ChatWidgetsMixin:
         cls: str = "",
         style: str = "",
         border: bool = False,
+        key: Any = None,
     ):
         """Render chat history from a list-like state using Violit chat widgets.
 
@@ -1675,7 +1679,7 @@ class ChatWidgetsMixin:
         control whether those fields are rendered for this view.
         """
         items = messages.value if hasattr(messages, "value") else messages
-        with self.chat_thread(height=height, cls=cls, style=style, border=border):
+        with self.chat_thread(height=height, cls=cls, style=style, border=border, key=key):
             for index, item in enumerate(items or []):
                 role = item.get("role", "assistant") if isinstance(item, dict) else "assistant"
                 phase = _normalize_chat_phase(item)
@@ -1776,6 +1780,7 @@ class ChatWidgetsMixin:
         cls: str = "",
         style: str = "",
         border: bool = False,
+        key: Any = None,
     ):
         """Preferred high-level renderer for chat history state.
 
@@ -1793,6 +1798,7 @@ class ChatWidgetsMixin:
             cls=cls,
             style=style,
             border=border,
+            key=key,
         )
 
     def agent_history(
@@ -1809,6 +1815,7 @@ class ChatWidgetsMixin:
         cls: str = "",
         style: str = "",
         border: bool = False,
+        key: Any = None,
     ):
         """Primary high-level renderer for agent-oriented chat history.
 
@@ -1827,6 +1834,7 @@ class ChatWidgetsMixin:
             cls=cls,
             style=style,
             border=border,
+            key=key,
         )
 
     def chat_input(
@@ -2051,7 +2059,7 @@ class ChatWidgetsMixin:
         file_accept_attr = _resolve_chat_file_accept_attr(file_type)
         audio_capture_enabled = bool(accept_audio)
 
-        cid = f"chat_input_{_sanitize_chat_key(key)}" if key is not None else self._get_next_cid("chat_input")
+        cid = self._resolve_widget_cid("chat_input", key)
         stop_cid = f"{cid}__stop"
         store = get_session_store()
         normalized_submit_policy = str(submit_policy).strip().lower() or "drop"

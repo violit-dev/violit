@@ -442,7 +442,7 @@ class LayoutWidgetsMixin:
             key: Optional stable identifier for preserving active-tab state across
                  rerenders when surrounding component order can change.
         """
-        cid = f"tabs_{_sanitize_layout_key(key)}" if key is not None else self._get_next_cid("tabs")
+        cid = self._resolve_widget_cid("tabs", key)
         
         class TabsManager:
             def __init__(self, app, tabs_id, labels, user_cls="", user_style=""):
@@ -647,6 +647,23 @@ class LayoutWidgetsMixin:
             dialog_id = self._resolve_widget_cid(dialog_prefix, key) if key is not None else dialog_prefix
             modal_id = f"{dialog_id}_modal"
 
+            def _clear_runtime_dialog_children(*, mark_dirty: bool):
+                if session_ctx.get() is None:
+                    return None
+
+                from ..state import get_session_store
+
+                store = get_session_store()
+                fragment_children = list(store.get('fragment_components', {}).get(dialog_id, []))
+                cleanup_subtree = getattr(self, "_cleanup_runtime_component_subtree", None)
+                if callable(cleanup_subtree):
+                    for child_cid, _child_builder in fragment_children:
+                        cleanup_subtree(store, child_cid)
+                store['fragment_components'][dialog_id] = []
+                if mark_dirty:
+                    store.setdefault('forced_dirty', set()).add(dialog_id)
+                return store
+
             def builder():
                 from ..state import get_session_store
                 store = get_session_store()
@@ -671,10 +688,12 @@ class LayoutWidgetsMixin:
                 return Component("div", id=dialog_id, content=html)
 
             def close_dialog(*args, **kwargs):
+                _clear_runtime_dialog_children(mark_dirty=True)
                 self._enqueue_client_command('dialog.close', {'id': modal_id})
 
             def dialog_action(value=None):
                 if value == 'closed':
+                    _clear_runtime_dialog_children(mark_dirty=True)
                     return
                 close_dialog()
 
@@ -683,9 +702,8 @@ class LayoutWidgetsMixin:
             # Create a function to open the dialog
             def open_dialog(*args, **kwargs):
                 from ..state import get_session_store
+                _clear_runtime_dialog_children(mark_dirty=False)
                 store = get_session_store()
-                # Clear previous children so re-opening doesn't accumulate
-                store['fragment_components'][dialog_id] = []
 
                 # Set fragment context for dialog content
                 token = fragment_ctx.set(dialog_id)

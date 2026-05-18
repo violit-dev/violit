@@ -120,6 +120,8 @@ def _create_runtime_store(base_count: int = 0) -> Dict[str, Any]:
         'render_lock': threading.RLock(),
         'builders': {},
         'actions': {},
+        'widget_key_registry': {},
+        'widget_key_by_cid': {},
         'submitted_values': {},
         'component_count': base_count,
         'fragment_components': {},

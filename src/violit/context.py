@@ -12,6 +12,7 @@ action_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar("action_ctx", 
 initial_render_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar("initial_render", default=False) # for large-scale data rendering
 pending_shared_views_ctx: contextvars.ContextVar[Optional[set[tuple[str, str]]]] = contextvars.ContextVar("pending_shared_views", default=None)
 registration_pass_ctx: contextvars.ContextVar[Optional[set[str]]] = contextvars.ContextVar("registration_pass", default=None)
+widget_key_registration_ctx: contextvars.ContextVar[Optional[dict[tuple[str, str], str]]] = contextvars.ContextVar("widget_key_registration", default=None)
 
 # Global Reference for App Instance (used for initial theme sync)
 app_instance_ref: list[Any | None] = [None]

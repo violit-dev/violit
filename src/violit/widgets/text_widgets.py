@@ -922,7 +922,7 @@ class TextWidgetsMixin:
         """
         from ..state import State, ComputedState
         
-        cid = f"text_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("text")
+        cid = self._resolve_widget_cid("text", key)
         def builder():
             token = rendering_ctx.set(cid)
             
@@ -967,7 +967,7 @@ class TextWidgetsMixin:
             unsafe_allow_html: If True, allow raw HTML tags to participate in markdown rendering
             help: Tooltip text
         """
-        cid = f"markdown_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("markdown")
+        cid = self._resolve_widget_cid("markdown", key)
         def builder():
             token = rendering_ctx.set(cid)
             from ..state import State, ComputedState
@@ -1015,7 +1015,7 @@ class TextWidgetsMixin:
         if "unsafe_allow_html" in props:
             raise TypeError("html() no longer accepts unsafe_allow_html. Use unsafe_html().")
 
-        cid = f"html_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("html")
+        cid = self._resolve_widget_cid("html", key)
         def builder():
             from ..state import State, ComputedState
             token = rendering_ctx.set(cid)
@@ -1054,7 +1054,7 @@ class TextWidgetsMixin:
 
         This is the truly dangerous HTML API. Never pass untrusted input here.
         """
-        cid = f"html_{_sanitize_text_key(key)}" if key is not None else self._get_next_cid("html")
+        cid = self._resolve_widget_cid("html", key)
         def builder():
             from ..state import State, ComputedState
             token = rendering_ctx.set(cid)

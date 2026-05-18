@@ -28,7 +28,7 @@ import re
 from .app_launcher import AppLauncherMixin
 from .app_runtime import AppRuntimeMixin
 from .app_support import FileWatcher, IntervalHandle, Page, SidebarProxy, print_terminal_splash
-from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx, pending_shared_views_ctx, registration_pass_ctx
+from .context import session_ctx, view_ctx, rendering_ctx, fragment_ctx, app_instance_ref, layout_ctx, page_ctx, action_ctx, initial_render_ctx, pending_shared_views_ctx, registration_pass_ctx, widget_key_registration_ctx
 from .theme import Theme
 from .component import Component
 from .engine import LiteEngine, WsEngine
@@ -447,6 +447,9 @@ class App(
         self.static_actions: Dict[str, Callable] = {}
         self.static_fragments: Dict[str, Callable] = {} # Deprecated. It was for the @app.fragments decorator.
         self.static_fragment_components: Dict[str, List[Any]] = {} # For children components of container widgets.
+        self.static_widget_key_registry: Dict[tuple[str, str], str] = {}
+        self.static_widget_key_by_cid: Dict[str, tuple[str, str]] = {}
+        self._pending_widget_keys: Dict[str, str] = {}
         
         self.state_count = 0
 
@@ -728,10 +731,107 @@ class App(
             return f"widget_{digest}"
         return f"{normalized[:48]}_{digest}"
 
+    @staticmethod
+    def _normalize_widget_key(value: Any) -> str:
+        return str(value)
+
+    def _remember_widget_key(self, cid: str, key: Any) -> None:
+        if key is None:
+            return
+        self._pending_widget_keys[cid] = self._normalize_widget_key(key)
+
+    def _consume_widget_key(self, cid: str) -> Optional[str]:
+        return self._pending_widget_keys.pop(cid, None)
+
+    def _current_widget_key_scope(self) -> str:
+        current_fragment = fragment_ctx.get()
+        if current_fragment:
+            owner = f"fragment:{current_fragment}"
+        else:
+            current_render = rendering_ctx.get()
+            owner = f"render:{current_render}" if current_render else "root"
+        return f"{layout_ctx.get()}::{owner}"
+
+    @staticmethod
+    def _is_component_in_render_subtree(component_id: str, owner_id: Optional[str], parent_map: Dict[str, str]) -> bool:
+        if owner_id is None:
+            return False
+        current = component_id
+        while current is not None:
+            if current == owner_id:
+                return True
+            current = parent_map.get(current)
+        return False
+
+    def _validate_explicit_widget_key(
+        self,
+        cid: str,
+        raw_key: Optional[str],
+        *,
+        sid: Optional[str],
+        store: Dict[str, Any],
+        active_widget_key_pass: Optional[Dict[tuple[str, str], str]],
+    ) -> Optional[tuple[str, str]]:
+        if raw_key is None:
+            return None
+
+        entry = (self._current_widget_key_scope(), raw_key)
+        existing_cid: Optional[str] = None
+
+        if active_widget_key_pass is not None:
+            existing_cid = active_widget_key_pass.get(entry)
+            if existing_cid is None and sid is not None:
+                existing_cid = store.get('widget_key_registry', {}).get(entry)
+                if existing_cid is not None:
+                    owner_id = rendering_ctx.get()
+                    parent_map = store.get('fragment_parent', {})
+                    if self._is_component_in_render_subtree(existing_cid, owner_id, parent_map):
+                        existing_cid = None
+        elif not action_ctx.get(False):
+            registry = self.static_widget_key_registry if sid is None else store.get('widget_key_registry', {})
+            existing_cid = registry.get(entry)
+
+        if existing_cid is not None and existing_cid != cid:
+            raise ValueError(
+                f"Duplicate widget key detected: explicit key {raw_key!r} is already used by component '{existing_cid}'. "
+                "Keys must be unique within the same render scope, regardless of widget type."
+            )
+
+        return entry
+
+    def _store_explicit_widget_key(
+        self,
+        cid: str,
+        entry: Optional[tuple[str, str]],
+        *,
+        sid: Optional[str],
+        store: Dict[str, Any],
+        active_widget_key_pass: Optional[Dict[tuple[str, str], str]],
+    ) -> None:
+        if entry is None:
+            return
+
+        if active_widget_key_pass is not None:
+            active_widget_key_pass[entry] = cid
+            return
+
+        if action_ctx.get(False):
+            return
+
+        if sid is None:
+            self.static_widget_key_registry[entry] = cid
+            self.static_widget_key_by_cid[cid] = entry
+            return
+
+        store.setdefault('widget_key_registry', {})[entry] = cid
+        store.setdefault('widget_key_by_cid', {})[cid] = entry
+
     def _resolve_widget_cid(self, prefix: str, key: Any = None) -> str:
         if key is None:
             return self._get_next_cid(prefix)
-        return f"{prefix}_{self._sanitize_widget_key(key)}"
+        cid = f"{prefix}_{self._sanitize_widget_key(key)}"
+        self._remember_widget_key(cid, key)
+        return cid
 
     def _resolve_state_name(self, key=None, *, stack_depth: int = 1) -> str:
         if key is not None:
@@ -849,6 +949,14 @@ class App(
         builder = self._wrap_component_builder(builder)
 
         active_registration_pass = registration_pass_ctx.get()
+        active_widget_key_pass = widget_key_registration_ctx.get()
+        widget_key_entry = self._validate_explicit_widget_key(
+            cid,
+            self._consume_widget_key(cid),
+            sid=sid,
+            store=store,
+            active_widget_key_pass=active_widget_key_pass,
+        )
         if active_registration_pass is not None:
             if cid in active_registration_pass:
                 raise ValueError(
@@ -862,6 +970,14 @@ class App(
                     f"Duplicate widget key detected: component id '{cid}' is already registered. "
                     "Explicit key= values must be unique within a render scope."
                 )
+
+        self._store_explicit_widget_key(
+            cid,
+            widget_key_entry,
+            sid=sid,
+            store=store,
+            active_widget_key_pass=active_widget_key_pass,
+        )
         
         store['builders'][cid] = builder
         if action:
@@ -1043,6 +1159,9 @@ class App(
         unregister_component_from_scoped_trackers(current_session_id, current_view_id, component_id)
         store.get('builders', {}).pop(component_id, None)
         store.get('actions', {}).pop(component_id, None)
+        key_entry = store.get('widget_key_by_cid', {}).pop(component_id, None)
+        if key_entry is not None:
+            store.get('widget_key_registry', {}).pop(key_entry, None)
         store.get('fragment_components', {}).pop(component_id, None)
         store.setdefault('fragment_parent', {}).pop(component_id, None)
         store.setdefault('_reactivity_owner', {}).pop(component_id, None)
@@ -1374,6 +1493,7 @@ class App(
         store = get_session_store()
         with store['render_lock']:
             registration_token = registration_pass_ctx.set(set())
+            widget_key_token = widget_key_registration_ctx.set({})
             
             main_html = []
             sidebar_html = []
@@ -1411,6 +1531,7 @@ class App(
 
                 return "".join(main_html), "".join(sidebar_html)
             finally:
+                widget_key_registration_ctx.reset(widget_key_token)
                 registration_pass_ctx.reset(registration_token)
 
     def _get_dirty_rendered(self):
@@ -1418,6 +1539,7 @@ class App(
         store = get_session_store()
         with store['render_lock']:
             registration_token = registration_pass_ctx.set(set())
+            widget_key_token = widget_key_registration_ctx.set({})
             tracker = store['tracker']
             current_session_id = session_ctx.get()
             current_view_id = view_ctx.get()
@@ -1505,6 +1627,7 @@ class App(
                         unregister_component_from_scoped_trackers(current_session_id, current_view_id, cid)
                 return res
             finally:
+                widget_key_registration_ctx.reset(widget_key_token)
                 registration_pass_ctx.reset(registration_token)
 
     async def _flush_view_updates_async(self, session_id: str, current_view_id: str) -> None:

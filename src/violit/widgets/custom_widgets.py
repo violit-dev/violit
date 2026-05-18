@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         static_order: list[str]
 
         def _get_next_cid(self, prefix: str) -> str: ...
+        def _resolve_widget_cid(self, prefix: str, key: Any = None) -> str: ...
         def _register_component(self, cid: str, builder: Callable, action: Optional[Callable] = None): ...
         def _get_widget_defaults(self, widget_type: str) -> Dict[str, Any]: ...
 
@@ -456,11 +457,7 @@ class CustomWidgetsMixin:
         if definition is None:
             raise ValueError(f"Unknown custom widget '{name}'. Register it with app.register_widget() first.")
 
-        cid = (
-            f"custom_widget_{_sanitize_custom_widget_key(name)}_{_sanitize_custom_widget_key(key)}"
-            if key is not None
-            else app_self._get_next_cid(f"custom_widget_{_sanitize_custom_widget_key(name)}")
-        )
+        cid = app_self._resolve_widget_cid(f"custom_widget_{_sanitize_custom_widget_key(name)}", key)
 
         event_cids: Dict[str, str] = {}
         render_props = dict(props)
