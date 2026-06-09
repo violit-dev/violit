@@ -3791,6 +3791,7 @@
                                     const widgetType = item.id.split('_')[0];
                                     let smartUpdated = false;
                                     
+                                    if (!isNavigation) {
                                     // Checkbox/Toggle: Update checked property only (preserve animation)
                                     if (widgetType === 'checkbox' || widgetType === 'toggle') {
                                         // Parse new HTML to extract checked state
@@ -3977,6 +3978,7 @@
                                     // render script so Plotly.react updates traces without nuking the background.
                                     if (!smartUpdated && item.id.endsWith('_wrapper') && el.querySelector('.js-plotly-plot')) {
                                         smartUpdated = trySmartUpdatePlotlyWrapper(el, item.html);
+                                    }
                                     }
                                     
                                     // Default: Full DOM replacement
